@@ -81,11 +81,18 @@ const IconButton = ({ icon: Icon, label, className = "", ...props }) => (
 );
 
 const Card = ({ className = "", children }) => (
-  <div className={cx("rounded-2xl border border-white/10 bg-white/5 backdrop-blur shadow-[0_14px_60px_rgba(0,0,0,0.45)]", className)}>{children}</div>
+  <div
+    className={cx(
+      "rounded-3xl border border-white/10 bg-gradient-to-br from-white/10 via-white/5 to-white/20 backdrop-blur-xl shadow-[0_24px_80px_rgba(0,0,0,0.55)] transition",
+      className
+    )}
+  >
+    {children}
+  </div>
 );
-const CardHeader = ({ className = "", children }) => <div className={cx("p-5", className)}>{children}</div>;
-const CardContent = ({ className = "", children }) => <div className={cx("px-5 pb-5", className)}>{children}</div>;
-const CardFooter = ({ className = "", children }) => <div className={cx("px-5 pb-5", className)}>{children}</div>;
+const CardHeader = ({ className = "", children }) => <div className={cx("px-6 pt-6", className)}>{children}</div>;
+const CardContent = ({ className = "", children }) => <div className={cx("px-6 pb-6", className)}>{children}</div>;
+const CardFooter = ({ className = "", children }) => <div className={cx("px-6 pb-6", className)}>{children}</div>;
 const CardTitle = ({ className = "", children }) => <h3 className={cx("text-xl font-black", className)}>{children}</h3>;
 const CardDescription = ({ className = "", children }) => <p className={cx("text-sm text-white/75", className)}>{children}</p>;
 
@@ -485,6 +492,15 @@ const Aurora = () => {
   );
 };
 
+const CosmicBackdrop = () => (
+  <div className="pointer-events-none absolute inset-0 -z-10 overflow-hidden">
+    <div className="absolute left-1/2 top-[28%] h-[70vmax] w-[70vmax] -translate-x-1/2 -translate-y-1/2 rounded-full bg-gradient-to-br from-sky-500/20 via-purple-500/15 to-amber-400/20 blur-3xl" />
+    <div className="absolute -left-[20%] top-1/2 h-[55vmax] w-[55vmax] -translate-y-1/2 rounded-full bg-gradient-to-tr from-amber-400/18 via-transparent to-pink-500/25 blur-3xl" />
+    <div className="absolute bottom-[-20%] right-[-10%] h-[60vmax] w-[60vmax] rounded-full bg-gradient-to-tr from-indigo-500/20 via-transparent to-cyan-500/15 blur-3xl" />
+    <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(255,255,255,0.12),transparent_60%)]" />
+  </div>
+);
+
 const LoreGlyph = ({ onRefresh, refreshing }) => (
   <motion.button
     type="button"
@@ -510,61 +526,191 @@ const LoreGlyph = ({ onRefresh, refreshing }) => (
 );
 
 const NavBar = ({ onRefresh, refreshing }) => (
-  <header className="sticky top-0 z-40 border-b border-white/10 bg-black/70 backdrop-blur">
-    <div className="mx-auto flex max-w-7xl items-center gap-4 px-4 py-3 text-white">
-      <LoreGlyph onRefresh={onRefresh} refreshing={refreshing} />
-      <div className="flex flex-col">
-        <button
-          type="button"
-          className="text-left text-xl font-black tracking-tight text-white/95 hover:text-white"
-          onClick={() => window.location.assign("/loremaker")}
-        >
-          Loremaker Universe
-        </button>
-        <p className="text-xs font-semibold text-white/65">
-          Explore every storyline, faction, and mythic ability woven through Menelek Makonnen’s expanding cosmos.
-        </p>
-      </div>
-      <div className="ml-auto hidden items-center gap-2 sm:flex">
-        {NAV_ITEMS.map((item) => (
-          <Button
-            key={item.key}
-            as="a"
-            href={item.href}
-            target={item.external ? "_blank" : undefined}
-            rel={item.external ? "noreferrer" : undefined}
-            variant="ghost"
-            className="border border-white/15 bg-white/5 text-white/85 hover:bg-white/15"
+  <header className="sticky top-0 z-40 bg-[#05060f]/85 backdrop-blur-xl">
+    <div className="mx-auto max-w-7xl px-4 py-4">
+      <div className="flex items-center gap-4 rounded-3xl border border-white/10 bg-gradient-to-br from-white/10 via-white/5 to-white/10 px-4 py-3 text-white shadow-[0_18px_60px_rgba(0,0,0,0.45)]">
+        <LoreGlyph onRefresh={onRefresh} refreshing={refreshing} />
+        <div className="flex flex-col">
+          <button
+            type="button"
+            className="text-left text-base font-black uppercase tracking-[0.42em] text-white/70"
+            onClick={() => window.location.assign("/loremaker")}
           >
-            <item.icon className="h-4 w-4" />
-            {item.label}
-          </Button>
-        ))}
-      </div>
-      <div className="ml-auto flex items-center gap-2 sm:hidden">
-        <IconButton icon={Menu} label="Menu" onClick={() => window.location.assign("/")} />
+            Loremaker Universe
+          </button>
+          <p className="text-xs font-semibold text-white/65">
+            Explore every storyline, faction, and mythic ability woven through Menelek Makonnen’s expanding cosmos.
+          </p>
+        </div>
+        <div className="ml-auto hidden items-center gap-2 sm:flex">
+          {NAV_ITEMS.map((item) => (
+            <Button
+              key={item.key}
+              as="a"
+              href={item.href}
+              target={item.external ? "_blank" : undefined}
+              rel={item.external ? "noreferrer" : undefined}
+              variant="ghost"
+              className="border border-white/15 bg-white/5 text-white/85 hover:bg-white/15"
+            >
+              <item.icon className="h-4 w-4" />
+              {item.label}
+            </Button>
+          ))}
+        </div>
+        <div className="ml-auto flex items-center gap-2 sm:hidden">
+          <IconButton icon={Menu} label="Menu" onClick={() => window.location.assign("/")} />
+        </div>
       </div>
     </div>
   </header>
 );
 
-const Hero = ({ total }) => (
-  <section className="relative mx-auto mt-8 max-w-5xl overflow-hidden rounded-3xl border border-white/15 bg-white/10 p-8 text-white shadow-[0_20px_90px_rgba(0,0,0,0.55)]">
-    <Aurora />
-    <div className="relative z-10 space-y-6">
-      <div>
-        <h1 className="text-3xl font-black tracking-tight sm:text-4xl">Loremaker Universe</h1>
-        <p className="mt-3 max-w-2xl text-base font-semibold text-white/80 sm:text-lg">
-          Explore every storyline, faction, and mythic ability woven through Menelek Makonnen’s expanding cosmos. Filter the archive,
-          dive into detailed dossiers, and summon characters into the Arena.
-        </p>
+const Hero = ({ total }) => {
+  const safeTotal = Number.isFinite(total) ? total : 0;
+  const number = new Intl.NumberFormat("en-US");
+  const stats = [
+    {
+      label: "Live Dossiers",
+      value: number.format(Math.max(1, safeTotal)),
+      detail: "ready for review",
+    },
+    {
+      label: "Arena Matchups",
+      value: number.format(Math.max(24, safeTotal * Math.max(safeTotal - 1, 1))),
+      detail: "possible outcomes",
+    },
+    {
+      label: "Narratives Indexed",
+      value: number.format(Math.max(18, safeTotal * 3)),
+      detail: "story arcs & chronicles",
+    },
+  ];
+
+  return (
+    <section className="relative mx-auto mt-8 max-w-5xl overflow-hidden rounded-3xl border border-white/15 bg-gradient-to-br from-white/10 via-white/5 to-white/10 p-8 text-white shadow-[0_20px_90px_rgba(0,0,0,0.55)]">
+      <Aurora />
+      <div className="relative z-10 space-y-6">
+        <div className="space-y-4">
+          <h1 className="text-3xl font-black tracking-tight sm:text-5xl">Loremaker Universe Vault</h1>
+          <p className="max-w-2xl text-base font-semibold text-white/85 sm:text-lg">
+            Explore every storyline, faction, and mythic ability woven through Menelek Makonnen’s expanding cosmos. Filter the archive,
+            dive into cinematic dossiers, and summon characters into the Arena.
+          </p>
+          <div className="flex flex-wrap gap-3">
+            <Badge className="bg-amber-400/20 text-amber-100">
+              {safeTotal} character{safeTotal === 1 ? "" : "s"} active in the archive today
+            </Badge>
+            <Button
+              variant="secondary"
+              className="bg-gradient-to-r from-amber-400 via-fuchsia-500 to-indigo-500 text-white"
+              onClick={() => document.getElementById("previews")?.scrollIntoView({ behavior: "smooth" })}
+            >
+              View cinematic previews
+            </Button>
+          </div>
+        </div>
+        <div className="grid gap-4 pt-2 sm:grid-cols-3">
+          {stats.map((stat) => (
+            <div
+              key={stat.label}
+              className="rounded-2xl border border-white/10 bg-gradient-to-br from-white/10 via-white/5 to-white/10 p-4 text-sm font-semibold text-white/80 shadow-[0_14px_45px_rgba(0,0,0,0.35)]"
+            >
+              <p className="text-[0.6rem] font-black uppercase tracking-[0.4em] text-white/60">{stat.label}</p>
+              <p className="mt-2 text-2xl font-black text-white">{stat.value}</p>
+              <p className="text-[0.7rem] uppercase tracking-[0.3em] text-white/55">{stat.detail}</p>
+            </div>
+          ))}
+        </div>
       </div>
-      <Badge className="bg-amber-400/20 text-amber-100">
-        {total} character{total === 1 ? "" : "s"} active in the archive today
-      </Badge>
-    </div>
-  </section>
-);
+    </section>
+  );
+};
+
+// -----------------------------------------------------------------------------
+// Character presentation
+// -----------------------------------------------------------------------------
+const PreviewBoard = ({ data, onOpen }) => {
+  const previews = useMemo(() => {
+    if (!data.length) return [];
+    const highlight = pickDaily(data, "preview");
+    const remainder = data
+      .filter((character) => !highlight || character.id !== highlight.id)
+      .sort((a, b) => scoreCharacter(b) - scoreCharacter(a))
+      .slice(0, 4);
+    return highlight ? [highlight, ...remainder] : remainder;
+  }, [data]);
+
+  const palette = [
+    "from-amber-400/35 via-fuchsia-500/20 to-indigo-500/20",
+    "from-sky-500/25 via-cyan-400/20 to-emerald-400/20",
+    "from-purple-500/25 via-indigo-500/20 to-slate-500/20",
+    "from-rose-500/25 via-orange-400/20 to-yellow-300/20",
+  ];
+
+  if (!previews.length) return null;
+
+  return (
+    <section id="previews" className="mx-auto mt-12 max-w-7xl">
+      <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.4em] text-white/65">Cinematic Previews</p>
+          <h2 className="text-2xl font-black text-white sm:text-3xl">Tonight’s Dispatches from the Vault</h2>
+        </div>
+        <span className="text-xs font-semibold uppercase tracking-[0.3em] text-white/55">
+          Hover for atmosphere • Click to open dossiers
+        </span>
+      </div>
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5">
+        {previews.map((character, index) => {
+          const image = character.cover || character.gallery?.[0];
+          const accent = palette[index % palette.length];
+          return (
+            <motion.button
+              key={character.id}
+              type="button"
+              onClick={() => onOpen(character)}
+              whileHover={{ scale: 1.03, y: -6 }}
+              className="group relative aspect-[4/5] overflow-hidden rounded-3xl border border-white/15 bg-white/10 text-left text-white shadow-[0_24px_70px_rgba(0,0,0,0.45)]"
+            >
+              <div className={cx("absolute inset-0 bg-gradient-to-br", accent)} />
+              {image ? (
+                <div className="absolute inset-0 overflow-hidden">
+                  <ImageSafe
+                    src={image}
+                    alt={character.name}
+                    fallbackLabel={character.name}
+                    className="h-full w-full object-cover opacity-75 transition duration-700 group-hover:scale-105 group-hover:opacity-90"
+                  />
+                </div>
+              ) : (
+                <div className="absolute inset-0 flex items-center justify-center bg-black/40">
+                  <Insignia label={character.name} size={70} />
+                </div>
+              )}
+              <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/30 to-transparent" />
+              <div className="relative z-10 flex h-full flex-col justify-between p-5">
+                <div className="space-y-2">
+                  <span className="inline-flex items-center rounded-full bg-white/10 px-3 py-1 text-[0.6rem] font-black uppercase tracking-[0.35em] text-white/70">
+                    Preview {index + 1}
+                  </span>
+                  <h3 className="text-lg font-black drop-shadow-[0_8px_24px_rgba(0,0,0,0.45)]">{character.name}</h3>
+                  <p className="text-xs font-semibold leading-relaxed text-white/80">
+                    {character.shortDesc || character.longDesc || "Select to enter the full cinematic dossier."}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2 text-xs font-semibold text-white/80">
+                  <Sparkles className="h-3.5 w-3.5" />
+                  <span>{character.faction?.[0] || character.locations?.[0] || "Unaligned"}</span>
+                </div>
+              </div>
+            </motion.button>
+          );
+        })}
+      </div>
+    </section>
+  );
+};
 
 // -----------------------------------------------------------------------------
 // Character presentation
@@ -628,10 +774,25 @@ const CharacterCard = ({ character, onOpen, onFacet, onUseInArena }) => {
   };
 
   return (
-    <Card className={cx("overflow-hidden transition", pulse ? "ring-2 ring-amber-300" : "hover:-translate-y-[3px]")}>
+    <Card
+      className={cx(
+        "overflow-hidden transition",
+        pulse ? "ring-2 ring-amber-300" : "hover:-translate-y-2 hover:shadow-[0_28px_80px_rgba(0,0,0,0.45)]"
+      )}
+    >
       <div className="relative h-56 w-full">
-        <button type="button" className="absolute inset-0" onClick={() => onOpen(character)}>
-          <ImageSafe src={character.cover || character.gallery[0]} alt={character.name} fallbackLabel={character.name} className="h-full w-full" />
+        <button
+          type="button"
+          className="group absolute inset-0 overflow-hidden"
+          onClick={() => onOpen(character)}
+        >
+          <ImageSafe
+            src={character.cover || character.gallery[0]}
+            alt={character.name}
+            fallbackLabel={character.name}
+            className="h-full w-full object-cover transition duration-700 group-hover:scale-105"
+          />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/25 to-transparent opacity-85 transition duration-500 group-hover:opacity-70" />
         </button>
         <div className="absolute left-3 top-3 flex flex-col gap-2">
           <Insignia label={character.faction?.[0] || character.name} size={38} />
@@ -890,30 +1051,79 @@ const CharacterModal = ({ open, character, onClose, onFacet, onUseInArena }) => 
 // -----------------------------------------------------------------------------
 // Hero slider
 // -----------------------------------------------------------------------------
-const FeaturedCard = ({ label, title, description, actions }) => (
-  <div className="grid h-72 grid-cols-1 overflow-hidden rounded-3xl border border-white/15 bg-gradient-to-br from-indigo-600/35 via-fuchsia-500/25 to-amber-400/20 text-white shadow-[0_20px_80px_rgba(0,0,0,0.55)] md:grid-cols-[3fr_2fr]">
-    <div className="flex flex-col justify-between p-6">
-      <div className="space-y-2">
-        <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.4em] text-white/70">
-          <Clock className="h-3.5 w-3.5" /> {label}
-        </p>
-        <h3 className="text-2xl font-black">{title}</h3>
-        <p className="text-sm font-semibold text-white/85">{description}</p>
+const FeaturedCard = ({ label, title, description, actions, image, accent = "from-indigo-600/35 via-fuchsia-500/25 to-amber-400/20" }) => (
+  <motion.article
+    className="relative grid h-72 grid-cols-1 overflow-hidden rounded-3xl border border-white/15 bg-black/40 text-white shadow-[0_20px_80px_rgba(0,0,0,0.55)] md:grid-cols-[3fr_2fr]"
+    whileHover={{ y: -6, boxShadow: "0 28px 90px rgba(0,0,0,0.55)" }}
+    transition={{ type: "spring", stiffness: 140, damping: 18 }}
+  >
+    <div className={cx("absolute inset-0 bg-gradient-to-br", accent)} />
+    {image ? (
+      <div className="absolute inset-0 opacity-60">
+        <ImageSafe
+          src={image}
+          alt={title}
+          fallbackLabel={title}
+          className="h-full w-full object-cover"
+        />
+        <div className="absolute inset-0 bg-gradient-to-br from-black/70 via-black/20 to-transparent" />
       </div>
-      <div className="flex flex-wrap gap-2">
-        {actions.map((action) => (
-          <Button key={action.label} variant={action.variant || "secondary"} onClick={action.onClick}>
-            {action.label}
-            {action.icon ? <action.icon className="h-4 w-4" /> : null}
-          </Button>
-        ))}
+    ) : null}
+    <div className="relative z-10 grid h-full grid-cols-1 md:grid-cols-[3fr_2fr]">
+      <div className="flex flex-col justify-between p-6">
+        <div className="space-y-3">
+          <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.4em] text-white/70">
+            <Clock className="h-3.5 w-3.5" /> {label}
+          </p>
+          <h3 className="text-2xl font-black drop-shadow-[0_16px_40px_rgba(0,0,0,0.55)]">{title}</h3>
+          <p className="text-sm font-semibold text-white/85">{description}</p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {actions.map((action) => (
+            <Button
+              key={action.label}
+              variant={action.variant || "secondary"}
+              onClick={action.onClick}
+              className={cx(
+                action.highlight ? "bg-gradient-to-r from-amber-400 via-fuchsia-500 to-indigo-500 text-white" : "",
+                action.className
+              )}
+            >
+              {action.label}
+              {action.icon ? <action.icon className="h-4 w-4" /> : null}
+            </Button>
+          ))}
+        </div>
+      </div>
+      <div className="relative hidden overflow-hidden md:flex">
+        {image ? (
+          <>
+            <ImageSafe
+              src={image}
+              alt={`${title} artwork`}
+              fallbackLabel={title}
+              className="h-full w-full object-cover opacity-80"
+            />
+            <div className="absolute inset-0 bg-gradient-to-l from-black/75 via-black/35 to-transparent" />
+          </>
+        ) : (
+          <div className="flex h-full w-full items-center justify-center bg-white/10">
+            <Sparkles className="h-16 w-16 text-white/70" />
+          </div>
+        )}
       </div>
     </div>
-    <div className="relative hidden items-center justify-center bg-black/40 md:flex">
-      <Sparkles className="h-20 w-20 text-amber-200/80" />
-    </div>
-  </div>
+  </motion.article>
 );
+
+const accentForAlignment = (alignment = "") => {
+  const tone = alignment.toLowerCase();
+  if (tone.includes("hero")) return "from-emerald-400/35 via-cyan-400/25 to-sky-500/20";
+  if (tone.includes("villain") || tone.includes("rogue") || tone.includes("dark"))
+    return "from-rose-500/40 via-purple-500/25 to-indigo-500/25";
+  if (tone.includes("neutral")) return "from-amber-400/30 via-emerald-400/20 to-sky-400/20";
+  return "from-indigo-600/35 via-fuchsia-500/25 to-amber-400/20";
+};
 
 const HeroSlider = ({ data, onOpen, onFacet }) => {
   const character = useMemo(() => pickDaily(data, "character"), [data]);
@@ -924,6 +1134,7 @@ const HeroSlider = ({ data, onOpen, onFacet }) => {
   const slides = useMemo(() => {
     const deck = [];
     if (character) {
+      const image = character.cover || character.gallery?.[0];
       deck.push({
         type: "Character",
         render: () => (
@@ -931,8 +1142,10 @@ const HeroSlider = ({ data, onOpen, onFacet }) => {
             label="Featured Character"
             title={character.name}
             description={character.shortDesc || character.longDesc || "No summary available."}
+            image={image}
+            accent={accentForAlignment(character.alignment || "")}
             actions={[
-              { label: "Character Profile", onClick: () => onOpen(character), icon: ArrowRight },
+              { label: "Character Profile", onClick: () => onOpen(character), icon: ArrowRight, highlight: true },
               character.faction?.[0]
                 ? { label: character.faction[0], onClick: () => onFacet({ key: "faction", value: character.faction[0] }) }
                 : null,
@@ -950,18 +1163,22 @@ const HeroSlider = ({ data, onOpen, onFacet }) => {
     if (factions.length) {
       const faction = pickDaily(factions, "faction");
       if (faction) {
+        const factionCharacter = data.find((char) => (char.faction || []).includes(faction));
+        const factionImage = factionCharacter?.cover || factionCharacter?.gallery?.[0];
         deck.push({
           type: "Faction",
           render: () => (
-          <FeaturedCard
-            label="Featured Faction"
-            title={faction}
-            description="Explore every member aligned under this banner."
-            actions={[
-              { label: "View Members", onClick: () => onFacet({ key: "faction", value: faction }) },
-              { label: "Character Profile", onClick: () => onFacet({ key: "faction", value: faction }) },
-            ]}
-          />
+            <FeaturedCard
+              label="Featured Faction"
+              title={faction}
+              description="Explore every member aligned under this banner."
+              image={factionImage}
+              accent="from-amber-400/30 via-fuchsia-500/25 to-rose-500/25"
+              actions={[
+                { label: "View Members", onClick: () => onFacet({ key: "faction", value: faction }), highlight: true },
+                { label: "Filter by Faction", onClick: () => onFacet({ key: "faction", value: faction }) },
+              ]}
+            />
           ),
         });
       }
@@ -969,17 +1186,23 @@ const HeroSlider = ({ data, onOpen, onFacet }) => {
     if (locations.length) {
       const location = pickDaily(locations, "location");
       if (location) {
+        const locationCharacter = data.find((char) =>
+          (char.locations || []).some((loc) => loc.toLowerCase() === location.toLowerCase())
+        );
+        const locationImage = locationCharacter?.cover || locationCharacter?.gallery?.[0];
         deck.push({
           type: "Location",
           render: () => (
-          <FeaturedCard
-            label="Featured Location"
-            title={location}
-            description="Travel to this realm and see who thrives—or schemes—within."
-            actions={[
-              { label: "View Residents", onClick: () => onFacet({ key: "locations", value: location }) },
-            ]}
-          />
+            <FeaturedCard
+              label="Featured Location"
+              title={location}
+              description="Travel to this realm and see who thrives—or schemes—within."
+              image={locationImage}
+              accent="from-sky-500/30 via-cyan-400/20 to-emerald-400/20"
+              actions={[
+                { label: "View Residents", onClick: () => onFacet({ key: "locations", value: location }), highlight: true },
+              ]}
+            />
           ),
         });
       }
@@ -987,23 +1210,29 @@ const HeroSlider = ({ data, onOpen, onFacet }) => {
     if (powers.length) {
       const power = pickDaily(powers, "power");
       if (power) {
+        const powerCharacter = data.find((char) =>
+          (char.powers || []).some((entry) => entry.name.toLowerCase() === power.toLowerCase())
+        );
+        const powerImage = powerCharacter?.cover || powerCharacter?.gallery?.[0];
         deck.push({
           type: "Power",
           render: () => (
-          <FeaturedCard
-            label="Featured Power"
-            title={power}
-            description="Compare how each wielder bends this ability to their will."
-            actions={[
-              { label: "View Wielders", onClick: () => onFacet({ key: "powers", value: power }) },
-            ]}
-          />
+            <FeaturedCard
+              label="Featured Power"
+              title={power}
+              description="Compare how each wielder bends this ability to their will."
+              image={powerImage}
+              accent="from-purple-500/30 via-indigo-500/20 to-cyan-400/20"
+              actions={[
+                { label: "View Wielders", onClick: () => onFacet({ key: "powers", value: power }), highlight: true },
+              ]}
+            />
           ),
         });
       }
     }
     return deck;
-  }, [character, factions, locations, powers, onFacet, onOpen]);
+  }, [character, factions, locations, powers, onFacet, onOpen, data]);
 
   const [index, setIndex] = useState(0);
   useEffect(() => {
@@ -1479,7 +1708,7 @@ const QuickControls = ({
   sortedBy,
   onSort,
 }) => (
-  <div className="flex flex-col gap-4 rounded-3xl border border-white/10 bg-white/5 p-5 text-white shadow-[0_16px_70px_rgba(0,0,0,0.45)]">
+  <div className="flex flex-col gap-4 rounded-3xl border border-white/10 bg-gradient-to-br from-white/10 via-white/5 to-white/10 p-6 text-white shadow-[0_16px_70px_rgba(0,0,0,0.45)] backdrop-blur-lg">
     <div className="flex flex-col gap-3 md:flex-row md:items-center">
       <div className="relative flex-1">
         <Input
@@ -1669,7 +1898,7 @@ const ChatDock = () => {
 };
 
 const Footer = () => (
-  <footer className="mt-16 border-t border-white/10 bg-black/70">
+  <footer className="mt-16 border-t border-white/10 bg-gradient-to-t from-black/80 via-black/40 to-transparent backdrop-blur">
     <div className="mx-auto flex max-w-7xl flex-col gap-6 px-4 py-8 text-white/70 sm:flex-row sm:items-center sm:justify-between">
       <div className="space-y-1">
         <p className="text-sm font-semibold">© {new Date().getFullYear()} Loremaker • ICUNI</p>
@@ -1819,10 +2048,12 @@ export default function LoremakerPage() {
   const showStories = data.some((character) => (character.stories || []).length);
 
   return (
-    <div className="relative min-h-screen bg-[#080915] text-white">
+    <div className="relative min-h-screen overflow-hidden bg-[#080915] text-white">
+      <CosmicBackdrop />
       <NavBar onRefresh={refetch} refreshing={loading} />
       <main className="mx-auto max-w-7xl px-4 pb-32">
         <Hero total={heroCount} />
+        <PreviewBoard data={filtered} onOpen={openModal} />
         <div className="mt-10 space-y-12">
           <QuickControls
             query={query}
