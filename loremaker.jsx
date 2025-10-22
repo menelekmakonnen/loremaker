@@ -49,11 +49,11 @@ const cx = (...classes) => classes.filter(Boolean).join(" ");
 
 function Button({ variant = "default", className = "", children, as: Comp = "button", icon: Icon, ...props }) {
   const base =
-    "inline-flex items-center gap-2 rounded-xl px-3.5 py-2.5 text-sm font-bold transition active:scale-[.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70";
+    "inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold tracking-wide transition active:scale-[.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300/70";
   const palette = {
-    default: "bg-white text-slate-900 hover:bg-amber-100",
-    secondary: "bg-black/75 text-white hover:bg-black",
-    outline: "border border-white/35 text-white hover:bg-white/15",
+    default: "bg-amber-300 text-slate-900 shadow-[0_12px_30px_rgba(235,197,120,0.45)] hover:bg-amber-200",
+    secondary: "border border-[#273354] bg-[#141c33] text-white hover:bg-[#1a2440]",
+    outline: "border border-[#273354] bg-transparent text-white hover:bg-white/5",
     ghost: "text-white/75 hover:text-white",
     destructive: "bg-red-600 text-white hover:bg-red-500",
   }[variant];
@@ -71,7 +71,7 @@ const IconButton = ({ icon: Icon, label, className = "", ...props }) => (
     aria-label={label}
     title={label}
     className={cx(
-      "inline-flex h-10 w-10 items-center justify-center rounded-xl border border-white/25 bg-white/10 text-white shadow-[0_10px_35px_rgba(0,0,0,0.35)] transition hover:bg-white/20",
+      "inline-flex h-10 w-10 items-center justify-center rounded-xl border border-[#273354] bg-[#10172b] text-white shadow-[0_10px_30px_rgba(6,10,26,0.45)] transition hover:bg-[#17213a]",
       className
     )}
     {...props}
@@ -83,7 +83,7 @@ const IconButton = ({ icon: Icon, label, className = "", ...props }) => (
 const Card = ({ className = "", children }) => (
   <div
     className={cx(
-      "rounded-3xl border border-white/10 bg-gradient-to-br from-white/10 via-white/5 to-white/20 backdrop-blur-xl shadow-[0_24px_80px_rgba(0,0,0,0.55)] transition",
+      "rounded-3xl border border-[#1c243d]/80 bg-[#0d1326]/80 shadow-[0_32px_110px_rgba(3,6,18,0.6)] backdrop-blur-xl transition",
       className
     )}
   >
@@ -99,7 +99,7 @@ const CardDescription = ({ className = "", children }) => <p className={cx("text
 const Input = ({ className = "", ...props }) => (
   <input
     className={cx(
-      "w-full rounded-xl border border-white/25 bg-white/10 px-4 py-2.5 text-sm font-semibold text-white placeholder:text-white/60 focus:outline-none focus:ring-2 focus:ring-amber-300",
+      "w-full rounded-xl border border-[#273354] bg-[#0f162c]/80 px-4 py-2.5 text-sm font-semibold text-white placeholder:text-white/55 focus:outline-none focus:ring-2 focus:ring-amber-300/60",
       className
     )}
     {...props}
@@ -107,7 +107,12 @@ const Input = ({ className = "", ...props }) => (
 );
 
 const Badge = ({ className = "", children }) => (
-  <span className={cx("inline-flex items-center rounded-full bg-white/10 px-3 py-1 text-xs font-bold text-white", className)}>
+  <span
+    className={cx(
+      "inline-flex items-center gap-2 rounded-full border border-[#273354] bg-[#141d38]/70 px-3.5 py-1 text-[0.7rem] font-semibold uppercase tracking-[0.2em] text-amber-100",
+      className
+    )}
+  >
     {children}
   </span>
 );
@@ -526,23 +531,23 @@ const LoreGlyph = ({ onRefresh, refreshing }) => (
 );
 
 const NavBar = ({ onRefresh, refreshing }) => (
-  <header className="sticky top-0 z-40 bg-[#05060f]/85 backdrop-blur-xl">
+  <header className="sticky top-0 z-40 border-b border-[#101830]/70 bg-[#060b19]/90 backdrop-blur-2xl">
     <div className="mx-auto max-w-7xl px-4 py-4">
-      <div className="flex items-center gap-4 rounded-3xl border border-white/10 bg-gradient-to-br from-white/10 via-white/5 to-white/10 px-4 py-3 text-white shadow-[0_18px_60px_rgba(0,0,0,0.45)]">
-        <LoreGlyph onRefresh={onRefresh} refreshing={refreshing} />
-        <div className="flex flex-col">
-          <button
-            type="button"
-            className="text-left text-base font-black uppercase tracking-[0.42em] text-white/70"
-            onClick={() => window.location.assign("/loremaker")}
-          >
-            Loremaker Universe
-          </button>
-          <p className="text-xs font-semibold text-white/65">
-            Explore every storyline, faction, and mythic ability woven through Menelek Makonnen’s expanding cosmos.
-          </p>
+      <div className="flex flex-wrap items-center gap-4 text-white">
+        <div className="flex items-center gap-3 rounded-2xl border border-[#1d2743] bg-[#0c1226]/80 px-3 py-2 shadow-[0_16px_50px_rgba(4,7,20,0.55)]">
+          <LoreGlyph onRefresh={onRefresh} refreshing={refreshing} />
+          <div>
+            <p className="text-[0.65rem] font-semibold uppercase tracking-[0.5em] text-white/55">Menelek Makonnen</p>
+            <button
+              type="button"
+              className="text-left text-lg font-black tracking-tight text-white"
+              onClick={() => window.location.assign("/loremaker")}
+            >
+              Loremaker Universe
+            </button>
+          </div>
         </div>
-        <div className="ml-auto hidden items-center gap-2 sm:flex">
+        <div className="hidden items-center gap-2 lg:flex">
           {NAV_ITEMS.map((item) => (
             <Button
               key={item.key}
@@ -550,16 +555,22 @@ const NavBar = ({ onRefresh, refreshing }) => (
               href={item.href}
               target={item.external ? "_blank" : undefined}
               rel={item.external ? "noreferrer" : undefined}
-              variant="ghost"
-              className="border border-white/15 bg-white/5 text-white/85 hover:bg-white/15"
+              variant="outline"
+              className="border-transparent bg-[#10172b] text-white/85 hover:border-[#273354] hover:bg-[#161f36]"
             >
               <item.icon className="h-4 w-4" />
               {item.label}
             </Button>
           ))}
         </div>
-        <div className="ml-auto flex items-center gap-2 sm:hidden">
-          <IconButton icon={Menu} label="Menu" onClick={() => window.location.assign("/")} />
+        <div className="ml-auto flex items-center gap-2">
+          <Button as="a" href={LINKS.loremaker} variant="secondary" className="hidden sm:inline-flex">
+            Universe Vault
+          </Button>
+          <Button as="a" href={LINKS.ai} variant="outline" className="hidden sm:inline-flex">
+            AI Studio
+          </Button>
+          <IconButton icon={Menu} label="Open menu" className="lg:hidden" onClick={() => window.location.assign("/")} />
         </div>
       </div>
     </div>
@@ -571,56 +582,63 @@ const Hero = ({ total }) => {
   const number = new Intl.NumberFormat("en-US");
   const stats = [
     {
-      label: "Live Dossiers",
+      label: "Live dossiers",
       value: number.format(Math.max(1, safeTotal)),
       detail: "ready for review",
     },
     {
-      label: "Arena Matchups",
+      label: "Arena matchups",
       value: number.format(Math.max(24, safeTotal * Math.max(safeTotal - 1, 1))),
       detail: "possible outcomes",
     },
     {
-      label: "Narratives Indexed",
+      label: "Narratives indexed",
       value: number.format(Math.max(18, safeTotal * 3)),
       detail: "story arcs & chronicles",
     },
   ];
 
   return (
-    <section className="relative mx-auto mt-8 max-w-5xl overflow-hidden rounded-3xl border border-white/15 bg-gradient-to-br from-white/10 via-white/5 to-white/10 p-8 text-white shadow-[0_20px_90px_rgba(0,0,0,0.55)]">
+    <section className="relative mx-auto mt-10 max-w-7xl overflow-hidden rounded-[32px] border border-[#1c243d] bg-gradient-to-br from-[#151f38] via-[#0f162d] to-[#080d1c] px-8 py-10 text-white shadow-[0_40px_110px_rgba(4,7,20,0.65)]">
       <Aurora />
-      <div className="relative z-10 space-y-6">
-        <div className="space-y-4">
-          <h1 className="text-3xl font-black tracking-tight sm:text-5xl">Loremaker Universe Vault</h1>
-          <p className="max-w-2xl text-base font-semibold text-white/85 sm:text-lg">
-            Explore every storyline, faction, and mythic ability woven through Menelek Makonnen’s expanding cosmos. Filter the archive,
-            dive into cinematic dossiers, and summon characters into the Arena.
+      <div className="relative z-10 grid gap-10 lg:grid-cols-[1.15fr,0.85fr]">
+        <div className="space-y-6">
+          <div className="flex flex-wrap items-center gap-3">
+            <Badge className="border-amber-200/40 bg-amber-200/10 text-amber-100">Universe Vault</Badge>
+            <span className="text-xs font-semibold uppercase tracking-[0.35em] text-white/55">Daily refreshed dossier feed</span>
+          </div>
+          <h1 className="text-4xl font-black tracking-tight sm:text-5xl">Step into the Loremaker universe archive.</h1>
+          <p className="max-w-2xl text-base font-medium text-white/80 sm:text-lg">
+            Discover champions, archivists, and myths spanning every faction of Menelek Makonnen’s cosmos. Filter the compendium,
+            dive into cinematic previews, and launch matchups inside the Arena.
           </p>
           <div className="flex flex-wrap gap-3">
-            <Badge className="bg-amber-400/20 text-amber-100">
-              {safeTotal} character{safeTotal === 1 ? "" : "s"} active in the archive today
+            <Badge className="border-[#273354] bg-[#10182d] text-amber-100">
+              {safeTotal} active dossier{safeTotal === 1 ? "" : "s"}
             </Badge>
             <Button
               variant="secondary"
-              className="bg-gradient-to-r from-amber-400 via-fuchsia-500 to-indigo-500 text-white"
+              className="bg-gradient-to-r from-[#fcd277] via-[#ef7fd3] to-[#7289ff] text-white"
               onClick={() => document.getElementById("previews")?.scrollIntoView({ behavior: "smooth" })}
             >
-              View cinematic previews
+              Preview tonight’s features
             </Button>
           </div>
         </div>
-        <div className="grid gap-4 pt-2 sm:grid-cols-3">
-          {stats.map((stat) => (
-            <div
-              key={stat.label}
-              className="rounded-2xl border border-white/10 bg-gradient-to-br from-white/10 via-white/5 to-white/10 p-4 text-sm font-semibold text-white/80 shadow-[0_14px_45px_rgba(0,0,0,0.35)]"
-            >
-              <p className="text-[0.6rem] font-black uppercase tracking-[0.4em] text-white/60">{stat.label}</p>
-              <p className="mt-2 text-2xl font-black text-white">{stat.value}</p>
-              <p className="text-[0.7rem] uppercase tracking-[0.3em] text-white/55">{stat.detail}</p>
-            </div>
-          ))}
+        <div className="rounded-3xl border border-[#1e2844] bg-[#0a1124]/80 p-6 shadow-[0_24px_90px_rgba(4,8,22,0.55)]">
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-semibold uppercase tracking-[0.4em] text-white/55">Cosmic activity</p>
+            <Sparkles className="h-5 w-5 text-amber-200" />
+          </div>
+          <div className="mt-6 space-y-5">
+            {stats.map((stat) => (
+              <div key={stat.label} className="rounded-2xl border border-[#212b46] bg-[#111a31]/80 p-4">
+                <p className="text-[0.65rem] font-semibold uppercase tracking-[0.35em] text-white/55">{stat.label}</p>
+                <p className="mt-2 text-3xl font-black text-white">{stat.value}</p>
+                <p className="text-[0.7rem] uppercase tracking-[0.28em] text-white/40">{stat.detail}</p>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
     </section>
@@ -641,72 +659,91 @@ const PreviewBoard = ({ data, onOpen }) => {
     return highlight ? [highlight, ...remainder] : remainder;
   }, [data]);
 
-  const palette = [
-    "from-amber-400/35 via-fuchsia-500/20 to-indigo-500/20",
-    "from-sky-500/25 via-cyan-400/20 to-emerald-400/20",
-    "from-purple-500/25 via-indigo-500/20 to-slate-500/20",
-    "from-rose-500/25 via-orange-400/20 to-yellow-300/20",
-  ];
-
   if (!previews.length) return null;
 
+  const [featured, ...others] = previews;
+
   return (
-    <section id="previews" className="mx-auto mt-12 max-w-7xl">
-      <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+    <section id="previews" className="mx-auto mt-14 max-w-7xl space-y-6">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.4em] text-white/65">Cinematic Previews</p>
-          <h2 className="text-2xl font-black text-white sm:text-3xl">Tonight’s Dispatches from the Vault</h2>
+          <p className="text-xs font-semibold uppercase tracking-[0.4em] text-white/60">Tonight’s featured</p>
+          <h2 className="text-3xl font-black text-white sm:text-4xl">Cinematic dispatches from the vault</h2>
         </div>
-        <span className="text-xs font-semibold uppercase tracking-[0.3em] text-white/55">
-          Hover for atmosphere • Click to open dossiers
+        <span className="text-xs font-semibold uppercase tracking-[0.35em] text-white/45">
+          Hover to preview atmosphere · Click to open dossiers
         </span>
       </div>
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5">
-        {previews.map((character, index) => {
-          const image = character.cover || character.gallery?.[0];
-          const accent = palette[index % palette.length];
-          return (
+      <div className="grid gap-5 lg:grid-cols-[1.15fr,0.85fr]">
+        {featured ? (
+          <motion.button
+            type="button"
+            whileHover={{ scale: 1.01, y: -4 }}
+            onClick={() => onOpen(featured)}
+            className="group relative flex min-h-[320px] flex-col overflow-hidden rounded-[28px] border border-[#1d2743] bg-gradient-to-br from-[#182447] via-[#111a34] to-[#0a0f22] text-left text-white shadow-[0_30px_90px_rgba(4,7,22,0.55)]"
+          >
+            {featured.cover || featured.gallery?.[0] ? (
+              <ImageSafe
+                src={featured.cover || featured.gallery?.[0]}
+                alt={featured.name}
+                fallbackLabel={featured.name}
+                className="absolute inset-0 h-full w-full object-cover opacity-60 transition duration-700 group-hover:opacity-80"
+              />
+            ) : null}
+            <div className="absolute inset-0 bg-gradient-to-br from-[#05070f]/80 via-[#05070f]/40 to-transparent" />
+            <div className="relative z-10 flex flex-1 flex-col justify-between p-8">
+              <div className="flex flex-wrap items-center gap-3">
+                <Badge className="border-amber-200/40 bg-amber-200/15 text-amber-100">Featured character</Badge>
+                <span className="text-xs font-semibold uppercase tracking-[0.35em] text-white/55">{featured.alignment || "Unaligned"}</span>
+              </div>
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <p className="text-xs font-semibold uppercase tracking-[0.4em] text-white/55">{featured.faction?.[0] || "Unaffiliated"}</p>
+                  <h3 className="text-4xl font-black tracking-tight">{featured.name}</h3>
+                </div>
+                <p className="max-w-2xl text-sm text-white/80 sm:text-base">
+                  {featured.shortDesc || featured.longDesc || "No synopsis available."}
+                </p>
+                <div className="flex flex-wrap gap-2 text-xs font-semibold text-white/70">
+                  {(featured.tags || []).slice(0, 3).map((tag) => (
+                    <span key={tag} className="rounded-full border border-white/20 bg-white/10 px-3 py-1 uppercase tracking-[0.3em]">
+                      {tag}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </motion.button>
+        ) : null}
+        <div className="grid gap-4 sm:grid-cols-2">
+          {others.map((character) => (
             <motion.button
               key={character.id}
               type="button"
+              whileHover={{ scale: 1.02, y: -3 }}
               onClick={() => onOpen(character)}
-              whileHover={{ scale: 1.03, y: -6 }}
-              className="group relative aspect-[4/5] overflow-hidden rounded-3xl border border-white/15 bg-white/10 text-left text-white shadow-[0_24px_70px_rgba(0,0,0,0.45)]"
+              className="group relative overflow-hidden rounded-[24px] border border-[#1a233e] bg-[#101831]/90 p-5 text-left text-white shadow-[0_22px_70px_rgba(4,7,22,0.45)]"
             >
-              <div className={cx("absolute inset-0 bg-gradient-to-br", accent)} />
-              {image ? (
-                <div className="absolute inset-0 overflow-hidden">
-                  <ImageSafe
-                    src={image}
-                    alt={character.name}
-                    fallbackLabel={character.name}
-                    className="h-full w-full object-cover opacity-75 transition duration-700 group-hover:scale-105 group-hover:opacity-90"
-                  />
+              {character.cover || character.gallery?.[0] ? (
+                <ImageSafe
+                  src={character.cover || character.gallery?.[0]}
+                  alt={character.name}
+                  fallbackLabel={character.name}
+                  className="absolute inset-0 h-full w-full object-cover opacity-35 transition duration-700 group-hover:opacity-55"
+                />
+              ) : null}
+              <div className="absolute inset-0 bg-gradient-to-br from-[#05070f]/85 via-[#05070f]/45 to-transparent" />
+              <div className="relative z-10 flex flex-col gap-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-[0.6rem] font-semibold uppercase tracking-[0.4em] text-white/55">{character.faction?.[0] || "Unaffiliated"}</span>
+                  <Swords className="h-4 w-4 text-amber-200" />
                 </div>
-              ) : (
-                <div className="absolute inset-0 flex items-center justify-center bg-black/40">
-                  <Insignia label={character.name} size={70} />
-                </div>
-              )}
-              <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/30 to-transparent" />
-              <div className="relative z-10 flex h-full flex-col justify-between p-5">
-                <div className="space-y-2">
-                  <span className="inline-flex items-center rounded-full bg-white/10 px-3 py-1 text-[0.6rem] font-black uppercase tracking-[0.35em] text-white/70">
-                    Preview {index + 1}
-                  </span>
-                  <h3 className="text-lg font-black drop-shadow-[0_8px_24px_rgba(0,0,0,0.45)]">{character.name}</h3>
-                  <p className="text-xs font-semibold leading-relaxed text-white/80">
-                    {character.shortDesc || character.longDesc || "Select to enter the full cinematic dossier."}
-                  </p>
-                </div>
-                <div className="flex items-center gap-2 text-xs font-semibold text-white/80">
-                  <Sparkles className="h-3.5 w-3.5" />
-                  <span>{character.faction?.[0] || character.locations?.[0] || "Unaligned"}</span>
-                </div>
+                <h3 className="text-xl font-black">{character.name}</h3>
+                <p className="text-sm text-white/75 line-clamp-3">{character.shortDesc || character.longDesc || "No synopsis available."}</p>
               </div>
             </motion.button>
-          );
-        })}
+          ))}
+        </div>
       </div>
     </section>
   );
@@ -716,9 +753,9 @@ const PreviewBoard = ({ data, onOpen }) => {
 // Character presentation
 // -----------------------------------------------------------------------------
 const PowerMeter = ({ level }) => (
-  <div className="h-2 w-full overflow-hidden rounded-full bg-white/20">
+  <div className="h-2 w-full overflow-hidden rounded-full bg-[#1f2a46]">
     <div
-      className="h-full rounded-full bg-gradient-to-r from-cyan-300 via-fuchsia-300 to-amber-200"
+      className="h-full rounded-full bg-gradient-to-r from-[#6ae7ff] via-[#fdd375] to-[#ef7fd3]"
       style={{ width: `${Math.max(0, Math.min(10, level)) * 10}%` }}
     />
   </div>
@@ -732,7 +769,7 @@ const Insignia = ({ label, size = 44 }) => {
     .join("") || "LM";
   return (
     <div
-      className="flex items-center justify-center rounded-2xl border border-white/25 bg-white/10 text-white shadow-[0_12px_45px_rgba(0,0,0,0.4)]"
+      className="flex items-center justify-center rounded-2xl border border-[#273354] bg-[#101831]/90 text-white shadow-[0_18px_45px_rgba(5,9,24,0.55)]"
       style={{ width: size, height: size }}
     >
       <span className="text-sm font-black tracking-[0.3em]">{initials}</span>
@@ -744,7 +781,7 @@ const ImageSafe = ({ src, alt, className = "", fallbackLabel }) => {
   const [err, setErr] = useState(false);
   if (!src || err) {
     return (
-      <div className={cx("flex items-center justify-center bg-black/35", className)}>
+      <div className={cx("flex items-center justify-center bg-[#0c1226]/85", className)}>
         <Insignia label={fallbackLabel || alt || "Lore"} size={72} />
       </div>
     );
@@ -757,8 +794,10 @@ const FacetChip = ({ active, onClick, children }) => (
     type="button"
     onClick={onClick}
     className={cx(
-      "rounded-full border px-3 py-1 text-xs font-bold transition",
-      active ? "border-amber-300 bg-amber-200/20 text-amber-100" : "border-white/25 bg-white/10 text-white/80 hover:bg-white/20"
+      "rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-[0.25em] transition",
+      active
+        ? "border-amber-200 bg-amber-200/15 text-amber-100"
+        : "border-[#273354] bg-[#0f162c] text-white/70 hover:bg-[#141f36] hover:text-white"
     )}
   >
     {children}
@@ -776,47 +815,50 @@ const CharacterCard = ({ character, onOpen, onFacet, onUseInArena }) => {
   return (
     <Card
       className={cx(
-        "overflow-hidden transition",
-        pulse ? "ring-2 ring-amber-300" : "hover:-translate-y-2 hover:shadow-[0_28px_80px_rgba(0,0,0,0.45)]"
+        "flex h-full flex-col overflow-hidden border-[#1c243d] bg-[#0f172d]/90 transition",
+        pulse ? "ring-2 ring-amber-300/60" : "hover:-translate-y-2 hover:shadow-[0_34px_90px_rgba(5,9,24,0.55)]"
       )}
     >
-      <div className="relative h-56 w-full">
-        <button
-          type="button"
-          className="group absolute inset-0 overflow-hidden"
-          onClick={() => onOpen(character)}
-        >
-          <ImageSafe
-            src={character.cover || character.gallery[0]}
-            alt={character.name}
-            fallbackLabel={character.name}
-            className="h-full w-full object-cover transition duration-700 group-hover:scale-105"
-          />
-          <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/25 to-transparent opacity-85 transition duration-500 group-hover:opacity-70" />
-        </button>
-        <div className="absolute left-3 top-3 flex flex-col gap-2">
-          <Insignia label={character.faction?.[0] || character.name} size={38} />
+      <div className="flex flex-1 flex-col gap-5 p-6">
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <Insignia label={character.faction?.[0] || character.name} size={44} />
+            <div>
+              <p className="text-[0.6rem] font-semibold uppercase tracking-[0.35em] text-white/55">
+                {character.faction?.[0] || character.alignment || "Unaffiliated"}
+              </p>
+              <button type="button" className="text-left text-xl font-black text-white" onClick={() => onOpen(character)}>
+                {character.name}
+              </button>
+            </div>
+          </div>
           <motion.button
             type="button"
             initial={{ opacity: 0, y: -6 }}
             whileInView={{ opacity: 1, y: 0 }}
             whileTap={{ scale: 0.95 }}
             onClick={triggerSim}
-            className="hidden rounded-full bg-amber-300 px-3 py-1 text-[0.65rem] font-black uppercase tracking-[0.35em] text-black shadow-lg md:flex"
+            className="hidden rounded-full border border-amber-200/60 bg-amber-200/15 px-3 py-1 text-[0.65rem] font-black uppercase tracking-[0.4em] text-amber-100 shadow lg:flex"
           >
             <Swords className="mr-1 h-3.5 w-3.5" /> Simulate
           </motion.button>
         </div>
-      </div>
-      <CardHeader className="pb-4">
-        <CardTitle className="text-white">
-          <button type="button" className="text-left" onClick={() => onOpen(character)}>
-            {character.name}
-          </button>
-        </CardTitle>
-        <CardDescription>{character.shortDesc || character.longDesc || "No description available."}</CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-3">
+        <p className="text-sm leading-relaxed text-white/70 line-clamp-3">
+          {character.shortDesc || character.longDesc || "No description available."}
+        </p>
+        <button
+          type="button"
+          className="relative h-40 overflow-hidden rounded-2xl border border-[#1a233e] bg-[#111a31]"
+          onClick={() => onOpen(character)}
+        >
+          <ImageSafe
+            src={character.cover || character.gallery?.[0]}
+            alt={character.name}
+            fallbackLabel={character.name}
+            className="h-full w-full object-cover opacity-80 transition duration-700 hover:scale-105"
+          />
+          <div className="absolute inset-0 bg-gradient-to-t from-[#05070f]/85 via-[#05070f]/30 to-transparent" />
+        </button>
         <div className="flex flex-wrap gap-2">
           {character.gender ? <FacetChip onClick={() => onFacet({ key: "gender", value: character.gender })}>{character.gender}</FacetChip> : null}
           {character.alignment ? <FacetChip onClick={() => onFacet({ key: "alignment", value: character.alignment })}>{character.alignment}</FacetChip> : null}
@@ -832,23 +874,23 @@ const CharacterCard = ({ character, onOpen, onFacet, onUseInArena }) => {
           ))}
         </div>
         {character.powers?.[0] ? (
-          <div className="space-y-2 text-xs font-bold text-white/90">
-            <div className="flex items-center justify-between">
+          <div className="space-y-2 rounded-2xl border border-[#1a233e] bg-[#111a31]/70 p-4 text-xs font-semibold text-white/80">
+            <div className="flex items-center justify-between text-white">
               <span>{character.powers[0].name}</span>
               <span>{character.powers[0].level}/10</span>
             </div>
             <PowerMeter level={character.powers[0].level} />
           </div>
         ) : null}
-      </CardContent>
-      <CardFooter className="flex items-center justify-between">
-        <Button variant="secondary" onClick={() => onOpen(character)}>
-          Read <ArrowRight className="h-4 w-4" />
+      </div>
+      <div className="flex items-center justify-between border-t border-[#1a233e] bg-[#0b142a]/80 px-6 py-4">
+        <Button variant="secondary" className="gap-2" onClick={() => onOpen(character)}>
+          Read dossier <ArrowRight className="h-4 w-4" />
         </Button>
-        <Button variant="outline" className="md:hidden" onClick={() => onUseInArena(character)}>
+        <Button variant="outline" className="lg:hidden" onClick={() => onUseInArena(character)}>
           <Swords className="h-4 w-4" /> Sim
         </Button>
-      </CardFooter>
+      </div>
     </Card>
   );
 };
@@ -1464,7 +1506,7 @@ const CharacterGrid = ({ data, onOpen, onFacet, onUseInArena }) => (
       />
     ))}
     {!data.length ? (
-      <div className="text-white/80">No characters match your filters yet.</div>
+      <div className="text-white/60">No characters match your filters yet.</div>
     ) : null}
   </div>
 );
@@ -1480,73 +1522,73 @@ const HEALTH_BAR_VARIANTS = {
 const ArenaSlot = ({ label, character, onRelease, onRandom, isChampion }) => (
   <div
     className={cx(
-      "relative flex min-h-[18rem] flex-col gap-4 rounded-3xl border border-slate-200 bg-white/95 p-4 text-slate-900 shadow-[0_16px_60px_rgba(15,23,42,0.25)]",
-      isChampion ? "ring-4 ring-amber-300" : ""
+      "relative flex min-h-[18rem] flex-col gap-4 rounded-3xl border border-[#1a233e] bg-[#0d152b]/95 p-5 text-white shadow-[0_26px_80px_rgba(4,7,22,0.45)]",
+      isChampion ? "ring-2 ring-amber-300/60" : ""
     )}
   >
-    <div className="flex items-center justify-between">
-      <span className="text-xs font-black uppercase tracking-[0.35em] text-slate-500">{label}</span>
+    <div className="flex items-center justify-between gap-3">
+      <span className="text-xs font-semibold uppercase tracking-[0.35em] text-white/55">{label}</span>
       <div className="flex items-center gap-2">
-        <Button variant="outline" onClick={onRandom} className="border-slate-300 text-slate-700">
+        <Button variant="outline" onClick={onRandom}>
           Randomise
         </Button>
         {character ? (
-          <IconButton icon={X} label="Release" onClick={onRelease} className="border-slate-200 bg-slate-100 text-slate-600" />
+          <IconButton icon={X} label="Release" onClick={onRelease} className="border-[#273354] bg-[#111a31] text-white/80" />
         ) : null}
       </div>
     </div>
     {character ? (
-      <div className="space-y-3">
+      <div className="space-y-4">
         <div className="flex items-center gap-3">
-          <div className="h-18 w-18 overflow-hidden rounded-2xl border border-slate-200 bg-slate-900">
-            <ImageSafe src={character.cover || character.gallery[0]} alt={character.name} fallbackLabel={character.name} className="h-full w-full" />
+          <div className="h-18 w-18 overflow-hidden rounded-2xl border border-[#273354] bg-[#101831]">
+            <ImageSafe src={character.cover || character.gallery?.[0]} alt={character.name} fallbackLabel={character.name} className="h-full w-full" />
           </div>
           <div>
-            <p className="text-lg font-black text-slate-900">{character.name}</p>
-            <p className="text-xs font-semibold uppercase tracking-[0.3em] text-slate-500">{character.faction?.[0] || "Unaligned"}</p>
+            <p className="text-lg font-black text-white">{character.name}</p>
+            <p className="text-xs font-semibold uppercase tracking-[0.3em] text-white/55">{character.faction?.[0] || "Unaligned"}</p>
           </div>
         </div>
-        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
-          <p className="text-xs font-semibold uppercase tracking-[0.3em] text-slate-500">Health Bar</p>
-          <motion.div className="mt-2 h-2 rounded-full bg-slate-200" initial="hidden" animate="ready" variants={HEALTH_BAR_VARIANTS}>
+        <div className="rounded-2xl border border-[#1a233e] bg-[#111a31]/80 p-3">
+          <p className="text-xs font-semibold uppercase tracking-[0.3em] text-white/55">Health Bar</p>
+          <motion.div className="mt-2 h-2 rounded-full bg-[#1f2a46]" initial="hidden" animate="ready" variants={HEALTH_BAR_VARIANTS}>
             <motion.div
-              className="h-full rounded-full bg-gradient-to-r from-emerald-400 to-amber-400"
+              className="h-full rounded-full bg-gradient-to-r from-[#6ae7ff] via-[#fdd375] to-[#ef7fd3]"
               animate={{ scaleX: isChampion ? 1 : 0.4 }}
               transition={{ duration: 1.3, ease: "easeInOut" }}
               style={{ transformOrigin: "left" }}
             />
           </motion.div>
         </div>
-        <div className="grid grid-cols-2 gap-3 text-xs font-semibold text-slate-700">
+        <div className="grid grid-cols-2 gap-3 text-xs font-semibold text-white/75">
           <div>
-            <p className="text-[0.65rem] uppercase tracking-[0.3em] text-slate-400">Alignment</p>
-            <p className="mt-1 font-bold text-slate-800">{character.alignment || "Unknown"}</p>
+            <p className="text-[0.65rem] uppercase tracking-[0.3em] text-white/45">Alignment</p>
+            <p className="mt-1 font-bold text-white">{character.alignment || "Unknown"}</p>
           </div>
           <div>
-            <p className="text-[0.65rem] uppercase tracking-[0.3em] text-slate-400">Status</p>
-            <p className="mt-1 font-bold text-slate-800">{character.status || "Unknown"}</p>
+            <p className="text-[0.65rem] uppercase tracking-[0.3em] text-white/45">Status</p>
+            <p className="mt-1 font-bold text-white">{character.status || "Unknown"}</p>
           </div>
           <div>
-            <p className="text-[0.65rem] uppercase tracking-[0.3em] text-slate-400">Era</p>
-            <p className="mt-1 font-bold text-slate-800">{character.era || "Unknown"}</p>
+            <p className="text-[0.65rem] uppercase tracking-[0.3em] text-white/45">Era</p>
+            <p className="mt-1 font-bold text-white">{character.era || "Unknown"}</p>
           </div>
           <div>
-            <p className="text-[0.65rem] uppercase tracking-[0.3em] text-slate-400">Locations</p>
-            <p className="mt-1 font-bold text-slate-800">{character.locations?.join(", ") || "—"}</p>
+            <p className="text-[0.65rem] uppercase tracking-[0.3em] text-white/45">Locations</p>
+            <p className="mt-1 font-bold text-white">{character.locations?.join(", ") || "—"}</p>
           </div>
         </div>
-        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
-          <p className="text-[0.65rem] uppercase tracking-[0.3em] text-slate-400">Powers</p>
+        <div className="rounded-2xl border border-[#1a233e] bg-[#111a31]/80 p-3">
+          <p className="text-[0.65rem] uppercase tracking-[0.3em] text-white/45">Powers</p>
           <div className="mt-2 space-y-2">
             {(character.powers || []).map((power) => (
               <div key={power.name} className="space-y-1">
-                <div className="flex items-center justify-between text-xs font-bold text-slate-700">
+                <div className="flex items-center justify-between text-xs font-bold text-white/80">
                   <span>{power.name}</span>
                   <span>{power.level}/10</span>
                 </div>
-                <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-200">
+                <div className="h-1.5 w-full overflow-hidden rounded-full bg-[#1f2a46]">
                   <div
-                    className="h-full rounded-full bg-gradient-to-r from-slate-500 via-amber-400 to-rose-400"
+                    className="h-full rounded-full bg-gradient-to-r from-[#6ae7ff] via-[#fdd375] to-[#ef7fd3]"
                     style={{ width: `${Math.max(0, Math.min(10, power.level)) * 10}%` }}
                   />
                 </div>
@@ -1556,8 +1598,8 @@ const ArenaSlot = ({ label, character, onRelease, onRandom, isChampion }) => (
         </div>
       </div>
     ) : (
-      <div className="flex flex-1 flex-col items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-slate-50/60 p-6 text-center text-slate-500">
-        <Swords className="h-8 w-8 text-slate-400" />
+      <div className="flex flex-1 flex-col items-center justify-center rounded-2xl border border-dashed border-[#273354] bg-[#101831]/70 p-6 text-center text-white/60">
+        <Swords className="h-8 w-8 text-white/50" />
         <p className="mt-3 text-sm font-semibold">Select or randomise a character to enter the arena.</p>
       </div>
     )}
@@ -1580,17 +1622,17 @@ const BattleArena = ({
   const championId = result?.winner?.id;
 
   return (
-    <Card className="bg-white text-slate-900 shadow-[0_20px_80px_rgba(15,23,42,0.35)]">
-      <CardHeader className="border-b border-slate-200 pb-4">
+    <Card className="border-[#1a233e] bg-[#0b142a]/95 text-white shadow-[0_34px_110px_rgba(4,7,22,0.55)]">
+      <CardHeader className="border-b border-[#1a233e] pb-4">
         <div className="flex items-center justify-between">
           <div>
-            <CardTitle className="text-slate-900">Battle Arena</CardTitle>
-            <CardDescription className="text-slate-600">Characters become Champions through calculated strikes and luck swings.</CardDescription>
+            <CardTitle className="text-white">Battle Arena</CardTitle>
+            <CardDescription className="text-white/65">Characters become Champions through calculated strikes and luck swings.</CardDescription>
           </div>
-          <IconButton icon={X} label="Hide arena" onClick={onClose} className="border-slate-200 bg-slate-100 text-slate-600" />
+          <IconButton icon={X} label="Hide arena" onClick={onClose} className="border-[#273354] bg-[#111a31] text-white/80" />
         </div>
       </CardHeader>
-      <CardContent className="space-y-4">
+      <CardContent className="space-y-5">
         <div className="grid gap-4 lg:grid-cols-2">
           <ArenaSlot
             label="Character One"
@@ -1607,27 +1649,23 @@ const BattleArena = ({
             isChampion={championId && charB && championId === charB.id}
           />
         </div>
-        <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-slate-700">
-          <Button
-            variant="outline"
-            className="border-slate-300 text-slate-700"
-            onClick={() => onRandomise(!slotA ? "a" : !slotB ? "b" : "a")}
-          >
+        <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-[#1a233e] bg-[#111a31]/80 p-4 text-white/80">
+          <Button variant="outline" onClick={() => onRandomise(!slotA ? "a" : !slotB ? "b" : "a")}
+            >
             Randomise Next Slot
           </Button>
           <Button
-            variant="secondary"
-            className="bg-slate-900 text-white hover:bg-slate-800"
+            variant="default"
             onClick={onFight}
             disabled={!charA || !charB || charA.id === charB.id || fighting}
           >
             Fight
           </Button>
-          <Button variant="outline" className="border-slate-300 text-slate-700" onClick={() => { onRelease("a"); onRelease("b"); }}>
+          <Button variant="outline" onClick={() => { onRelease("a"); onRelease("b"); }}>
             Reset
           </Button>
-          <div className="ml-auto flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.3em] text-slate-500">
-            <Swords className={cx("h-4 w-4", fighting ? "animate-pulse text-amber-500" : "text-slate-500")} />
+          <div className="ml-auto flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.3em] text-white/50">
+            <Swords className={cx("h-4 w-4", fighting ? "animate-pulse text-amber-200" : "text-white/50")} />
             {fighting ? "Calculating" : result ? "Champion crowned" : "Awaiting contestants"}
           </div>
         </div>
@@ -1636,8 +1674,8 @@ const BattleArena = ({
             animate={fighting ? { rotate: [0, -15, 15, -10, 10, 0], scale: [1, 1.1, 1] } : { rotate: 0, scale: 1 }}
             transition={fighting ? { duration: 1.2, repeat: Infinity, ease: "easeInOut" } : { duration: 0.4 }}
             className={cx(
-              "relative flex h-16 w-16 items-center justify-center rounded-full border-4 border-slate-200 bg-slate-900 text-white",
-              fighting ? "shadow-[0_0_40px_rgba(251,191,36,0.7)]" : ""
+              "relative flex h-16 w-16 items-center justify-center rounded-full border-4 border-[#1a233e] bg-[#101831] text-white",
+              fighting ? "shadow-[0_0_40px_rgba(235,197,120,0.7)]" : ""
             )}
           >
             <Swords className="h-8 w-8" />
@@ -1651,22 +1689,22 @@ const BattleArena = ({
           </motion.div>
         </div>
         {result ? (
-          <div className="grid gap-4 text-sm text-slate-700 lg:grid-cols-3">
-            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-slate-500">{charA?.name || "—"}</p>
-              <p className="mt-2 font-bold">Base Score: {result.scores.a.base}</p>
-              <p className="font-bold">Luck Swings: {result.scores.a.luck}</p>
-              <p className="font-bold">Final: {result.scores.a.total}</p>
+          <div className="grid gap-4 text-sm text-white/80 lg:grid-cols-3">
+            <div className="rounded-2xl border border-[#1a233e] bg-[#111a31]/80 p-4">
+              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-white/45">{charA?.name || "—"}</p>
+              <p className="mt-2 font-bold text-white">Base Score: {result.scores.a.base}</p>
+              <p className="font-bold text-white">Luck Swings: {result.scores.a.luck}</p>
+              <p className="font-bold text-white">Final: {result.scores.a.total}</p>
             </div>
-            <div className="rounded-2xl border border-slate-200 bg-slate-900 p-4 text-center text-white">
-              <p className="text-xs font-semibold uppercase tracking-[0.4em] text-white/60">Champion</p>
+            <div className="rounded-2xl border border-[#e9b85a]/50 bg-[#151f38] p-4 text-center text-white shadow-[0_0_40px_rgba(235,197,120,0.3)]">
+              <p className="text-xs font-semibold uppercase tracking-[0.4em] text-amber-100">Champion</p>
               <p className="mt-2 text-lg font-black">{result.winner.name}</p>
             </div>
-            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-slate-500">{charB?.name || "—"}</p>
-              <p className="mt-2 font-bold">Base Score: {result.scores.b.base}</p>
-              <p className="font-bold">Luck Swings: {result.scores.b.luck}</p>
-              <p className="font-bold">Final: {result.scores.b.total}</p>
+            <div className="rounded-2xl border border-[#1a233e] bg-[#111a31]/80 p-4">
+              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-white/45">{charB?.name || "—"}</p>
+              <p className="mt-2 font-bold text-white">Base Score: {result.scores.b.base}</p>
+              <p className="font-bold text-white">Luck Swings: {result.scores.b.luck}</p>
+              <p className="font-bold text-white">Final: {result.scores.b.total}</p>
             </div>
           </div>
         ) : null}
@@ -1686,10 +1724,10 @@ const SortRail = ({ active, onSelect }) => (
         type="button"
         onClick={() => onSelect(option.key)}
         className={cx(
-          "rounded-full border px-3 py-1 text-xs font-black uppercase tracking-[0.2em] transition",
+          "rounded-full border px-4 py-1.5 text-xs font-semibold uppercase tracking-[0.28em] transition",
           active === option.key
-            ? "border-amber-300 bg-amber-300/20 text-amber-100"
-            : "border-white/25 bg-white/10 text-white/75 hover:bg-white/20"
+            ? "border-amber-200 bg-amber-200/15 text-amber-100"
+            : "border-[#273354] bg-[#0f172d] text-white/65 hover:bg-[#141f36] hover:text-white"
         )}
       >
         {option.label}
@@ -1708,31 +1746,31 @@ const QuickControls = ({
   sortedBy,
   onSort,
 }) => (
-  <div className="flex flex-col gap-4 rounded-3xl border border-white/10 bg-gradient-to-br from-white/10 via-white/5 to-white/10 p-6 text-white shadow-[0_16px_70px_rgba(0,0,0,0.45)] backdrop-blur-lg">
-    <div className="flex flex-col gap-3 md:flex-row md:items-center">
+  <div className="flex flex-col gap-6 rounded-[28px] border border-[#1a233e] bg-[#0d152b]/90 p-6 text-white shadow-[0_28px_90px_rgba(4,7,22,0.45)] backdrop-blur-xl">
+    <div className="flex flex-col gap-4 lg:flex-row lg:items-center">
       <div className="relative flex-1">
         <Input
           value={query}
           onChange={(event) => setQuery(event.target.value)}
           placeholder="Search characters, powers, factions, locations..."
-          className="pl-9"
+          className="pl-11"
         />
-        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/70" />
+        <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-white/60" />
       </div>
       <div className="flex flex-wrap items-center gap-3">
-        <Button variant="secondary" className="bg-gradient-to-r from-amber-500 via-fuchsia-500 to-indigo-500 text-white" onClick={onOpenFilters}>
+        <Button variant="secondary" className="gap-2" onClick={onOpenFilters}>
           <Filter className="h-4 w-4" /> Filters
         </Button>
         <Button variant="outline" onClick={onClear}>
           Clear
         </Button>
-        <Button variant={arenaVisible ? "secondary" : "outline"} onClick={onToggleArena}>
-          Arena {arenaVisible ? "On" : "Off"}
+        <Button variant={arenaVisible ? "default" : "outline"} onClick={onToggleArena}>
+          <Swords className="h-4 w-4" /> Arena {arenaVisible ? "active" : "standby"}
         </Button>
       </div>
     </div>
-    <div className="space-y-2">
-      <p className="text-xs font-semibold uppercase tracking-[0.3em] text-white/60">Sort Characters</p>
+    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <p className="text-xs font-semibold uppercase tracking-[0.35em] text-white/55">Sort dossier listing</p>
       <SortRail active={sortedBy} onSelect={onSort} />
     </div>
   </div>
@@ -1841,13 +1879,13 @@ const ChatDock = () => {
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 12 }}
-            className="mb-3 w-72 rounded-3xl border border-white/10 bg-white/10 p-4 text-white shadow-[0_14px_45px_rgba(0,0,0,0.45)] backdrop-blur"
+            className="mb-3 w-72 rounded-3xl border border-[#1a233e] bg-[#0d152b]/95 p-4 text-white shadow-[0_28px_70px_rgba(4,7,22,0.45)] backdrop-blur"
           >
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2 text-sm font-semibold">
                 <Bot className="h-4 w-4" /> Lore Chat
               </div>
-              <IconButton icon={X} label="Close chat" onClick={() => setOpen(false)} className="border-white/20 bg-white/10" />
+              <IconButton icon={X} label="Close chat" onClick={() => setOpen(false)} className="border-[#273354] bg-[#111a31] text-white/80" />
             </div>
             <div className="mt-3 max-h-40 space-y-2 overflow-y-auto text-xs">
               {messages.map((message) => (
@@ -1855,14 +1893,14 @@ const ChatDock = () => {
                   key={message.id}
                   className={cx(
                     "rounded-2xl px-3 py-2",
-                    message.role === "user" ? "bg-amber-300/30 text-amber-100" : "bg-white/15 text-white"
+                    message.role === "user" ? "bg-amber-200/15 text-amber-100" : "bg-[#111a31]/80 text-white"
                   )}
                 >
                   {message.text}
                 </div>
               ))}
               {!messages.length ? (
-                <p className="rounded-2xl bg-white/5 p-3 text-white/70">
+                <p className="rounded-2xl border border-[#273354] bg-[#111a31]/70 p-3 text-white/70">
                   Ask the Lorekeeper about characters, factions, or events and we’ll route it through the connected workflow.
                 </p>
               ) : null}
@@ -1872,13 +1910,13 @@ const ChatDock = () => {
                 value={input}
                 onChange={(event) => setInput(event.target.value)}
                 placeholder="Ask the Lorekeeper..."
-                className="flex-1 rounded-xl border border-white/20 bg-white/10 px-3 py-2 text-xs font-semibold text-white placeholder:text-white/50 focus:outline-none focus:ring-2 focus:ring-amber-300"
+                className="flex-1 rounded-xl border border-[#273354] bg-[#111a31]/80 px-3 py-2 text-xs font-semibold text-white placeholder:text-white/50 focus:outline-none focus:ring-2 focus:ring-amber-300/60"
               />
               <button
                 type="button"
                 onClick={sendMessage}
                 disabled={sending}
-                className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-amber-300 bg-amber-400 text-black shadow disabled:opacity-60"
+                className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-amber-200 bg-amber-300 text-slate-900 shadow disabled:opacity-60"
               >
                 <Send className="h-4 w-4" />
               </button>
@@ -1889,7 +1927,7 @@ const ChatDock = () => {
       <button
         type="button"
         onClick={() => setOpen((prev) => !prev)}
-        className="inline-flex items-center gap-2 rounded-full border border-white/25 bg-white/10 px-4 py-2 text-sm font-semibold text-white shadow-[0_12px_35px_rgba(0,0,0,0.4)] backdrop-blur hover:bg-white/20"
+        className="inline-flex items-center gap-2 rounded-full border border-[#273354] bg-[#111a31]/80 px-4 py-2 text-sm font-semibold text-white shadow-[0_18px_45px_rgba(4,7,22,0.45)] backdrop-blur hover:bg-[#141f36]"
       >
         <MessageCircle className="h-4 w-4" /> Chat
       </button>
@@ -1898,23 +1936,23 @@ const ChatDock = () => {
 };
 
 const Footer = () => (
-  <footer className="mt-16 border-t border-white/10 bg-gradient-to-t from-black/80 via-black/40 to-transparent backdrop-blur">
-    <div className="mx-auto flex max-w-7xl flex-col gap-6 px-4 py-8 text-white/70 sm:flex-row sm:items-center sm:justify-between">
+  <footer className="mt-16 border-t border-[#1a233e] bg-[#060b19]/80 backdrop-blur">
+    <div className="mx-auto flex max-w-7xl flex-col gap-6 px-4 py-8 text-white/60 sm:flex-row sm:items-center sm:justify-between">
       <div className="space-y-1">
-        <p className="text-sm font-semibold">© {new Date().getFullYear()} Loremaker • ICUNI</p>
+        <p className="text-sm font-semibold text-white/80">© {new Date().getFullYear()} Loremaker • ICUNI</p>
         <p className="text-xs">Mythic universes engineered by Menelek Makonnen.</p>
       </div>
       <div className="flex flex-wrap gap-3 text-sm font-semibold text-white">
-        <a href={LINKS.instagram} target="_blank" rel="noreferrer" className="flex items-center gap-2 rounded-full border border-white/10 bg-white/10 px-3 py-1 hover:bg-white/20">
+        <a href={LINKS.instagram} target="_blank" rel="noreferrer" className="flex items-center gap-2 rounded-full border border-[#273354] bg-[#111a31]/80 px-3 py-1 hover:bg-[#141f36]">
           <Instagram className="h-4 w-4" /> Instagram
         </a>
-        <a href={LINKS.youtube} target="_blank" rel="noreferrer" className="flex items-center gap-2 rounded-full border border-white/10 bg-white/10 px-3 py-1 hover:bg-white/20">
+        <a href={LINKS.youtube} target="_blank" rel="noreferrer" className="flex items-center gap-2 rounded-full border border-[#273354] bg-[#111a31]/80 px-3 py-1 hover:bg-[#141f36]">
           <Youtube className="h-4 w-4" /> YouTube
         </a>
-        <a href={LINKS.linkedin} target="_blank" rel="noreferrer" className="flex items-center gap-2 rounded-full border border-white/10 bg-white/10 px-3 py-1 hover:bg-white/20">
+        <a href={LINKS.linkedin} target="_blank" rel="noreferrer" className="flex items-center gap-2 rounded-full border border-[#273354] bg-[#111a31]/80 px-3 py-1 hover:bg-[#141f36]">
           <Linkedin className="h-4 w-4" /> LinkedIn
         </a>
-        <a href={LINKS.email} className="flex items-center gap-2 rounded-full border border-white/10 bg-white/10 px-3 py-1 hover:bg-white/20">
+        <a href={LINKS.email} className="flex items-center gap-2 rounded-full border border-[#273354] bg-[#111a31]/80 px-3 py-1 hover:bg-[#141f36]">
           <Mail className="h-4 w-4" /> Email
         </a>
       </div>
