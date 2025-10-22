@@ -1,0 +1,10 @@
+{
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["./*"],
+      "framer-motion": ["./lib/framer-motion.js"],
+      "lucide-react": ["./lib/lucide-react.js"]
+    }
+  }
+}
