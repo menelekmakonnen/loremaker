@@ -1,10 +1,92 @@
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap");
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-/* Custom global styles can be added here */
+:root {
+  color-scheme: dark;
+  --canvas: #050915;
+  --canvas-secondary: #0b1124;
+  --glow-one: rgba(109, 125, 255, 0.45);
+  --glow-two: rgba(254, 196, 108, 0.35);
+  --glow-three: rgba(120, 188, 255, 0.32);
+}
+
 body {
   min-height: 100vh;
-  background-color: #000;
-  color: #fff;
+  background: radial-gradient(at 18% 16%, rgba(118, 136, 255, 0.28) 0, transparent 55%),
+    radial-gradient(at 80% 12%, rgba(253, 198, 126, 0.26) 0, transparent 52%),
+    radial-gradient(at 50% 88%, rgba(107, 205, 255, 0.16) 0, transparent 60%),
+    linear-gradient(160deg, var(--canvas-secondary) 0%, #060812 55%, var(--canvas) 100%);
+  color: #f8f8ff;
+  font-family: "Space Grotesk", "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  position: relative;
+  overflow-x: hidden;
+}
+
+body::before,
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: -1;
+}
+
+body::before {
+  background-image: radial-gradient(1px 1px at 10% 20%, rgba(255, 255, 255, 0.45) 0, transparent 60%),
+    radial-gradient(1px 1px at 42% 78%, rgba(255, 255, 255, 0.3) 0, transparent 65%),
+    radial-gradient(2px 2px at 78% 42%, rgba(255, 255, 255, 0.22) 0, transparent 70%);
+  opacity: 0.55;
+  animation: twinkle 16s linear infinite;
+}
+
+body::after {
+  background: linear-gradient(0deg, rgba(5, 6, 15, 0.66), transparent 35%),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220' viewBox='0 0 220 220'%3E%3Cg fill='none' stroke='rgba(255,255,255,0.04)' stroke-width='1'%3E%3Cpath d='M0 .5H220'/%3E%3Cpath d='M.5 0V220'/%3E%3C/g%3E%3C/svg%3E");
+  mix-blend-mode: screen;
+  opacity: 0.32;
+}
+
+@keyframes twinkle {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 0.55;
+  }
+  40% {
+    transform: scale(1.02);
+    opacity: 0.85;
+  }
+  70% {
+    transform: scale(0.98);
+    opacity: 0.45;
+  }
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.25) rgba(8, 9, 21, 0.5);
+}
+
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, rgba(255, 200, 120, 0.65), rgba(130, 109, 255, 0.45));
+  border-radius: 999px;
+}
+
+*::-webkit-scrollbar-track {
+  background: rgba(8, 9, 21, 0.4);
 }
