@@ -1,4 +1,12 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  useId,
+} from "react";
 import { AnimatePresence, motion, useMotionValue, useSpring, useTransform } from "framer-motion";
 import {
   Search,
@@ -21,12 +29,13 @@ import {
   Crown,
   Swords,
 } from "lucide-react";
+import { computeFeatured, normaliseArray, fetchCharactersFromSheets, todayKey } from "../lib/characters";
 
 /**
  * Ultra interactive Loremaker experience
  * - Loads characters from Google Sheets (GViz)
  * - Daily seeded hero carousel + power seeding
- * - Sliding filters drawer, animated arena, chat webhook bridge
+ * - Sliding filters drawer, animated arena, immersive UI components
  */
 
 function cx(...classes) {
@@ -34,7 +43,7 @@ function cx(...classes) {
 }
 
 function Button({ variant = "solid", size = "md", className = "", children, as: Tag = "button", ...props }) {
-  const base = "inline-flex items-center justify-center gap-2 font-extrabold rounded-xl transition focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-0";
+  const base = "inline-flex items-center justify-center gap-2 font-extrabold rounded-xl transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300/80 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent";
   const sizes = {
     sm: "px-3 py-1.5 text-xs",
     md: "px-4 py-2 text-sm",
@@ -119,255 +128,6 @@ function useMediaQuery(query) {
   return matches;
 }
 
-const SHEET_ID = "1nbAsU-zNe4HbM0bBLlYofi1pHhneEjEIWfW22JODBeM";
-const SHEET_NAME = "Characters";
-const GVIZ_URL = (sheetName) =>
-  `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(sheetName)}`;
-
-const TRACK_VISIT_WEBHOOK =
-  typeof window === "undefined"
-    ? process.env.NEXT_PUBLIC_LOREMAKER_TRACK_WEBHOOK || ""
-    : window?.__NEXT_DATA__?.props?.pageProps?.trackVisitWebhook ||
-      process.env.NEXT_PUBLIC_LOREMAKER_TRACK_WEBHOOK ||
-      "";
-
-const COL_ALIAS = {
-  id: ["id", "char_id", "character id", "code"],
-  name: ["character", "character name", "name"],
-  alias: ["alias", "aliases", "also known as"],
-  gender: ["gender", "sex"],
-  alignment: ["alignment"],
-  location: ["location", "base of operations", "locations"],
-  status: ["status"],
-  era: ["era", "origin/era", "time"],
-  firstAppearance: ["first appearance", "debut", "firstappearance"],
-  powers: ["powers", "abilities", "power"],
-  faction: ["faction", "team", "faction/team"],
-  tag: ["tag", "tags"],
-  shortDesc: ["short description", "shortdesc", "blurb"],
-  longDesc: ["long description", "longdesc", "bio"],
-  stories: ["stories", "story", "appears in"],
-  cover: ["cover image", "cover", "cover url"],
-};
-const GALLERY_ALIASES = Array.from({ length: 15 }, (_, i) => i + 1).map((n) => [
-  `gallery image ${n}`,
-  `gallery ${n}`,
-  `img ${n}`,
-  `image ${n}`,
-]);
-
-let __SOURCE_ORDER = new Map();
-
-const toSlug = (s) => (s || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)+/g, "");
-function normalizeDriveUrl(url) {
-  if (!url) return undefined;
-  try {
-    const u = new URL(url);
-    if (u.hostname.includes("drive.google.com")) {
-      const match = u.pathname.match(/\/file\/d\/([^/]+)/);
-      const id = (match && match[1]) || u.searchParams.get("id");
-      if (id) return `https://drive.google.com/uc?export=view&id=${id}`;
-    }
-    return url;
-  } catch {
-    return url;
-  }
-}
-function splitList(raw) {
-  if (!raw) return [];
-  return raw
-    .replace(/\band\b/gi, ",")
-    .replace(/[|;/]/g, ",")
-    .split(",")
-    .map((s) => s.trim())
-    .filter(Boolean);
-}
-function parseLocations(raw) {
-  const items = splitList(raw);
-  const set = new Set();
-  for (const item of items) {
-    item
-      .split(/\s*,\s*/)
-      .map((s) => s.trim())
-      .filter(Boolean)
-      .forEach((value) => set.add(value));
-  }
-  return Array.from(set);
-}
-function parsePowers(raw) {
-  if (!raw) return [];
-  const items = splitList(raw);
-  return items.map((item) => {
-    let name = item;
-    let level = 0;
-    const colon = item.match(/^(.*?)[=:]\s*(\d{1,2})(?:\s*\/\s*10)?$/);
-    if (colon) {
-      name = colon[1].trim();
-      level = parseInt(colon[2], 10);
-    } else if (/\((\d{1,2})\)/.test(item)) {
-      const m = item.match(/^(.*?)\((\d{1,2})\)$/);
-      name = (m?.[1] || item).trim();
-      level = parseInt(m?.[2] || "0", 10);
-    } else {
-      const trail = item.match(/^(.*?)(\d{1,2})$/);
-      if (trail) {
-        name = trail[1].trim();
-        level = parseInt(trail[2], 10);
-      } else {
-        name = item.trim();
-      }
-    }
-    return { name, level: Number.isFinite(level) ? Math.min(10, Math.max(0, level)) : 0 };
-  });
-}
-function headerMap(headers) {
-  const map = {};
-  const lower = headers.map((h) => (h || "").toLowerCase().trim());
-  const findIndex = (aliases) => {
-    for (const alias of aliases) {
-      const idx = lower.indexOf(alias);
-      if (idx !== -1) return idx;
-    }
-    return -1;
-  };
-  for (const key of Object.keys(COL_ALIAS)) {
-    const idx = findIndex(COL_ALIAS[key]);
-    if (idx !== -1) map[key] = idx;
-  }
-  GALLERY_ALIASES.forEach((aliases, index) => {
-    const idx = findIndex(aliases);
-    if (idx !== -1) map[`gallery_${index + 1}`] = idx;
-  });
-  return map;
-}
-function parseGViz(text) {
-  const match = text.match(/google\.visualization\.Query\.setResponse\((.*)\);?$/s);
-  if (!match) throw new Error("GViz format not recognised");
-  return JSON.parse(match[1]);
-}
-function rowToCharacter(row, map) {
-  const read = (key) => {
-    const idx = map[key];
-    if (idx == null) return undefined;
-    const cell = row[idx];
-    if (!cell) return undefined;
-    const value = cell.v ?? cell.f ?? cell;
-    return typeof value === "string" ? value : String(value ?? "");
-  };
-  const name = (read("name") || "").trim();
-  if (!name) return null;
-  const char = {
-    id: read("id") || toSlug(name),
-    name,
-    alias: splitList(read("alias")),
-    gender: read("gender"),
-    alignment: read("alignment"),
-    locations: parseLocations(read("location")),
-    status: read("status"),
-    era: read("era"),
-    firstAppearance: read("firstAppearance"),
-    powers: parsePowers(read("powers")),
-    faction: splitList(read("faction")),
-    tags: splitList(read("tag")),
-    shortDesc: read("shortDesc"),
-    longDesc: read("longDesc"),
-    stories: splitList(read("stories")),
-    cover: normalizeDriveUrl(read("cover")),
-    gallery: [],
-  };
-  for (let i = 1; i <= 15; i++) {
-    const url = read(`gallery_${i}`);
-    if (url) char.gallery.push(normalizeDriveUrl(url));
-  }
-  return char;
-}
-
-const todayKey = () => new Date().toISOString().slice(0, 10);
-function seededRandom(seed) {
-  let h = 2166136261;
-  for (let i = 0; i < seed.length; i++) {
-    h ^= seed.charCodeAt(i);
-    h += (h << 1) + (h << 4) + (h << 7) + (h << 8) + (h << 24);
-  }
-  return () => {
-    h += 0x6d2b79f5;
-    let t = Math.imul(h ^ (h >>> 15), 1 | h);
-    t ^= t + Math.imul(t ^ (t >>> 7), 61 | t);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
-const dailyInt = (seed, min = 1, max = 10) => {
-  const rand = seededRandom(`${seed}|${todayKey()}`)();
-  return Math.floor(rand * (max - min + 1)) + min;
-};
-function fillDailyPowers(c) {
-  const seed = c.id || c.name || "character";
-  const powers = (c.powers || []).map((p, idx) => {
-    const label = p.name || `Power ${idx + 1}`;
-    const base = Math.max(0, Math.min(10, Number(p.level) || 0));
-    const min = base ? Math.max(3, base - 2) : 3;
-    const max = base ? Math.min(10, base + 2) : 9;
-    const level = dailyInt(`${seed}|${label}`, min, max);
-    return { ...p, level };
-  });
-  return { ...c, powers };
-}
-
-const uniqueSorted = (values) => Array.from(new Set(values.filter(Boolean))).sort((a, b) => a.localeCompare(b));
-
-function computeFeatured(characters) {
-  if (!characters || !characters.length) {
-    return { character: null, faction: null, location: null, power: null };
-  }
-  const rng = seededRandom(`featured|${todayKey()}`);
-  const pick = (arr) => {
-    if (!arr.length) return null;
-    const index = Math.floor(rng() * arr.length);
-    return arr[index] || arr[arr.length - 1] || null;
-  };
-
-  const character = pick(characters);
-  const factions = uniqueSorted(characters.flatMap((char) => normaliseArray(char.faction)));
-  const locations = uniqueSorted(characters.flatMap((char) => normaliseArray(char.locations)));
-  const powers = uniqueSorted(characters.flatMap((char) => (char.powers || []).map((power) => power.name)));
-
-  const faction = pick(factions);
-  const location = pick(locations);
-  const power = pick(powers);
-
-  const factionMembers = faction
-    ? characters.filter((char) => normaliseArray(char.faction).includes(faction))
-    : [];
-  const locationResidents = location
-    ? characters.filter((char) => normaliseArray(char.locations).includes(location))
-    : [];
-  const powerWielders = power
-    ? characters.filter((char) => (char.powers || []).some((p) => p.name === power))
-    : [];
-
-  return {
-    character: character || null,
-    faction: faction
-      ? { name: faction, members: factionMembers.slice(0, 8) }
-      : null,
-    location: location
-      ? { name: location, residents: locationResidents.slice(0, 8) }
-      : null,
-    power: power
-      ? { name: power, wielders: powerWielders.slice(0, 8) }
-      : null,
-  };
-}
-
-function normaliseArray(value) {
-  if (value == null) return [];
-  if (Array.isArray(value)) return value.filter(Boolean);
-  if (typeof value === "string") {
-    const trimmed = value.trim();
-    return trimmed ? [trimmed] : [];
-  }
-  return [value];
-}
 
 function getCharacterValues(character, key) {
   switch (key) {
@@ -453,61 +213,43 @@ function matchesFilters(character, filters = {}, combineAND = false, query = "")
   });
 }
 
-function useCharacters() {
-  const [data, setData] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+function useCharacters(initialData = [], initialError = null) {
+  const [data, setData] = useState(initialData);
+  const [loading, setLoading] = useState(!initialData.length && !initialError);
+  const [error, setError] = useState(initialError);
 
-  const fetchSheet = async () => {
+  const fetchLatest = useCallback(async (force = false) => {
     setLoading(true);
-    setError(null);
     try {
-      const pull = async (sheet) => {
-        const res = await fetch(GVIZ_URL(sheet));
-        if (!res.ok) throw new Error(`Google Sheets request failed (${res.status})`);
-        const text = await res.text();
-        return parseGViz(text);
-      };
-      let response;
-      try {
-        response = await pull(SHEET_NAME);
-      } catch (err) {
-        response = await pull("Sheet1");
+      const res = await fetch(`/api/characters${force ? "?force=1" : ""}`);
+      if (!res.ok) {
+        const payload = await res.json().catch(() => ({}));
+        throw new Error(payload.error || `Request failed (${res.status})`);
       }
-      const rows = response.table.rows || [];
-      const labels = response.table.cols.map((col) => (col?.label || col?.id || "").trim());
-      let map = headerMap(labels);
-      let usableRows = rows;
-      if (map.name == null && rows.length) {
-        const guess = (rows[0]?.c || []).map((cell) => String(cell?.v ?? cell?.f ?? "").trim());
-        const alt = headerMap(guess);
-        if (alt.name != null) {
-          map = alt;
-          usableRows = rows.slice(1);
-        }
-      }
-      const parsed = [];
-      usableRows.forEach((row, index) => {
-        const char = rowToCharacter(row.c || [], map);
-        if (char) {
-          parsed.push(fillDailyPowers(char));
-          if (!__SOURCE_ORDER.has(char.id)) __SOURCE_ORDER.set(char.id, index);
-        }
-      });
-      setData(parsed);
+      const payload = await res.json();
+      setData(payload.data || []);
+      setError(null);
     } catch (err) {
       console.error(err);
       setError(err?.message || "Unable to load characters");
     } finally {
       setLoading(false);
     }
-  };
-
-  useEffect(() => {
-    fetchSheet();
   }, []);
 
-  return { data, loading, error, refetch: fetchSheet };
+  useEffect(() => {
+    setData(initialData);
+    setError(initialError);
+    setLoading(false);
+  }, [initialData, initialError]);
+
+  useEffect(() => {
+    if (!initialData.length && !initialError) {
+      fetchLatest();
+    }
+  }, [fetchLatest, initialData.length, initialError]);
+
+  return { data, loading, error, refetch: () => fetchLatest(true) };
 }
 
 function Aurora({ className = "" }) {
@@ -959,7 +701,14 @@ function PowerMeter({ level, accent = "amber" }) {
       ? "from-rose-300 via-rose-400 to-red-500"
       : "from-amber-200 via-fuchsia-300 to-indigo-300";
   return (
-    <div className="h-2 w-full overflow-hidden rounded-full bg-white/15">
+    <div
+      className="h-2 w-full overflow-hidden rounded-full bg-white/15"
+      role="progressbar"
+      aria-valuenow={pct}
+      aria-valuemin={0}
+      aria-valuemax={100}
+      aria-label="Power level"
+    >
       <div className={cx("h-full bg-gradient-to-r", gradient)} style={{ width: `${pct}%` }} />
     </div>
   );
@@ -968,7 +717,9 @@ function PowerMeter({ level, accent = "amber" }) {
 function FacetChip({ active, onClick, children }) {
   return (
     <button
+      type="button"
       onClick={onClick}
+      aria-pressed={!!active}
       className={cx(
         "rounded-full border px-3 py-1 text-xs font-bold uppercase tracking-wide transition",
         active ? "border-white bg-white text-black" : "border-white/30 bg-white/10 text-white hover:bg-white/20"
@@ -1204,6 +955,9 @@ function Gallery({ images, cover, name }) {
 }
 
 function CharacterModal({ open, onClose, char, onFacet, onUseInSim }) {
+  const dialogRef = useRef(null);
+  const previouslyFocused = useRef(null);
+  const titleId = useId();
   useEffect(() => {
     if (!open) return;
     const original = document.body.style.overflow;
@@ -1212,17 +966,56 @@ function CharacterModal({ open, onClose, char, onFacet, onUseInSim }) {
       document.body.style.overflow = original;
     };
   }, [open]);
+  useEffect(() => {
+    if (!open) return undefined;
+    previouslyFocused.current = typeof document !== "undefined" ? document.activeElement : null;
+    const node = dialogRef.current;
+    if (!node) return undefined;
+    const focusable = node.querySelectorAll(
+      'a[href], button:not([disabled]), textarea, input, select, [tabindex]:not([tabindex="-1"])'
+    );
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    first?.focus();
+
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        onClose();
+      }
+      if (event.key === "Tab" && focusable.length) {
+        if (event.shiftKey && document.activeElement === first) {
+          event.preventDefault();
+          last?.focus();
+        } else if (!event.shiftKey && document.activeElement === last) {
+          event.preventDefault();
+          first?.focus();
+        }
+      }
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+      previouslyFocused.current && previouslyFocused.current.focus?.();
+    };
+  }, [open, onClose]);
   if (!open || !char) return null;
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby={titleId}>
       <Aurora className="opacity-70" />
       <div className="absolute inset-0 bg-black/70" onClick={onClose} />
-      <div className="relative z-10 w-full max-w-6xl overflow-hidden rounded-3xl border border-white/15 bg-black/65 backdrop-blur-2xl">
+      <div
+        ref={dialogRef}
+        className="relative z-10 w-full max-w-6xl overflow-hidden rounded-3xl border border-white/15 bg-black/65 backdrop-blur-2xl"
+      >
         <div className="flex items-center justify-between border-b border-white/15 px-6 py-4 text-white">
           <div className="flex items-center gap-4">
             <Insignia label={char.name} size={48} />
             <div>
-              <div className="text-3xl font-black drop-shadow-[0_2px_8px_rgba(0,0,0,0.6)]">{char.name}</div>
+              <div id={titleId} className="text-3xl font-black drop-shadow-[0_2px_8px_rgba(0,0,0,0.6)]">
+                {char.name}
+              </div>
               {char.era && <div className="text-[11px] font-extrabold uppercase tracking-[0.3em] text-white/70">{char.era}</div>}
             </div>
           </div>
@@ -1959,19 +1752,7 @@ function SidebarFilters({ data, filters, setFilters, combineAND, setCombineAND, 
       return next;
     });
   };
-
-  const Section = ({ title, values, keyName, single }) => (
-    <div className="space-y-2">
-      <div className="text-xs font-extrabold uppercase tracking-wide text-white/70">{title}</div>
-      <div className="flex max-h-40 flex-wrap gap-2 overflow-auto pr-1">
-        {values.map((value) => (
-          <FacetChip key={value} active={single ? filters[keyName] === value : (filters[keyName] || []).includes(value)} onClick={() => toggle(keyName, value, !!single)}>
-            {value}
-          </FacetChip>
-        ))}
-      </div>
-    </div>
-  );
+  const blendTooltipId = useId();
 
   return (
     <div className="space-y-6 p-5 text-white">
@@ -1982,37 +1763,83 @@ function SidebarFilters({ data, filters, setFilters, combineAND, setCombineAND, 
         <div className="flex items-center gap-2 text-xs">
           <span className="font-bold uppercase tracking-wide">Mode</span>
           <Badge className="bg-white/10 text-white/80">{combineAND ? "AND" : "Blend"}</Badge>
-          <Switch checked={combineAND} onCheckedChange={setCombineAND} />
+          <Switch checked={combineAND} onCheckedChange={setCombineAND} aria-describedby={blendTooltipId} />
         </div>
       </div>
+      <p id={blendTooltipId} className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-[11px] font-semibold leading-relaxed text-white/70">
+        Blend finds legends that match any of your selections. Switch to AND for precise dossiers that match every chosen filter.
+      </p>
       <Button variant="destructive" className="w-full" onClick={onClear}>
         Clear all
       </Button>
-      <Section title="Gender / Sex" values={genders} keyName="gender" single />
-      <Section title="Alignment" values={alignments} keyName="alignment" single />
-      <Section title="Era" values={eras} keyName="era" />
-      <Section title="Locations" values={locations} keyName="locations" />
-      <Section title="Faction / Team" values={factions} keyName="faction" />
-      <Section title="Powers" values={powers} keyName="powers" />
-      <Section title="Tags" values={tags} keyName="tags" />
-      <Section title="Status" values={statuses} keyName="status" />
-      <Section title="Stories" values={stories} keyName="stories" />
+      <FilterSection
+        title="Gender / Sex"
+        values={genders}
+        keyName="gender"
+        single
+        activeValues={filters.gender}
+        onToggle={(value) => toggle("gender", value, true)}
+      />
+      <FilterSection
+        title="Alignment"
+        values={alignments}
+        keyName="alignment"
+        single
+        activeValues={filters.alignment}
+        onToggle={(value) => toggle("alignment", value, true)}
+      />
+      <FilterSection
+        title="Era"
+        values={eras}
+        keyName="era"
+        activeValues={filters.era || []}
+        onToggle={(value) => toggle("era", value)}
+      />
+      <FilterSection
+        title="Locations"
+        values={locations}
+        keyName="locations"
+        activeValues={filters.locations || []}
+        onToggle={(value) => toggle("locations", value)}
+      />
+      <FilterSection
+        title="Faction / Team"
+        values={factions}
+        keyName="faction"
+        activeValues={filters.faction || []}
+        onToggle={(value) => toggle("faction", value)}
+      />
+      <FilterSection
+        title="Powers"
+        values={powers}
+        keyName="powers"
+        activeValues={filters.powers || []}
+        onToggle={(value) => toggle("powers", value)}
+      />
+      <FilterSection
+        title="Tags"
+        values={tags}
+        keyName="tags"
+        activeValues={filters.tags || []}
+        onToggle={(value) => toggle("tags", value)}
+      />
+      <FilterSection
+        title="Status"
+        values={statuses}
+        keyName="status"
+        activeValues={filters.status || []}
+        onToggle={(value) => toggle("status", value)}
+      />
+      <FilterSection
+        title="Stories"
+        values={stories}
+        keyName="stories"
+        activeValues={filters.stories || []}
+        onToggle={(value) => toggle("stories", value)}
+      />
     </div>
   );
 }
-
-function runDevTests() {
-  if (process.env.NODE_ENV === "production") return;
-  console.groupCollapsed("[Loremaker] quick sanity tests");
-  console.assert(toSlug("Mystic Man!") === "mystic-man", "slug ok");
-  console.assert(JSON.stringify(parseLocations("Hova, Yankopia; Afajato | and Luminae")) === JSON.stringify(["Hova", "Yankopia", "Afajato", "Luminae"]), "locations ok");
-  const powers = parsePowers("Speed:8, Strength=10, Flight (9), Telepathy 7");
-  console.assert(powers[0].level === 8 && powers[1].level === 10 && powers[2].level === 9 && powers[3].level === 7, "powers ok");
-  const gurl = normalizeDriveUrl("https://drive.google.com/file/d/12345/view?usp=sharing");
-  console.assert(gurl === "https://drive.google.com/uc?export=view&id=12345", "drive url normalised");
-  console.groupEnd();
-}
-
 
 function ScrollShortcuts() {
   const [showTop, setShowTop] = useState(false);
@@ -2074,6 +1901,8 @@ function ScrollShortcuts() {
 }
 
 function FilterDrawer({ open, onClose, children }) {
+  const drawerRef = useRef(null);
+  const previouslyFocused = useRef(null);
   useEffect(() => {
     if (!open) return undefined;
     const previous = document.body.style.overflow;
@@ -2082,6 +1911,38 @@ function FilterDrawer({ open, onClose, children }) {
       document.body.style.overflow = previous;
     };
   }, [open]);
+  useEffect(() => {
+    if (!open) return undefined;
+    previouslyFocused.current = typeof document !== "undefined" ? document.activeElement : null;
+    const node = drawerRef.current;
+    if (!node) return undefined;
+    const focusable = node.querySelectorAll(
+      'a[href], button:not([disabled]), textarea, input, select, [tabindex]:not([tabindex="-1"])'
+    );
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    first?.focus();
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        onClose();
+      }
+      if (event.key === "Tab" && focusable.length) {
+        if (event.shiftKey && document.activeElement === first) {
+          event.preventDefault();
+          last?.focus();
+        } else if (!event.shiftKey && document.activeElement === last) {
+          event.preventDefault();
+          first?.focus();
+        }
+      }
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+      previouslyFocused.current && previouslyFocused.current.focus?.();
+    };
+  }, [open, onClose]);
 
   return (
     <AnimatePresence>
@@ -2095,11 +1956,15 @@ function FilterDrawer({ open, onClose, children }) {
             onClick={onClose}
           />
           <motion.aside
+            ref={drawerRef}
             initial={{ x: "100%" }}
             animate={{ x: 0 }}
             exit={{ x: "100%" }}
             transition={{ type: "spring", stiffness: 200, damping: 26 }}
             className="fixed inset-y-0 right-0 z-50 w-full max-w-md overflow-y-auto border-l border-white/10 bg-[#070a19] shadow-[0_40px_120px_rgba(7,10,25,0.6)]"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Filters"
           >
             <div className="flex items-center justify-between border-b border-white/10 px-5 py-4">
               <div className="text-xs font-bold uppercase tracking-[0.35em] text-white/70">Filters</div>
@@ -2115,6 +1980,258 @@ function FilterDrawer({ open, onClose, children }) {
   );
 }
 
+
+function ToolsBar({
+  query,
+  onQueryChange,
+  sortMode,
+  onSortModeChange,
+  onOpenFilters,
+  onClearFilters,
+  onArenaShortcut,
+  onSync,
+  showArena,
+}) {
+  const barRef = useRef(null);
+  const sentinelRef = useRef(null);
+  const [affixed, setAffixed] = useState(false);
+  const [barHeight, setBarHeight] = useState(0);
+  const [headerOffset, setHeaderOffset] = useState(0);
+
+  useLayoutEffect(() => {
+    const measure = () => {
+      if (barRef.current) {
+        setBarHeight(barRef.current.getBoundingClientRect().height);
+      }
+      if (typeof window !== "undefined") {
+        const header = document.getElementById("lore-header");
+        if (header) {
+          setHeaderOffset(header.getBoundingClientRect().height);
+        }
+      }
+    };
+    measure();
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || typeof ResizeObserver === "undefined") return undefined;
+    const header = document.getElementById("lore-header");
+    if (!header) return undefined;
+    const observer = new ResizeObserver(() => {
+      setHeaderOffset(header.getBoundingClientRect().height);
+    });
+    observer.observe(header);
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    if (!sentinelRef.current) return undefined;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        setAffixed(!entry.isIntersecting);
+      },
+      { threshold: 0, rootMargin: "-1px 0px 0px 0px" }
+    );
+    observer.observe(sentinelRef.current);
+    return () => observer.disconnect();
+  }, []);
+
+  return (
+    <div className="relative">
+      <div ref={sentinelRef} aria-hidden="true" className="h-0" />
+      {affixed && <div style={{ height: barHeight }} aria-hidden="true" />}
+      <div
+        className={cx(
+          "transition-all duration-200",
+          affixed
+            ? "fixed inset-x-0 z-40 border-b border-white/10 bg-[#050813]/95 backdrop-blur-xl shadow-[0_12px_40px_rgba(4,8,20,0.45)]"
+            : ""
+        )}
+        style={affixed ? { top: headerOffset } : undefined}
+      >
+        <div ref={barRef} className="mx-auto max-w-7xl px-3 py-3 sm:px-4">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+            <label className="relative flex-1 min-w-[220px] sm:min-w-[260px]" htmlFor="universe-search">
+              <span className="sr-only">Search the universe</span>
+              <Input
+                id="universe-search"
+                value={query}
+                onChange={(event) => onQueryChange(event.target.value)}
+                placeholder="Search characters, powers, locations, tags…"
+                className="w-full bg-white/15 pl-10 pr-3 text-sm text-white placeholder:text-white/60"
+              />
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/70" aria-hidden="true" />
+            </label>
+            <div className="relative w-full min-w-[160px] sm:w-48">
+              <span className="sr-only" id="sort-menu-label">
+                Sort heroes
+              </span>
+              <select
+                aria-labelledby="sort-menu-label"
+                value={sortMode}
+                onChange={(event) => onSortModeChange(event.target.value)}
+                className="w-full appearance-none rounded-xl border border-white/25 bg-black/70 px-3 py-2 pr-9 text-[11px] font-bold uppercase tracking-wide text-white/85 shadow-inner focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300 sm:text-xs"
+              >
+                {SORT_OPTIONS.map((item) => (
+                  <option key={item.value} value={item.value} className="bg-black text-white">
+                    {item.label}
+                  </option>
+                ))}
+              </select>
+              <ArrowDown className="pointer-events-none absolute right-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-white/70" aria-hidden="true" />
+            </div>
+            <Button
+              variant="gradient"
+              size="sm"
+              onClick={onOpenFilters}
+              className="flex-none shadow-[0_15px_40px_rgba(250,204,21,0.3)]"
+              aria-label="Open filters"
+            >
+              <Filter className="h-4 w-4" aria-hidden="true" />
+              <span className="hidden sm:inline">Filters</span>
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onClearFilters}
+              className="flex-none"
+              aria-label="Clear filters"
+            >
+              <X size={14} aria-hidden="true" />
+              <span className="hidden sm:inline">Clear</span>
+            </Button>
+            <Button
+              variant="subtle"
+              size="sm"
+              onClick={onArenaShortcut}
+              className={cx("flex-none", showArena ? "ring-2 ring-amber-300/70" : "")}
+              aria-pressed={showArena}
+              aria-label={showArena ? "Scroll to arena" : "Open arena"}
+            >
+              <Swords size={14} aria-hidden="true" />
+              <span className="hidden sm:inline">Arena</span>
+            </Button>
+            <Button
+              variant="dark"
+              size="sm"
+              onClick={onSync}
+              className="flex-none"
+              aria-label="Sync universe"
+            >
+              <RefreshCcw size={14} aria-hidden="true" />
+              <span className="hidden sm:inline">Sync</span>
+            </Button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
+function groupByInitial(values) {
+  return values.reduce((acc, value) => {
+    const initial = value?.[0]?.toUpperCase() || "#";
+    if (!acc[initial]) acc[initial] = [];
+    acc[initial].push(value);
+    return acc;
+  }, {});
+}
+
+function FilterSection({ title, values, keyName, single, activeValues, onToggle }) {
+  const [term, setTerm] = useState("");
+  const [openGroups, setOpenGroups] = useState(new Set());
+
+  const filteredGroups = useMemo(() => {
+    const filtered = term
+      ? values.filter((value) => value.toLowerCase().includes(term.toLowerCase()))
+      : values;
+    const grouped = Object.entries(groupByInitial(filtered));
+    return grouped.sort((a, b) => a[0].localeCompare(b[0]));
+  }, [term, values]);
+
+  useEffect(() => {
+    const defaults = new Set(filteredGroups.slice(0, 3).map(([letter]) => letter));
+    setOpenGroups(defaults);
+  }, [filteredGroups]);
+
+  const handleToggle = useCallback((letter, open) => {
+    setOpenGroups((prev) => {
+      const next = new Set(prev);
+      if (open) {
+        next.add(letter);
+      } else {
+        next.delete(letter);
+      }
+      return next;
+    });
+  }, []);
+
+  const currentValues = single ? (activeValues ? [activeValues] : []) : activeValues || [];
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between gap-3">
+        <div className="text-xs font-extrabold uppercase tracking-wide text-white/75">{title}</div>
+        <label className="relative hidden min-w-[160px] sm:block">
+          <span className="sr-only">Search {title}</span>
+          <input
+            value={term}
+            onChange={(event) => setTerm(event.target.value)}
+            className="w-full rounded-lg border border-white/20 bg-black/40 px-3 py-1.5 text-xs font-semibold text-white placeholder:text-white/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300"
+            placeholder="Filter"
+            type="text"
+          />
+          <Search className="pointer-events-none absolute right-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-white/60" aria-hidden="true" />
+        </label>
+      </div>
+      <label className="relative sm:hidden">
+        <span className="sr-only">Search {title}</span>
+        <input
+          value={term}
+          onChange={(event) => setTerm(event.target.value)}
+          className="w-full rounded-lg border border-white/20 bg-black/40 px-3 py-2 text-xs font-semibold text-white placeholder:text-white/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300"
+          placeholder={`Find ${title.toLowerCase()}`}
+          type="text"
+        />
+        <Search className="pointer-events-none absolute right-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-white/60" aria-hidden="true" />
+      </label>
+      <div className="space-y-1.5">
+        {filteredGroups.map(([letter, items]) => (
+          <details
+            key={`${keyName}-${letter}`}
+            open={openGroups.has(letter)}
+            onToggle={(event) => handleToggle(letter, event.target.open)}
+            className="group rounded-xl border border-white/10 bg-white/5 p-3"
+          >
+            <summary className="flex cursor-pointer items-center justify-between text-[11px] font-bold uppercase tracking-[0.35em] text-white/70 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-300">
+              <span>{letter}</span>
+              <ChevronDown className="h-3 w-3 transition group-open:rotate-180" aria-hidden="true" />
+            </summary>
+            <div className="mt-2 flex max-h-40 flex-wrap gap-2 overflow-auto pr-1">
+              {items.map((value) => (
+                <FacetChip
+                  key={value}
+                  active={currentValues.includes(value)}
+                  onClick={() => onToggle(value)}
+                >
+                  {value}
+                </FacetChip>
+              ))}
+            </div>
+          </details>
+        ))}
+        {!filteredGroups.length && (
+          <p className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-white/60">
+            No matches
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
 
 function HeroSection({ featured, onOpenFilters, onScrollToCharacters, onOpenCharacter, onFacet }) {
   const isCompact = useMediaQuery("(max-width: 640px)");
@@ -2211,7 +2328,9 @@ function HeroSection({ featured, onOpenFilters, onScrollToCharacters, onOpenChar
         <div className="absolute inset-0 bg-gradient-to-br from-black/85 via-black/70 to-indigo-900/70" />
         <div className="relative z-10 flex-1 space-y-5 pr-0 sm:pr-8">
           <Badge className="bg-white/15 text-white/85">{slide.label}</Badge>
-          <h2 className="text-3xl font-black tracking-tight sm:text-5xl">{char.name}</h2>
+          <h2 className="text-3xl font-black leading-tight tracking-tight text-balance sm:text-5xl">
+            {char.name}
+          </h2>
           <p className="text-sm font-semibold text-white/80 sm:text-base lg:text-lg">
             {char.shortDesc || char.longDesc?.slice(0, 220) || "A legend awaits their tale to be told."}
           </p>
@@ -2289,7 +2408,7 @@ function HeroSection({ featured, onOpenFilters, onScrollToCharacters, onOpenChar
         <div className="relative z-10 grid flex-1 gap-8 lg:grid-cols-[3fr_2fr] lg:items-center">
           <div className="space-y-6">
             <div className="text-xs font-bold uppercase tracking-[0.35em] text-white/70">{slide.label}</div>
-            <h2 className="text-3xl font-black tracking-tight sm:text-5xl lg:text-6xl">{title}</h2>
+            <h2 className="text-3xl font-black leading-tight tracking-tight text-balance sm:text-5xl lg:text-6xl">{title}</h2>
             <p className="max-w-xl text-sm font-semibold text-white/80 sm:text-base lg:text-lg">{blurb}</p>
             <div className="flex flex-wrap gap-3">
               <Button variant="gradient" size="lg" onClick={onScrollToCharacters} className="shadow-[0_18px_48px_rgba(253,230,138,0.35)]">
@@ -2349,6 +2468,25 @@ function HeroSection({ featured, onOpenFilters, onScrollToCharacters, onOpenChar
             </div>
           </div>
         </div>
+
+        <div className="flex flex-wrap items-center gap-4">
+          <Button
+            variant="gradient"
+            size="lg"
+            onClick={onOpenFilters}
+            className="shadow-[0_18px_48px_rgba(253,230,138,0.35)]"
+          >
+            Launch Filters
+          </Button>
+          <Button
+            variant="outline"
+            size="lg"
+            onClick={onScrollToCharacters}
+            className="border-white/60 text-white/90 hover:bg-white/10"
+          >
+            Explore Universe
+          </Button>
+        </div>
       </div>
     );
   };
@@ -2378,7 +2516,7 @@ function HeroSection({ featured, onOpenFilters, onScrollToCharacters, onOpenChar
             {icon}
             {slide.label}
           </div>
-          <h3 className="text-2xl font-black sm:text-4xl">{payload.name}</h3>
+          <h3 className="text-2xl font-black leading-tight text-balance sm:text-4xl">{payload.name}</h3>
           <p className="text-sm font-semibold text-white/75">{descriptor}</p>
           <div className="flex flex-wrap gap-2">
             <Button
@@ -2463,18 +2601,18 @@ function HeroSection({ featured, onOpenFilters, onScrollToCharacters, onOpenChar
               <button
                 type="button"
                 onClick={goPrev}
-                className="absolute left-2 top-1/2 z-20 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full border border-white/40 bg-black/60 text-white shadow-lg transition hover:bg-black/80"
+                className="absolute left-2 top-1/2 z-20 flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full border border-white/40 bg-black/70 text-white shadow-lg transition hover:bg-black/90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-300"
                 aria-label="Previous highlight"
               >
-                <ChevronLeft className="h-4 w-4" />
+                <ChevronLeft className="h-6 w-6 sm:h-7 sm:w-7" />
               </button>
               <button
                 type="button"
                 onClick={goNext}
-                className="absolute right-2 top-1/2 z-20 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full border border-white/40 bg-black/60 text-white shadow-lg transition hover:bg-black/80"
+                className="absolute right-2 top-1/2 z-20 flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full border border-white/40 bg-black/70 text-white shadow-lg transition hover:bg-black/90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-300"
                 aria-label="Next highlight"
               >
-                <ChevronRight className="h-4 w-4" />
+                <ChevronRight className="h-6 w-6 sm:h-7 sm:w-7" />
               </button>
             </>
           )}
@@ -2519,8 +2657,8 @@ function HeroSection({ featured, onOpenFilters, onScrollToCharacters, onOpenChar
 }
 
 /** -------------------- Page -------------------- */
-export default function LoremakerApp() {
-  const { data, loading, error, refetch } = useCharacters();
+export default function LoremakerApp({ initialCharacters = [], initialError = null }) {
+  const { data, loading, error, refetch } = useCharacters(initialCharacters, initialError);
   const [query, setQuery] = useState("");
   const [filters, setFilters] = useState({});
   const [combineAND, setCombineAND] = useState(false);
@@ -2534,7 +2672,6 @@ export default function LoremakerApp() {
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [transferNotices, setTransferNotices] = useState([]);
   const [headerCollapsed, setHeaderCollapsed] = useState(false);
-  const visitTracked = useRef(false);
   const statRingId = useMemo(() => Math.random().toString(36).slice(2), []);
 
   const selectedIds = useMemo(
@@ -2665,22 +2802,6 @@ export default function LoremakerApp() {
 
   const featured = useMemo(() => computeFeatured(data), [data]);
 
-  useEffect(() => {
-    if (visitTracked.current) return;
-    if (!TRACK_VISIT_WEBHOOK || typeof window === "undefined") return;
-    if (!data.length) return;
-    visitTracked.current = true;
-    fetch(TRACK_VISIT_WEBHOOK, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        path: window.location.pathname,
-        characters: data.length,
-        timestamp: new Date().toISOString(),
-      }),
-    }).catch(() => {});
-  }, [data.length]);
-
   const scrollToCharacters = useCallback(() => {
     document.getElementById("characters-grid")?.scrollIntoView({ behavior: "smooth", block: "start" });
   }, []);
@@ -2711,7 +2832,7 @@ export default function LoremakerApp() {
           </motion.div>
         ))}
       </AnimatePresence>
-      <header className="sticky top-0 z-40 border-b border-white/10 bg-black/70 backdrop-blur-2xl">
+      <header id="lore-header" className="sticky top-0 z-40 border-b border-white/10 bg-black/70 backdrop-blur-2xl">
         <div className="mx-auto w-full max-w-7xl px-3 py-3 sm:px-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-3">
@@ -2870,78 +2991,16 @@ export default function LoremakerApp() {
           <AnimatePresence initial={false}>
             {!headerCollapsed && (
               <motion.div
-                key="header-controls"
+                key="header-note"
                 initial={{ opacity: 0, height: 0 }}
                 animate={{ opacity: 1, height: "auto" }}
                 exit={{ opacity: 0, height: 0 }}
                 transition={{ duration: 0.3, ease: "easeInOut" }}
                 className="overflow-hidden"
               >
-                <div className="mt-4 grid grid-cols-4 gap-2 sm:flex sm:flex-wrap sm:items-center sm:justify-end">
-                  <div className="relative col-span-4 sm:order-1 sm:flex-1 sm:max-w-sm">
-                    <Input
-                      value={query}
-                      onChange={(event) => setQuery(event.target.value)}
-                      placeholder="Search characters, powers, locations, tags..."
-                      className="w-full bg-white/15 pl-9 text-sm sm:text-base"
-                    />
-                    <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/70" />
-                  </div>
-                  <div className="relative col-span-4 sm:order-2 sm:w-48">
-                    <select
-                      value={sortMode}
-                      onChange={(event) => setSortMode(event.target.value)}
-                      className="w-full appearance-none rounded-xl border border-white/25 bg-black/60 px-3 py-2 pr-9 text-[11px] font-bold uppercase tracking-wide text-white/80 shadow-inner backdrop-blur focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300 sm:text-xs"
-                    >
-                      {SORT_OPTIONS.map((item) => (
-                        <option key={item.value} value={item.value} className="bg-black text-white">
-                          {item.label}
-                        </option>
-                      ))}
-                    </select>
-                    <ArrowDown className="pointer-events-none absolute right-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-white/70" />
-                  </div>
-                  <Button
-                    variant="gradient"
-                    size="sm"
-                    onClick={() => setFiltersOpen(true)}
-                    className="col-span-1 shadow-[0_15px_40px_rgba(250,204,21,0.3)] sm:order-3 sm:col-auto"
-                    aria-label="Open filters"
-                  >
-                    <Filter className="h-4 w-4" />
-                    <span className="hidden sm:inline">Filters</span>
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={clearFilters}
-                    className="col-span-1 sm:order-4 sm:col-auto"
-                    aria-label="Clear filters"
-                  >
-                    <X size={14} />
-                    <span className="hidden sm:inline">Clear</span>
-                  </Button>
-                  <Button
-                    variant="subtle"
-                    size="sm"
-                    onClick={arenaShortcut}
-                    className="col-span-1 sm:order-5 sm:col-auto"
-                    aria-label={showArena ? "Scroll to arena" : "Open arena"}
-                  >
-                    <Swords size={14} />
-                    <span className="hidden sm:inline">Arena</span>
-                  </Button>
-                  <Button
-                    variant="dark"
-                    size="sm"
-                    onClick={() => refetch()}
-                    className="col-span-1 sm:order-6 sm:col-auto"
-                    aria-label="Sync universe"
-                  >
-                    <RefreshCcw size={14} />
-                    <span className="hidden sm:inline">Sync</span>
-                  </Button>
-                </div>
+                <p className="mt-4 text-xs font-semibold uppercase tracking-[0.35em] text-white/80">
+                  Shape the daily lore feed using the controls below the hero showcase.
+                </p>
               </motion.div>
             )}
           </AnimatePresence>
@@ -2966,6 +3025,17 @@ export default function LoremakerApp() {
           onScrollToCharacters={scrollToCharacters}
           onOpenCharacter={openCharacter}
           onFacet={handleFacet}
+        />
+        <ToolsBar
+          query={query}
+          onQueryChange={setQuery}
+          sortMode={sortMode}
+          onSortModeChange={setSortMode}
+          onOpenFilters={() => setFiltersOpen(true)}
+          onClearFilters={clearFilters}
+          onArenaShortcut={arenaShortcut}
+          onSync={refetch}
+          showArena={showArena}
         />
         {showArena && (
           <div id="arena-anchor" className="mt-10">
@@ -3019,4 +3089,25 @@ export default function LoremakerApp() {
         <ScrollShortcuts />
     </div>
   );
+}
+
+export async function getStaticProps() {
+  try {
+    const characters = await fetchCharactersFromSheets();
+    return {
+      props: {
+        initialCharacters: characters,
+        initialError: null,
+      },
+      revalidate: 600,
+    };
+  } catch (error) {
+    return {
+      props: {
+        initialCharacters: [],
+        initialError: error?.message || "Unable to load characters",
+      },
+      revalidate: 300,
+    };
+  }
 }
