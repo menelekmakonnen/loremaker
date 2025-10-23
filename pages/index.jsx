@@ -303,6 +303,100 @@ function fillDailyPowers(c) {
   return { ...c, powers };
 }
 
+function normaliseArray(value) {
+  if (value == null) return [];
+  if (Array.isArray(value)) return value.filter(Boolean);
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    return trimmed ? [trimmed] : [];
+  }
+  return [value];
+}
+
+function getCharacterValues(character, key) {
+  switch (key) {
+    case "gender":
+    case "alignment":
+    case "status":
+    case "era":
+      return normaliseArray(character[key]);
+    case "locations":
+      return normaliseArray(character.locations);
+    case "faction":
+      return normaliseArray(character.faction);
+    case "tags":
+      return normaliseArray(character.tags);
+    case "stories":
+      return normaliseArray(character.stories);
+    case "powers":
+      return normaliseArray((character.powers || []).map((power) => power.name));
+    case "alias":
+    case "aliases":
+      return normaliseArray(character.alias);
+    case "id":
+    case "name":
+      return normaliseArray(character[key]);
+    default:
+      return normaliseArray(character[key]);
+  }
+}
+
+function matchesFilters(character, filters = {}, combineAND = false, query = "") {
+  const terms = query
+    .toLowerCase()
+    .split(/\s+/)
+    .map((term) => term.trim())
+    .filter(Boolean);
+
+  if (terms.length) {
+    const searchable = [
+      character.id,
+      character.name,
+      character.gender,
+      character.alignment,
+      character.status,
+      character.era,
+      (character.alias || []).join(" "),
+      (character.locations || []).join(" "),
+      (character.faction || []).join(" "),
+      (character.tags || []).join(" "),
+      (character.stories || []).join(" "),
+      (character.powers || []).map((power) => power.name).join(" "),
+      character.shortDesc,
+      character.longDesc,
+    ]
+      .filter(Boolean)
+      .join(" \n ")
+      .toLowerCase();
+
+    const queryMatch = terms.every((term) => searchable.includes(term));
+    if (!queryMatch) {
+      return false;
+    }
+  }
+
+  if (!filters || !Object.keys(filters).length) return true;
+
+  const entries = Object.entries(filters).filter(([, value]) => {
+    if (value == null) return false;
+    if (Array.isArray(value)) return value.length > 0;
+    return String(value).trim().length > 0;
+  });
+
+  if (!entries.length) return true;
+
+  return entries.every(([key, selected]) => {
+    const desired = normaliseArray(selected).map((value) => String(value).toLowerCase());
+    if (!desired.length) return true;
+
+    const available = getCharacterValues(character, key).map((value) => String(value).toLowerCase());
+    if (!available.length) return false;
+
+    const comparator = combineAND ? "every" : "some";
+    return desired[comparator]((needle) => available.includes(needle));
+  });
+}
+
 function useCharacters() {
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(true);
