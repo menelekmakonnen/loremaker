@@ -5,6 +5,7 @@ import {
   RefreshCcw,
   X,
   ArrowDown,
+  ArrowUp,
   ArrowRight,
   ChevronLeft,
   ChevronRight,
