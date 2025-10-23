@@ -5,6 +5,7 @@ import {
   RefreshCcw,
   X,
   ArrowDown,
+  ArrowUp,
   ArrowRight,
   ChevronLeft,
   ChevronRight,
@@ -17,9 +18,6 @@ import {
   Library,
   Crown,
   Swords,
-  MessageCircle,
-  Send,
-  Bot,
 } from "lucide-react";
 
 /**
@@ -106,13 +104,6 @@ const SHEET_ID = "1nbAsU-zNe4HbM0bBLlYofi1pHhneEjEIWfW22JODBeM";
 const SHEET_NAME = "Characters";
 const GVIZ_URL = (sheetName) =>
   `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(sheetName)}`;
-
-const CHATBOT_WEBHOOK =
-  typeof window === "undefined"
-    ? process.env.NEXT_PUBLIC_LOREMAKER_CHAT_WEBHOOK || ""
-    : window?.__NEXT_DATA__?.props?.pageProps?.chatbotWebhook ||
-      process.env.NEXT_PUBLIC_LOREMAKER_CHAT_WEBHOOK ||
-      "";
 
 const TRACK_VISIT_WEBHOOK =
   typeof window === "undefined"
@@ -303,6 +294,146 @@ function fillDailyPowers(c) {
   return { ...c, powers };
 }
 
+const uniqueSorted = (values) => Array.from(new Set(values.filter(Boolean))).sort((a, b) => a.localeCompare(b));
+
+function computeFeatured(characters) {
+  if (!characters || !characters.length) {
+    return { character: null, faction: null, location: null, power: null };
+  }
+  const rng = seededRandom(`featured|${todayKey()}`);
+  const pick = (arr) => {
+    if (!arr.length) return null;
+    const index = Math.floor(rng() * arr.length);
+    return arr[index] || arr[arr.length - 1] || null;
+  };
+
+  const character = pick(characters);
+  const factions = uniqueSorted(characters.flatMap((char) => normaliseArray(char.faction)));
+  const locations = uniqueSorted(characters.flatMap((char) => normaliseArray(char.locations)));
+  const powers = uniqueSorted(characters.flatMap((char) => (char.powers || []).map((power) => power.name)));
+
+  const faction = pick(factions);
+  const location = pick(locations);
+  const power = pick(powers);
+
+  const factionMembers = faction
+    ? characters.filter((char) => normaliseArray(char.faction).includes(faction))
+    : [];
+  const locationResidents = location
+    ? characters.filter((char) => normaliseArray(char.locations).includes(location))
+    : [];
+  const powerWielders = power
+    ? characters.filter((char) => (char.powers || []).some((p) => p.name === power))
+    : [];
+
+  return {
+    character: character || null,
+    faction: faction
+      ? { name: faction, members: factionMembers.slice(0, 8) }
+      : null,
+    location: location
+      ? { name: location, residents: locationResidents.slice(0, 8) }
+      : null,
+    power: power
+      ? { name: power, wielders: powerWielders.slice(0, 8) }
+      : null,
+  };
+}
+
+function normaliseArray(value) {
+  if (value == null) return [];
+  if (Array.isArray(value)) return value.filter(Boolean);
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    return trimmed ? [trimmed] : [];
+  }
+  return [value];
+}
+
+function getCharacterValues(character, key) {
+  switch (key) {
+    case "gender":
+    case "alignment":
+    case "status":
+    case "era":
+      return normaliseArray(character[key]);
+    case "locations":
+      return normaliseArray(character.locations);
+    case "faction":
+      return normaliseArray(character.faction);
+    case "tags":
+      return normaliseArray(character.tags);
+    case "stories":
+      return normaliseArray(character.stories);
+    case "powers":
+      return normaliseArray((character.powers || []).map((power) => power.name));
+    case "alias":
+    case "aliases":
+      return normaliseArray(character.alias);
+    case "id":
+    case "name":
+      return normaliseArray(character[key]);
+    default:
+      return normaliseArray(character[key]);
+  }
+}
+
+function matchesFilters(character, filters = {}, combineAND = false, query = "") {
+  const terms = query
+    .toLowerCase()
+    .split(/\s+/)
+    .map((term) => term.trim())
+    .filter(Boolean);
+
+  if (terms.length) {
+    const searchable = [
+      character.id,
+      character.name,
+      character.gender,
+      character.alignment,
+      character.status,
+      character.era,
+      (character.alias || []).join(" "),
+      (character.locations || []).join(" "),
+      (character.faction || []).join(" "),
+      (character.tags || []).join(" "),
+      (character.stories || []).join(" "),
+      (character.powers || []).map((power) => power.name).join(" "),
+      character.shortDesc,
+      character.longDesc,
+    ]
+      .filter(Boolean)
+      .join(" \n ")
+      .toLowerCase();
+
+    const queryMatch = terms.every((term) => searchable.includes(term));
+    if (!queryMatch) {
+      return false;
+    }
+  }
+
+  if (!filters || !Object.keys(filters).length) return true;
+
+  const entries = Object.entries(filters).filter(([, value]) => {
+    if (value == null) return false;
+    if (Array.isArray(value)) return value.length > 0;
+    return String(value).trim().length > 0;
+  });
+
+  if (!entries.length) return true;
+
+  return entries.every(([key, selected]) => {
+    const desired = normaliseArray(selected).map((value) => String(value).toLowerCase());
+    if (!desired.length) return true;
+
+    const available = getCharacterValues(character, key).map((value) => String(value).toLowerCase());
+    if (!available.length) return false;
+
+    const comparator = combineAND ? "every" : "some";
+    return desired[comparator]((needle) => available.includes(needle));
+  });
+}
+
 function useCharacters() {
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -381,6 +512,149 @@ function Aurora({ className = "" }) {
       </motion.div>
       <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(255,255,255,0.09),transparent_65%)]" />
     </motion.div>
+  );
+}
+
+function LoreShield({ size = 56, onClick }) {
+  const idRef = useRef(() => `lore-${Math.random().toString(36).slice(2)}`);
+  const gradientId = useMemo(() => idRef.current(), []);
+  const generateAura = useCallback(() => {
+    const hue = Math.floor(Math.random() * 360);
+    return {
+      hue,
+      glow: 0.5 + Math.random() * 0.6,
+      rotate: (Math.random() - 0.5) * 8,
+      scale: 0.94 + Math.random() * 0.12,
+      flare: 0.4 + Math.random() * 0.6,
+      sheen: (hue + 60) % 360,
+    };
+  }, []);
+  const [aura, setAura] = useState(() => generateAura());
+  const sparks = useMemo(
+    () =>
+      Array.from({ length: 4 }).map((_, index) => ({
+        id: `spark-${index}`,
+        delay: 0.6 + index * 0.35,
+        x: (Math.random() - 0.5) * 26,
+        y: (Math.random() - 0.5) * 32,
+        scale: 0.5 + Math.random() * 0.9,
+      })),
+    []
+  );
+
+  useEffect(() => {
+    const interval = setInterval(() => setAura(generateAura()), 2600);
+    return () => clearInterval(interval);
+  }, [generateAura]);
+
+  const dramaticSurge = useCallback(() => {
+    setAura((prev) => ({
+      ...generateAura(),
+      glow: prev.glow + 0.6,
+      scale: prev.scale + 0.08,
+    }));
+  }, [generateAura]);
+
+  const handleClick = (event) => {
+    dramaticSurge();
+    if (onClick) {
+      onClick(event);
+    } else {
+      window.location.reload();
+    }
+  };
+
+  return (
+    <motion.button
+      type="button"
+      onClick={handleClick}
+      onHoverStart={dramaticSurge}
+      whileHover={{
+        scale: aura.scale + 0.14,
+        rotate: aura.rotate * 2,
+        boxShadow: `0 0 45px rgba(255,255,255,${0.45 + aura.glow * 0.2})`,
+        filter: "brightness(1.18) saturate(1.4)",
+      }}
+      whileTap={{
+        scale: 0.9,
+        rotate: -aura.rotate * 2,
+        boxShadow: `0 0 60px rgba(255,255,255,0.85)`,
+        filter: "contrast(1.2)",
+      }}
+      animate={{
+        rotate: aura.rotate,
+        scale: aura.scale,
+        boxShadow: `0 0 ${24 + aura.glow * 26}px rgba(99,102,241,${0.35 + aura.glow * 0.25})`,
+      }}
+      transition={{ type: "spring", stiffness: 200, damping: 15 }}
+      className="relative inline-flex items-center justify-center overflow-visible rounded-[22px] border border-white/30 bg-black/40 p-2"
+      aria-label="Reload Loremaker"
+    >
+      <svg width={size} height={size} viewBox="0 0 64 64" className="drop-shadow-[0_6px_24px_rgba(0,0,0,0.45)]">
+        <defs>
+          <linearGradient id={`${gradientId}-fill`} x1="0" x2="1" y1="0" y2="1">
+            <stop offset="0%" stopColor={`hsla(${aura.hue},88%,70%,0.85)`} />
+            <stop offset="60%" stopColor={`hsla(${(aura.hue + 140) % 360},82%,65%,0.9)`} />
+            <stop offset="100%" stopColor={`hsla(${aura.sheen},80%,72%,0.95)`} />
+          </linearGradient>
+          <radialGradient id={`${gradientId}-inner`} cx="0.5" cy="0.35" r="0.75">
+            <stop offset="0%" stopColor="rgba(255,255,255,0.95)" />
+            <stop offset="45%" stopColor={`hsla(${aura.hue},90%,80%,${0.45 + aura.flare * 0.3})`} />
+            <stop offset="100%" stopColor="rgba(15,23,42,0.1)" />
+          </radialGradient>
+        </defs>
+        <path
+          d="M32 4 L8 16 L8 36 C8 49 19 58 32 61 C45 58 56 49 56 36 L56 16 Z"
+          fill={`url(#${gradientId}-fill)`}
+          stroke="rgba(255,255,255,0.6)"
+          strokeWidth="1.4"
+        />
+        <path
+          d="M32 11 L17 18 L17 34 C17 43 23 50 32 52 C41 50 47 43 47 34 L47 18 Z"
+          fill={`url(#${gradientId}-inner)`}
+        />
+        <text
+          x="32"
+          y="38"
+          textAnchor="middle"
+          fontFamily="var(--font-sans, 'Inter', 'Segoe UI', sans-serif)"
+          fontWeight="900"
+          fontSize="16"
+          fill="#0f172a"
+          style={{ filter: "drop-shadow(0 1px 4px rgba(255,255,255,0.75))" }}
+        >
+          LORE
+        </text>
+      </svg>
+      {sparks.map((spark) => (
+        <motion.span
+          key={spark.id}
+          className="pointer-events-none absolute h-10 w-10 rounded-full bg-gradient-to-br from-amber-300/70 via-fuchsia-400/60 to-indigo-400/70 blur-md"
+          style={{
+            left: `calc(50% + ${spark.x}px)`,
+            top: `calc(50% + ${spark.y}px)`,
+            transform: "translate(-50%, -50%)",
+          }}
+          animate={{
+            opacity: [0.15, 0.65, 0.35, 0.2],
+            scale: [spark.scale, spark.scale * 1.4, spark.scale * 0.9, spark.scale],
+            rotate: [0, 15, -12, 0],
+          }}
+          transition={{ duration: 3.6, repeat: Infinity, delay: spark.delay, ease: "easeInOut" }}
+        />
+      ))}
+      <motion.span
+        className="pointer-events-none absolute inset-0 rounded-[22px]"
+        animate={{
+          boxShadow: [
+            "0 0 0 rgba(255,255,255,0)",
+            `0 0 24px rgba(148,163,255,${0.2 + aura.glow * 0.2})`,
+            "0 0 0 rgba(255,255,255,0)",
+          ],
+        }}
+        transition={{ duration: 2.8, repeat: Infinity, ease: "easeInOut" }}
+      />
+    </motion.button>
   );
 }
 
@@ -497,31 +771,9 @@ const SORT_OPTIONS = [
   { value: "faction", label: "By Faction" },
   { value: "az", label: "A-Z" },
   { value: "za", label: "Z-A" },
-  { value: "power", label: "From Most Powerful" },
-  { value: "power-low", label: "From Least Powerful" },
+  { value: "most", label: "From Most Powerful" },
+  { value: "least", label: "From Least Powerful" },
 ];
-
-function SortBar({ option, setOption }) {
-  return (
-    <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-white/15 bg-white/8 px-4 py-3">
-      <span className="text-xs font-bold uppercase tracking-wide text-white/70">Sort</span>
-      <div className="relative">
-        <select
-          value={option}
-          onChange={(event) => setOption(event.target.value)}
-          className="appearance-none rounded-xl border border-white/30 bg-black/70 px-4 py-2 pr-10 text-sm font-bold text-white shadow-inner focus:outline-none"
-        >
-          {SORT_OPTIONS.map((item) => (
-            <option key={item.value} value={item.value} className="bg-black text-white">
-              {item.label}
-            </option>
-          ))}
-        </select>
-        <ArrowDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/70" />
-      </div>
-    </div>
-  );
-}
 
 function CharacterCard({ char, onOpen, onFacet, onUseInSim, highlight }) {
   const [pulse, setPulse] = useState(false);
@@ -821,7 +1073,7 @@ function CharacterModal({ open, onClose, char, onFacet, onUseInSim }) {
 }
 
 const PAGE_SIZE = 24;
-function CharacterGrid({ data, onOpen, onFacet, onUseInSim, highlightId }) {
+function CharacterGrid({ data, onOpen, onFacet, onUseInSim, highlightId, mobileColumns = 2 }) {
   const [page, setPage] = useState(1);
   useEffect(() => setPage(1), [data]);
   useEffect(() => {
@@ -835,8 +1087,9 @@ function CharacterGrid({ data, onOpen, onFacet, onUseInSim, highlightId }) {
     return () => window.removeEventListener("scroll", handler);
   }, [data.length]);
   const slice = data.slice(0, page * PAGE_SIZE);
+  const mobileClass = mobileColumns >= 3 ? "grid-cols-3" : "grid-cols-2";
   return (
-    <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-6 pb-24">
+    <div className={cx("grid gap-6 pb-24", mobileClass, "sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4")}> 
       {slice.map((c) => (
         <CharacterCard
           key={c.id}
@@ -940,6 +1193,32 @@ function duel(c1, c2) {
       origin1,
       origin2,
     },
+  };
+}
+
+function computeBattleTimeline(charA, charB) {
+  const summary = duel(charA, charB);
+  const timeline = summary.logs.map((phase) => ({
+    round: phase.swing,
+    strikeA: Math.round(phase.offensive1),
+    strikeB: Math.round(phase.offensive2),
+    luckA: phase.luck1,
+    luckB: phase.luck2,
+    damageToB: phase.dmg1,
+    damageToA: phase.dmg2,
+    healthA: phase.h1,
+    healthB: phase.h2,
+  }));
+
+  return {
+    timeline,
+    winner: summary.winner,
+    loser: summary.loser,
+    finalScoreA: summary.breakdown.s1,
+    finalScoreB: summary.breakdown.s2,
+    finalHealthA: summary.h1,
+    finalHealthB: summary.h2,
+    breakdown: summary.breakdown,
   };
 }
 
@@ -1198,7 +1477,7 @@ function BattleArena({ characters, slots, setSlots, onOpenCharacter, pulseKey })
           </div>
         </CardHeader>
         <CardContent className="space-y-6">
-          <div className="grid gap-5 lg:grid-cols-[1fr_auto_1fr]">
+          <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] gap-5">
             <ArenaCard
               char={left}
               position="A"
@@ -1208,7 +1487,7 @@ function BattleArena({ characters, slots, setSlots, onOpenCharacter, pulseKey })
               isWinner={result?.winner?.id === left?.id}
               showX={showX === left?.id}
             />
-            <div className="flex flex-col items-center justify-center gap-3">
+            <div className="flex min-w-[110px] flex-col items-center justify-center gap-3">
               <motion.div
                 animate={battleState}
                 variants={swordVariants}
@@ -1355,297 +1634,428 @@ function runDevTests() {
   console.groupEnd();
 }
 
-const CHAT_WEBHOOK = process.env.NEXT_PUBLIC_LOREMAKER_CHATBOT_WEBHOOK;
-const TRACK_WEBHOOK = process.env.NEXT_PUBLIC_LOREMAKER_TRACK_WEBHOOK;
 
-function ChatWidget() {
-  const [open, setOpen] = useState(false);
-  const [messages, setMessages] = useState([
-    { role: "system", text: "Welcome to the Loremaker concierge. Ask about heroes, factions, or lore!" },
-  ]);
-  const [pending, setPending] = useState(false);
-  const inputRef = useRef(null);
+function ScrollShortcuts() {
+  const [showTop, setShowTop] = useState(false);
+  const [showBottom, setShowBottom] = useState(false);
 
-  const sendMessage = async (event) => {
-    event.preventDefault();
-    const value = inputRef.current?.value?.trim();
-    if (!value) return;
-    setMessages((prev) => [...prev, { role: "user", text: value }]);
-    setPending(true);
-    inputRef.current.value = "";
-    try {
-      if (CHAT_WEBHOOK) {
-        const res = await fetch(CHAT_WEBHOOK, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ message: value, timestamp: new Date().toISOString() }),
-        });
-        const data = await res.json().catch(() => ({}));
-        const reply = data?.reply || data?.message || "The Lore council acknowledges your request.";
-        setMessages((prev) => [...prev, { role: "assistant", text: reply }]);
-      } else {
-        setMessages((prev) => [
-          ...prev,
-          { role: "assistant", text: "Webhook not configured yet, but the Loremaker hears you." },
-        ]);
-      }
-    } catch (err) {
-      setMessages((prev) => [...prev, { role: "assistant", text: "Signal lost in the aether. Try again soon." }]);
-      console.error(err);
-    } finally {
-      setPending(false);
-    }
-  };
+  useEffect(() => {
+    const handler = () => {
+      const { scrollTop, scrollHeight, clientHeight } = document.documentElement;
+      setShowTop(scrollTop > 240);
+      setShowBottom(scrollTop + clientHeight < scrollHeight - 240);
+    };
+    handler();
+    window.addEventListener("scroll", handler, { passive: true });
+    return () => window.removeEventListener("scroll", handler);
+  }, []);
 
   return (
     <>
-      {showTop && (
-        <motion.button
-          onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
-          whileHover={{ scale: 1.08, rotate: [-2, 2, 0] }}
-          whileTap={{ scale: 0.95, rotate: 0 }}
-          animate={{ y: [0, -6, 0], boxShadow: [
-            "0 0 0 rgba(0,0,0,0.2)",
-            "0 12px 24px rgba(251,191,36,0.35)",
-            "0 0 0 rgba(0,0,0,0.2)",
-          ] }}
-          transition={{ duration: 2.4, repeat: Infinity, ease: "easeInOut" }}
-          className="fixed bottom-5 right-5 z-40 rounded-full border border-amber-300/60 bg-black/80 p-3 text-white shadow-xl"
-          aria-label="Back to top"
-          title="Back to top"
-        >
-          <ArrowUp />
-        </motion.button>
-      )}
-      {showBottom && (
-        <motion.button
-          onClick={() => window.scrollTo({ top: document.documentElement.scrollHeight, behavior: "smooth" })}
-          whileHover={{ scale: 1.08, rotate: [2, -2, 0] }}
-          whileTap={{ scale: 0.95, rotate: 0 }}
-          animate={{ y: [0, 6, 0], boxShadow: [
-            "0 0 0 rgba(0,0,0,0.2)",
-            "0 -12px 24px rgba(148,163,184,0.35)",
-            "0 0 0 rgba(0,0,0,0.2)",
-          ] }}
-          transition={{ duration: 2.6, repeat: Infinity, ease: "easeInOut" }}
-          className="fixed bottom-5 right-24 z-40 rounded-full border border-white/30 bg-black/80 p-3 text-white shadow-xl"
-          aria-label="Back to bottom"
-          title="Back to bottom"
-        >
-          <ArrowDown />
-        </motion.button>
-      )}
+      <AnimatePresence>
+        {showTop && (
+          <motion.button
+            key="scroll-top"
+            type="button"
+            onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+            initial={{ opacity: 0, y: 24 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 24 }}
+            whileHover={{ scale: 1.08, rotate: [-2, 2, 0] }}
+            whileTap={{ scale: 0.92, rotate: 0 }}
+            transition={{ duration: 0.35 }}
+            className="fixed bottom-5 right-5 z-40 rounded-full border border-amber-300/60 bg-black/80 p-3 text-white shadow-xl"
+            aria-label="Back to top"
+          >
+            <ArrowUp className="h-4 w-4" />
+          </motion.button>
+        )}
+      </AnimatePresence>
+      <AnimatePresence>
+        {showBottom && (
+          <motion.button
+            key="scroll-bottom"
+            type="button"
+            onClick={() => window.scrollTo({ top: document.documentElement.scrollHeight, behavior: "smooth" })}
+            initial={{ opacity: 0, y: 24 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 24 }}
+            whileHover={{ scale: 1.08, rotate: [2, -2, 0] }}
+            whileTap={{ scale: 0.92, rotate: 0 }}
+            transition={{ duration: 0.35 }}
+            className="fixed bottom-5 right-20 z-40 rounded-full border border-white/30 bg-black/80 p-3 text-white shadow-xl"
+            aria-label="Skip to bottom"
+          >
+            <ArrowDown className="h-4 w-4" />
+          </motion.button>
+        )}
+      </AnimatePresence>
     </>
   );
 }
 
-function Controls({ query, setQuery, setOpenFilters, sortMode, setSortMode, onClear, onJumpArena }) {
+function FilterDrawer({ open, onClose, children }) {
+  useEffect(() => {
+    if (!open) return undefined;
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previous;
+    };
+  }, [open]);
+
   return (
-    <div className="flex flex-col md:flex-row md:items-center gap-3 justify-between">
-      <div className="flex-1">
-        <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search characters, powers, locations…" />
-      </div>
-      <div className="flex items-center gap-2">
-        <select
-          value={sortMode}
-          onChange={(e) => setSortMode(e.target.value)}
-          className="rounded-xl border border-amber-300/60 bg-gradient-to-r from-black/80 via-slate-900/80 to-black/70 px-3 py-2 text-sm font-black text-amber-200"
-        >
-          <option value="default">Default</option>
-          <option value="random">Random</option>
-          <option value="faction">By Faction</option>
-          <option value="az">A-Z</option>
-          <option value="za">Z-A</option>
-          <option value="most">From Most Powerful</option>
-          <option value="least">From Least Powerful</option>
-        </select>
-        <Button variant="outline" onClick={() => setOpenFilters(true)} className="font-bold border-amber-300 bg-amber-300/20 text-amber-200">
-          <Filter className="mr-1" size={16} /> Filters
-        </Button>
-        <Button variant="ghost" onClick={onClear} className="font-bold">Clear</Button>
-        <Button variant="secondary" onClick={onJumpArena} className="font-bold">Arena</Button>
-      </div>
-    </div>
+    <AnimatePresence>
+      {open && (
+        <>
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-40 bg-black/70 backdrop-blur-sm"
+            onClick={onClose}
+          />
+          <motion.aside
+            initial={{ x: "100%" }}
+            animate={{ x: 0 }}
+            exit={{ x: "100%" }}
+            transition={{ type: "spring", stiffness: 200, damping: 26 }}
+            className="fixed inset-y-0 right-0 z-50 w-full max-w-md overflow-y-auto border-l border-white/10 bg-[#070a19] shadow-[0_40px_120px_rgba(7,10,25,0.6)]"
+          >
+            <div className="flex items-center justify-between border-b border-white/10 px-5 py-4">
+              <div className="text-xs font-bold uppercase tracking-[0.35em] text-white/70">Filters</div>
+              <Button variant="ghost" onClick={onClose} className="text-xs font-bold uppercase tracking-wide text-white/80">
+                <X size={14} /> Close
+              </Button>
+            </div>
+            <div className="pb-12">{children}</div>
+          </motion.aside>
+        </>
+      )}
+    </AnimatePresence>
   );
 }
 
-function ChatDock() {
-  const [open, setOpen] = useState(false);
-  const [messages, setMessages] = useState([
-    {
-      role: "bot",
-      text: "Welcome to the Loremaker concierge. Ask about characters, battles, or request spreadsheet syncs!",
-      ts: Date.now(),
-    },
-  ]);
-  const [input, setInput] = useState("");
-  const [sending, setSending] = useState(false);
-  const trailRef = useRef(null);
+
+function HeroSection({
+  totalCharacters,
+  featured,
+  onOpenFilters,
+  onScrollToCharacters,
+  onOpenCharacter,
+  onFacet,
+}) {
+  const slides = useMemo(
+    () => [
+      { key: "character", label: "Featured Character", data: featured?.character },
+      { key: "faction", label: "Featured Faction", data: featured?.faction },
+      { key: "location", label: "Featured Location", data: featured?.location },
+      { key: "power", label: "Featured Power", data: featured?.power },
+    ],
+    [featured?.character, featured?.faction, featured?.location, featured?.power]
+  );
+  const [index, setIndex] = useState(0);
+  const [direction, setDirection] = useState(1);
+  const autoPlayed = useRef(false);
 
   useEffect(() => {
-    if (open) trailRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [open, messages]);
+    setIndex(0);
+    autoPlayed.current = false;
+  }, [featured?.character?.id, featured?.faction?.name, featured?.location?.name, featured?.power?.name]);
 
-  const sendMessage = async () => {
-    const content = input.trim();
-    if (!content) return;
-    setMessages((prev) => [...prev, { role: "user", text: content, ts: Date.now() }]);
-    setInput("");
-    setSending(true);
-    try {
-      if (!CHATBOT_WEBHOOK) {
-        setMessages((prev) => [
-          ...prev,
-          {
-            role: "bot",
-            text: "Chatbot webhook is not configured yet. Please add NEXT_PUBLIC_LOREMAKER_CHAT_WEBHOOK.",
-            ts: Date.now(),
-          },
-        ]);
-      } else {
-        const payload = {
-          message: content,
-          timestamp: new Date().toISOString(),
-          source: "loremaker",
-        };
-        const res = await fetch(CHATBOT_WEBHOOK, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        });
-        let reply = "Our lore AI has received your message!";
-        if (res.ok) {
-          const data = await res.json().catch(() => null);
-          reply = data?.reply || data?.message || reply;
-        }
-        setMessages((prev) => [...prev, { role: "bot", text: reply, ts: Date.now() }]);
-      }
-    } catch (err) {
-      setMessages((prev) => [
-        ...prev,
-        {
-          role: "bot",
-          text: "We couldn't reach the chatbot right now. Please try again shortly.",
-          ts: Date.now(),
-        },
-      ]);
-    } finally {
-      setSending(false);
+  useEffect(() => {
+    if (slides.length <= 1 || autoPlayed.current) return undefined;
+    const timer = setTimeout(() => {
+      setDirection(1);
+      setIndex((prev) => (prev + 1) % slides.length);
+      autoPlayed.current = true;
+    }, 3600);
+    return () => clearTimeout(timer);
+  }, [slides.length]);
+
+  const current = slides[index] || slides[0];
+
+  const goPrev = () => {
+    setDirection(-1);
+    setIndex((prev) => (prev - 1 + slides.length) % slides.length);
+  };
+
+  const goNext = () => {
+    setDirection(1);
+    setIndex((prev) => (prev + 1) % slides.length);
+  };
+
+  const renderCharacter = (slide) => {
+    const char = slide.data;
+    if (!char) {
+      return (
+        <div className="flex min-h-[260px] flex-col justify-center gap-4 rounded-[32px] bg-white/5 p-8 text-white">
+          <div className="text-xs font-bold uppercase tracking-[0.35em] text-white/60">Featured Character</div>
+          <p className="text-lg font-semibold text-white/70">Loading today’s legend…</p>
+        </div>
+      );
+    }
+    const images = [char.cover, ...(char.gallery || [])].filter(Boolean).slice(0, 3);
+    const topPowers = [...(char.powers || [])]
+      .sort((a, b) => (Number(b.level) || 0) - (Number(a.level) || 0))
+      .slice(0, 3);
+    const openProfile = () => onOpenCharacter?.(char);
+    const handleFacetClick = (event, payload) => {
+      event.stopPropagation();
+      if (payload?.value) onFacet?.(payload);
+      openProfile();
+    };
+    return (
+      <div
+        role="button"
+        tabIndex={0}
+        onClick={openProfile}
+        onKeyDown={(event) => {
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            openProfile();
+          }
+        }}
+        className="grid gap-10 rounded-[32px] border border-white/15 bg-gradient-to-br from-black/60 via-indigo-900/50 to-fuchsia-700/40 p-8 text-white lg:grid-cols-[3fr_2fr]"
+      >
+        <div className="space-y-5">
+          <Badge className="bg-white/15 text-white/80">{slide.label}</Badge>
+          <h2 className="text-4xl font-black tracking-tight sm:text-5xl">{char.name}</h2>
+          <p className="text-base font-semibold text-white/80 md:text-lg">
+            {char.shortDesc || char.longDesc?.slice(0, 200) || "A legend awaits their tale to be told."}
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {char.gender && (
+              <FacetChip onClick={(event) => handleFacetClick(event, { key: "gender", value: char.gender })}>
+                Gender: {char.gender}
+              </FacetChip>
+            )}
+            {(char.faction || []).map((faction) => (
+              <FacetChip key={faction} onClick={(event) => handleFacetClick(event, { key: "faction", value: faction })}>
+                {faction}
+              </FacetChip>
+            ))}
+          </div>
+          <div className="space-y-3">
+            <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wide text-white/70">
+              <Atom size={14} /> Top Powers
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {topPowers.map((power) => (
+                <button
+                  key={power.name}
+                  type="button"
+                  onClick={(event) => handleFacetClick(event, { key: "powers", value: power.name })}
+                  className="rounded-full bg-white/10 px-3 py-1 text-xs font-bold uppercase tracking-wide text-white/90 transition hover:bg-white/20"
+                >
+                  {power.name} • {power.level}/10
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+        <div className="grid gap-4 sm:grid-cols-2">
+          {images.map((src, idx) => (
+            <motion.div
+              key={src}
+              className="relative overflow-hidden rounded-3xl border border-white/15"
+              initial={{ opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: idx * 0.1, duration: 0.4 }}
+            >
+              <img src={src} alt={`${char.name} portrait ${idx + 1}`} className="h-44 w-full object-cover" />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
+            </motion.div>
+          ))}
+          {!images.length && (
+            <div className="flex h-44 items-center justify-center rounded-3xl border border-dashed border-white/20 bg-white/5 text-sm font-semibold text-white/70">
+              Image dossier classified
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  const renderRoster = (slide, icon, facetKey) => {
+    const payload = slide.data;
+    if (!payload?.name) {
+      return (
+        <div className="flex min-h-[220px] flex-col justify-center gap-3 rounded-[32px] border border-white/10 bg-white/6 p-8 text-white">
+          <div className="text-xs font-bold uppercase tracking-[0.35em] text-white/70">{slide.label}</div>
+          <p className="text-sm font-semibold text-white/70">Daily highlight synchronising…</p>
+        </div>
+      );
+    }
+    const members = payload.members || payload.residents || payload.wielders || [];
+    const descriptor =
+      slide.key === "faction"
+        ? `Allies sworn to ${payload.name}`
+        : slide.key === "location"
+          ? `Key figures shaping ${payload.name}`
+          : `Masters of ${payload.name}`;
+    return (
+      <div className="grid gap-8 rounded-[32px] border border-white/15 bg-black/40 p-8 text-white lg:grid-cols-[2fr_3fr]">
+        <div className="space-y-4">
+          <div className="flex items-center gap-3 text-xs font-bold uppercase tracking-[0.35em] text-white/70">
+            {icon}
+            {slide.label}
+          </div>
+          <h3 className="text-3xl font-black sm:text-4xl">{payload.name}</h3>
+          <p className="text-sm font-semibold text-white/75">{descriptor}</p>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              variant="gradient"
+              size="sm"
+              onClick={() => {
+                onFacet?.({ key: facetKey, value: payload.name });
+              }}
+              className="shadow-[0_10px_30px_rgba(250,204,21,0.25)]"
+            >
+              Filter by {payload.name}
+            </Button>
+          </div>
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2">
+          {members.slice(0, 6).map((member) => (
+            <button
+              key={member.id || member.name}
+              type="button"
+              onClick={() => onOpenCharacter?.(member)}
+              className="flex items-center gap-3 rounded-3xl border border-white/15 bg-white/10 p-3 text-left transition hover:bg-white/20"
+            >
+              <Insignia label={member.name} size={40} variant={slide.key === "faction" ? "faction" : "character"} />
+              <div className="flex flex-col text-xs">
+                <span className="text-sm font-black text-white">{member.name}</span>
+                <span className="text-white/70">{member.alias?.[0] || member.shortDesc?.slice(0, 40) || "Open dossier"}</span>
+              </div>
+            </button>
+          ))}
+          {!members.length && (
+            <div className="flex h-32 items-center justify-center rounded-3xl border border-dashed border-white/15 bg-white/5 text-xs font-semibold text-white/60">
+              Awaiting intel on key figures.
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  const renderSlide = (slide) => {
+    switch (slide.key) {
+      case "character":
+        return renderCharacter(slide);
+      case "faction":
+        return renderRoster(slide, <Layers className="h-6 w-6" />, "faction");
+      case "location":
+        return renderRoster(slide, <MapPin className="h-6 w-6" />, "locations");
+      case "power":
+        return renderRoster(slide, <Atom className="h-6 w-6" />, "powers");
+      default:
+        return null;
     }
   };
 
   return (
-    <div className="fixed bottom-6 left-6 z-50 text-white">
-      <motion.button
-        onClick={() => setOpen((v) => !v)}
-        whileHover={{ scale: 1.08 }}
-        whileTap={{ scale: 0.94 }}
-        className="flex items-center gap-2 rounded-full border border-white/30 bg-black/70 px-4 py-2 font-bold shadow-lg"
-      >
-        <MessageCircle size={16} /> {open ? "Hide" : "Chat"}
-      </motion.button>
-      <AnimatePresence>
-        {open && (
-          <motion.div
-            initial={{ opacity: 0, scale: 0.9, y: 20 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.9, y: 20 }}
-            transition={{ type: "spring", stiffness: 220, damping: 26 }}
-            className="mt-3 w-72 rounded-2xl border border-white/20 bg-black/80 p-3 backdrop-blur"
-          >
-            <div className="mb-2 flex items-center gap-2 text-sm font-extrabold">
-              <Bot size={16} /> Loremaker Live Chat
-            </div>
-            <div className="mb-3 max-h-64 space-y-2 overflow-y-auto pr-1 text-xs">
-              {messages.map((msg) => (
-                <div
-                  key={msg.ts + msg.role}
-                  className={cx(
-                    "rounded-xl border px-3 py-2",
-                    msg.role === "user"
-                      ? "ml-8 border-amber-300/40 bg-amber-300/10 text-amber-100"
-                      : "mr-8 border-white/20 bg-white/10 text-white"
-                  )}
-                >
-                  {msg.text}
-                </div>
-              ))}
-              <div ref={trailRef} />
-            </div>
-            <div className="flex items-center gap-2">
-              <Input
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                placeholder="Send a message to the lore team"
-                className="flex-1 border-white/30 bg-white/10"
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey) {
-                    e.preventDefault();
-                    sendMessage();
-                  }
-                }}
-              />
-              <Button onClick={sendMessage} disabled={sending} className="px-3">
-                <Send size={16} />
-              </Button>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </div>
-  );
-}
-
-function HeroSection({ totalCharacters, onFilterClick, onScrollToFilters }) {
-  return (
-    <section className="relative overflow-hidden rounded-[36px] border border-white/15 bg-gradient-to-br from-indigo-900/60 via-fuchsia-700/40 to-amber-500/20 shadow-[0_40px_120px_rgba(12,9,32,0.55)]">
+    <section className="relative overflow-hidden rounded-[36px] border border-white/15 bg-gradient-to-br from-indigo-900/60 via-fuchsia-700/35 to-amber-500/20 shadow-[0_40px_120px_rgba(12,9,32,0.55)]">
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.18),transparent_55%)]" />
       <div className="absolute inset-x-0 top-0 h-32 bg-gradient-to-b from-black/40 to-transparent" />
       <div className="absolute -left-24 bottom-0 h-72 w-72 rounded-full bg-amber-400/10 blur-3xl" />
       <div className="absolute -right-20 -top-10 h-72 w-72 rounded-full bg-fuchsia-500/10 blur-3xl" />
-      <div className="relative z-10 flex flex-col gap-12 px-6 py-16 sm:px-10 md:px-16">
+      <div className="relative z-10 flex flex-col gap-10 px-6 py-14 sm:px-10 md:px-16">
         <nav className="flex flex-col gap-4 text-[11px] font-semibold uppercase tracking-[0.4em] text-white/70 sm:flex-row sm:items-center sm:justify-between">
-          <span className="font-black text-white">Loremaker</span>
-          <div className="flex items-center gap-6">
-            <a href="/" className="transition-colors hover:text-white">
-              Home
-            </a>
-            <span className="rounded-full border border-white/35 px-3 py-1 text-white">
-              Loremaker
-            </span>
+          <div className="flex items-center gap-2 text-white">
+            <Clock size={12} /> {todayKey()} • Daily Lore Sequence
           </div>
+          <button
+            type="button"
+            onClick={() => window.location.reload()}
+            className="self-start rounded-full border border-white/35 px-3 py-1 text-white transition hover:bg-white/10 sm:self-auto"
+          >
+            Loremaker
+          </button>
         </nav>
-        <div className="grid gap-12 lg:grid-cols-[3fr_2fr]">
-          <div className="space-y-6">
-            <h1 className="text-4xl font-black leading-tight text-white drop-shadow-lg sm:text-5xl md:text-6xl">
-              Chronicle every legend in Menelek Makonnen’s expanding cosmos.
-            </h1>
-            <p className="text-lg font-semibold text-white/85 md:text-xl">
-              Filter the archive, dive into detailed dossiers, and summon characters into the Arena.
-            </p>
-            <div className="flex flex-wrap items-center gap-4">
-              <Button variant="gradient" size="lg" onClick={onFilterClick} className="shadow-[0_18px_48px_rgba(253,230,138,0.35)]">
-                Launch Filters
-              </Button>
-              <Button
-                variant="outline"
-                size="lg"
-                onClick={onScrollToFilters}
-                className="border-white/50 text-white/85 hover:bg-white/10"
+
+        <div className="relative">
+          {slides.length > 1 && (
+            <>
+              <button
+                type="button"
+                onClick={goPrev}
+                className="absolute left-2 top-1/2 z-20 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full border border-white/40 bg-black/60 text-white shadow-lg transition hover:bg-black/80"
+                aria-label="Previous highlight"
               >
-                Browse Archive
-              </Button>
+                <ChevronLeft className="h-4 w-4" />
+              </button>
+              <button
+                type="button"
+                onClick={goNext}
+                className="absolute right-2 top-1/2 z-20 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full border border-white/40 bg-black/60 text-white shadow-lg transition hover:bg-black/80"
+                aria-label="Next highlight"
+              >
+                <ChevronRight className="h-4 w-4" />
+              </button>
+            </>
+          )}
+          <div className="overflow-hidden rounded-[36px]">
+            <AnimatePresence mode="wait" initial={false} custom={direction}>
+              <motion.div
+                key={current?.key}
+                custom={direction}
+                initial={{ opacity: 0, x: direction > 0 ? 140 : -140 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: direction > 0 ? -140 : 140 }}
+                transition={{ duration: 0.85, ease: "easeInOut" }}
+                className="relative"
+              >
+                {renderSlide(current)}
+              </motion.div>
+            </AnimatePresence>
+          </div>
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-3 text-xs font-bold uppercase tracking-wide text-white/70">
+            <span>
+              {index + 1} / {slides.length} — {current?.label}
+            </span>
+            <div className="flex items-center gap-2">
+              {slides.map((slide, idx) => (
+                <button
+                  key={slide.key}
+                  type="button"
+                  onClick={() => {
+                    setDirection(idx > index ? 1 : -1);
+                    setIndex(idx);
+                  }}
+                  className={cx(
+                    "h-2 w-6 rounded-full transition",
+                    idx === index ? "bg-white" : "bg-white/30 hover:bg-white/60"
+                  )}
+                  aria-label={`Show ${slide.label}`}
+                />
+              ))}
             </div>
           </div>
-          <div className="flex flex-col justify-end gap-6">
-            <div className="rounded-3xl border border-white/25 bg-black/40 px-6 py-6 backdrop-blur-xl">
-              <div className="text-[11px] font-bold uppercase tracking-[0.4em] text-white/60">Archive</div>
-              <div className="mt-3 text-5xl font-black text-white sm:text-6xl">{totalCharacters}</div>
-              <div className="mt-2 text-sm font-semibold text-white/70">Characters catalogued</div>
-            </div>
-            <p className="text-sm font-semibold text-white/70">
-              From primordial factions to whispered alliances, every dossier is ready for your next encounter.
-            </p>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-4">
+          <Button
+            variant="gradient"
+            size="lg"
+            onClick={onOpenFilters}
+            className="shadow-[0_18px_48px_rgba(253,230,138,0.35)]"
+          >
+            Launch Filters
+          </Button>
+          <Button
+            variant="outline"
+            size="lg"
+            onClick={onScrollToCharacters}
+            className="border-white/50 text-white/85 hover:bg-white/10"
+          >
+            Browse Archive
+          </Button>
+          <div className="ml-auto flex items-center gap-3 rounded-3xl border border-white/20 bg-white/10 px-5 py-3 text-sm font-semibold text-white/80">
+            <Crown size={16} /> {totalCharacters} characters catalogued
           </div>
         </div>
       </div>
@@ -1666,6 +2076,8 @@ export default function LoremakerApp() {
   const [showArena, setShowArena] = useState(true);
   const [openModal, setOpenModal] = useState(false);
   const [currentCharacter, setCurrentCharacter] = useState(null);
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [mobileColumns, setMobileColumns] = useState(2);
   const visitTracked = useRef(false);
 
   const selectedIds = useMemo(
@@ -1692,10 +2104,6 @@ export default function LoremakerApp() {
   }, []);
 
   const clearFilters = useCallback(() => {
-    setFilters({});
-  }, []);
-
-  const clearAll = useCallback(() => {
     setFilters({});
     setCombineAND(false);
     setQuery("");
@@ -1755,6 +2163,8 @@ export default function LoremakerApp() {
     }
   }, [filtered, sortMode]);
 
+  const featured = useMemo(() => computeFeatured(data), [data]);
+
   useEffect(() => {
     if (visitTracked.current) return;
     if (!TRACK_VISIT_WEBHOOK || typeof window === "undefined") return;
@@ -1771,49 +2181,73 @@ export default function LoremakerApp() {
     }).catch(() => {});
   }, [data.length]);
 
-  const scrollToFilters = useCallback(() => {
-    document.getElementById("filters-panel")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  const scrollToCharacters = useCallback(() => {
+    document.getElementById("characters-grid")?.scrollIntoView({ behavior: "smooth", block: "start" });
   }, []);
 
   return (
-    <div className="relative min-h-screen bg-[#070813] text-white">
+    <div className="relative min-h-screen overflow-x-hidden bg-[#070813] text-white">
       <Aurora />
       <header className="sticky top-0 z-40 border-b border-white/10 bg-black/40 backdrop-blur-xl">
-        <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-3 px-4 py-3">
-          <div className="flex items-center gap-2">
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/15">
-              <Insignia label="Lore" size={32} variant="site" />
+        <div className="mx-auto flex w-full max-w-7xl flex-wrap items-center gap-3 px-4 py-3">
+          <div className="flex items-center gap-3">
+            <LoreShield onClick={() => window.location.reload()} />
+            <div className="hidden flex-col text-[10px] font-semibold uppercase tracking-[0.35em] text-white/60 sm:flex">
+              <span>Pulse of the Loremaker</span>
+              <span className="text-white/80">Daily featured lore drops</span>
             </div>
-            <div className="text-2xl font-black tracking-tight">Loremaker Universe</div>
           </div>
-          <nav className="ml-6 hidden items-center gap-4 text-[11px] font-bold uppercase tracking-[0.4em] text-white/60 sm:flex">
-            <a href="/" className="transition-colors hover:text-white">
-              Home
-            </a>
-            <span className="rounded-full border border-white/35 px-3 py-1 text-white">Loremaker</span>
+          <nav className="ml-4 hidden items-center gap-3 text-[11px] font-bold uppercase tracking-[0.4em] text-white/60 sm:flex">
+            <button
+              type="button"
+              onClick={() => window.location.reload()}
+              className="rounded-full border border-white/35 px-3 py-1 text-white transition hover:bg-white/10"
+            >
+              Loremaker
+            </button>
           </nav>
-          <div className="ml-auto flex flex-wrap items-center gap-2">
-            <div className="relative">
+          <div className="ml-auto flex w-full flex-wrap items-center gap-2 sm:w-auto">
+            <div className="relative flex-1 min-w-[200px] sm:flex-none">
               <Input
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
                 placeholder="Search characters, powers, locations, tags..."
-                className="w-72 bg-white/15 pl-9"
+                className="w-full bg-white/15 pl-9"
               />
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/70" />
             </div>
-            <Button variant="gradient" onClick={scrollToFilters} className="shadow-[0_15px_40px_rgba(250,204,21,0.3)]">
-              <Filter className="h-4 w-4" /> Filters
-            </Button>
-            <Button variant="outline" onClick={clearFilters}>
-              <X size={14} /> Clear
-            </Button>
-            <Button variant="subtle" onClick={() => setShowArena((prev) => !prev)}>
-              <Swords size={14} /> {showArena ? "Hide Arena" : "Arena"}
-            </Button>
-            <Button variant="dark" onClick={() => refetch()}>
-              <RefreshCcw size={14} /> Sync
-            </Button>
+            <div className="flex items-center gap-2">
+              <div className="relative">
+                <select
+                  value={sortMode}
+                  onChange={(event) => setSortMode(event.target.value)}
+                  className="appearance-none rounded-xl border border-white/30 bg-black/70 px-3 py-2 pr-9 text-xs font-bold uppercase tracking-wide text-white shadow-inner focus:outline-none"
+                >
+                  {SORT_OPTIONS.map((item) => (
+                    <option key={item.value} value={item.value} className="bg-black text-white">
+                      {item.label}
+                    </option>
+                  ))}
+                </select>
+                <ArrowDown className="pointer-events-none absolute right-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-white/70" />
+              </div>
+              <Button
+                variant="gradient"
+                onClick={() => setFiltersOpen(true)}
+                className="shadow-[0_15px_40px_rgba(250,204,21,0.3)]"
+              >
+                <Filter className="h-4 w-4" /> Filters
+              </Button>
+              <Button variant="outline" onClick={clearFilters}>
+                <X size={14} /> Clear
+              </Button>
+              <Button variant="subtle" onClick={() => setShowArena((prev) => !prev)}>
+                <Swords size={14} /> {showArena ? "Hide Arena" : "Arena"}
+              </Button>
+              <Button variant="dark" onClick={() => refetch()}>
+                <RefreshCcw size={14} /> Sync
+              </Button>
+            </div>
           </div>
         </div>
       </header>
@@ -1832,22 +2266,12 @@ export default function LoremakerApp() {
 
         <HeroSection
           totalCharacters={data.length}
-          onFilterClick={scrollToFilters}
-          onScrollToFilters={scrollToFilters}
+          featured={featured}
+          onOpenFilters={() => setFiltersOpen(true)}
+          onScrollToCharacters={scrollToCharacters}
+          onOpenCharacter={openCharacter}
+          onFacet={handleFacet}
         />
-
-        <div id="filters-panel" className="mt-10">
-          <Controls
-            query={query}
-            setQuery={setQuery}
-            setOpenFilters={() => scrollToFilters()}
-            sortMode={sortMode}
-            setSortMode={setSortMode}
-            onClear={clearAll}
-            onJumpArena={() => document.getElementById("arena-anchor")?.scrollIntoView({ behavior: "smooth", block: "start" })}
-          />
-        </div>
-
         {showArena && (
           <div id="arena-anchor" className="mt-10">
             <BattleArena
@@ -1864,16 +2288,39 @@ export default function LoremakerApp() {
           <div className="flex flex-wrap items-center gap-2 text-xs font-semibold uppercase tracking-[0.3em] text-white/60">
             <Users size={14} /> {filtered.length} heroes ready
           </div>
-          <SortBar option={sortMode} setOption={setSortMode} />
+          <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-white/70">
+            <span>Mobile Density</span>
+            <button
+              type="button"
+              onClick={() => setMobileColumns(2)}
+              className={cx(
+                "rounded-full border px-3 py-1 transition",
+                mobileColumns === 2 ? "border-white bg-white/20 text-white" : "border-white/30 text-white/70 hover:bg-white/10"
+              )}
+            >
+              Duo
+            </button>
+            <button
+              type="button"
+              onClick={() => setMobileColumns(3)}
+              className={cx(
+                "rounded-full border px-3 py-1 transition",
+                mobileColumns === 3 ? "border-white bg-white/20 text-white" : "border-white/30 text-white/70 hover:bg-white/10"
+              )}
+            >
+              Trio
+            </button>
+          </div>
         </section>
 
-        <div className="mt-6">
+        <div id="characters-grid" className="mt-6">
           <CharacterGrid
             data={sorted.filter((c) => !selectedIds.includes(c.id))}
             onOpen={openCharacter}
             onFacet={handleFacet}
             onUseInSim={onUseInSim}
             highlightId={highlightedId}
+            mobileColumns={mobileColumns}
           />
         </div>
       </main>
@@ -1886,7 +2333,18 @@ export default function LoremakerApp() {
           onUseInSim={useInSim}
         />
 
-        <ChatDock />
+        <FilterDrawer open={filtersOpen} onClose={() => setFiltersOpen(false)}>
+          <SidebarFilters
+            data={data}
+            filters={filters}
+            setFilters={setFilters}
+            combineAND={combineAND}
+            setCombineAND={setCombineAND}
+            onClear={clearFilters}
+          />
+        </FilterDrawer>
+
+        <ScrollShortcuts />
     </div>
   );
 }
