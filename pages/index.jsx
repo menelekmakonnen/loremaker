@@ -635,50 +635,6 @@ function HeroHalo() {
   );
 }
 
-function CatalogViz({ total }) {
-  const segments = useMemo(() => {
-    const circumference = 2 * Math.PI * 32;
-    return [0.26, 0.18, 0.22, 0.14, 0.2].map((ratio, index) => ({
-      key: `seg-${index}`,
-      length: circumference * ratio,
-      offset: (circumference * index * 0.18) % circumference,
-      hue: 30 + index * 48,
-    }));
-  }, []);
-  return (
-    <div className="relative flex items-center justify-center">
-      <motion.div
-        className="relative flex h-24 w-24 items-center justify-center rounded-full border border-white/25 bg-black/60 p-3 shadow-[0_12px_40px_rgba(12,18,48,0.55)]"
-        animate={{ rotate: 360 }}
-        transition={{ duration: 48, repeat: Infinity, ease: "linear" }}
-      >
-        <svg viewBox="0 0 80 80" className="h-full w-full">
-          <g transform="translate(40,40)">
-            {segments.map((segment, index) => (
-              <motion.circle
-                key={segment.key}
-                r="32"
-                fill="transparent"
-                stroke={`hsla(${segment.hue},80%,60%,0.75)`}
-                strokeWidth="4"
-                strokeDasharray={`${segment.length} 200`}
-                strokeDashoffset={-segment.offset}
-                animate={{ strokeDashoffset: [segment.offset * -1, segment.offset * -1 - segment.length, segment.offset * -1] }}
-                transition={{ duration: 14 + index * 2.5, repeat: Infinity, ease: "easeInOut" }}
-                style={{ filter: "drop-shadow(0 0 6px hsla(45,100%,75%,0.3))" }}
-              />
-            ))}
-          </g>
-        </svg>
-        <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center text-center">
-          <span className="text-[9px] font-bold uppercase tracking-[0.3em] text-white/60">Universe</span>
-          <span className="text-lg font-black text-white sm:text-xl">{total}</span>
-        </div>
-      </motion.div>
-    </div>
-  );
-}
-
 function LoreShield({ size = 56, onClick }) {
   const idRef = useRef(() => `lore-${Math.random().toString(36).slice(2)}`);
   const gradientId = useMemo(() => idRef.current(), []);
@@ -952,86 +908,142 @@ function CharacterCard({ char, onOpen, onFacet, onUseInSim, highlight }) {
     onUseInSim(char.id);
     setTimeout(() => setPulse(false), 700);
   };
+  const quickFacts = [char.gender, char.status, char.alignment, char.era]
+    .filter(Boolean)
+    .slice(0, 3);
+  const quickFilters = [
+    ...(char.locations || []).slice(0, 2).map((value) => ({ key: "locations", value })),
+    ...(char.faction || []).slice(0, 1).map((value) => ({ key: "faction", value })),
+    ...(char.tags || []).slice(0, 1).map((value) => ({ key: "tag", value })),
+  ];
+  const signaturePowers = [...(char.powers || [])]
+    .sort((a, b) => (Number(b.level) || 0) - (Number(a.level) || 0))
+    .slice(0, 2);
+  const openProfile = () => onOpen(char);
+  const handleProfileKey = (event) => {
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      openProfile();
+    }
+  };
   return (
     <motion.div
       layout
-      animate={pulse ? { rotate: [0, -2, 2, -1, 1, 0], scale: [1, 1.02, 0.98, 1.01, 1] } : { rotate: 0, scale: 1 }}
-      transition={{ type: "spring", stiffness: 230, damping: 18 }}
+      animate={pulse ? { rotate: [0, -1.5, 1.5, -0.75, 0.75, 0], scale: [1, 1.02, 0.99, 1.01, 1] } : { rotate: 0, scale: 1 }}
+      transition={{ type: "spring", stiffness: 230, damping: 20 }}
     >
-      <Card className={cx("overflow-hidden bg-white/8", highlight ? "ring-2 ring-amber-300" : "")}
+      <Card className={cx("flex h-full flex-col overflow-hidden bg-white/8", highlight ? "ring-2 ring-amber-300" : "")}>
+        <div
+          role="button"
+          tabIndex={0}
+          onClick={openProfile}
+          onKeyDown={handleProfileKey}
+          className="group relative block aspect-[3/4] w-full overflow-hidden"
         >
-        <div className="relative">
-          <button onClick={() => onOpen(char)} className="block h-56 w-full overflow-hidden">
-            <ImageSafe
-              src={char.cover || char.gallery[0]}
-              alt={char.name}
-              fallbackLabel={char.name}
-              className="h-56 w-full object-cover transition-transform duration-500 hover:scale-105"
-            />
-          </button>
-          <div className="absolute left-4 top-4 flex flex-col gap-2">
-            <div className="cursor-pointer" onClick={() => onOpen(char)}>
-              <Insignia label={char.faction?.[0] || char.name} size={44} variant={char.faction?.length ? "faction" : "character"} />
+          <ImageSafe
+            src={char.cover || char.gallery[0]}
+            alt={char.name}
+            fallbackLabel={char.name}
+            className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+          />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/30 to-transparent transition duration-500 group-hover:from-black/70" />
+          <div className="absolute left-4 top-4 flex items-center gap-2">
+            <Insignia label={char.faction?.[0] || char.name} size={40} variant={char.faction?.length ? "faction" : "character"} />
+            {char.alias?.[0] && (
+              <span className="hidden rounded-full bg-white/15 px-3 py-1 text-[10px] font-bold uppercase tracking-wide text-white/80 sm:inline">
+                {char.alias[0]}
+              </span>
+            )}
+          </div>
+          <motion.button
+            type="button"
+            whileTap={{ scale: 0.92 }}
+            onClick={(event) => {
+              event.stopPropagation();
+              triggerSim();
+            }}
+            className="absolute right-4 top-4 inline-flex items-center gap-1.5 rounded-full bg-gradient-to-r from-amber-300 to-rose-300 px-3 py-1 text-[10px] font-black uppercase tracking-wide text-black shadow-lg"
+          >
+            <Swords size={14} />
+            <span className="hidden sm:inline">Sim</span>
+          </motion.button>
+          <div className="absolute inset-x-4 bottom-4 flex flex-col gap-1">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-lg font-black text-white sm:text-xl">{char.name}</span>
+              {char.status && (
+                <span className="rounded-full bg-white/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.3em] text-white/80">
+                  {char.status}
+                </span>
+              )}
             </div>
-            <motion.button
-              whileTap={{ scale: 0.92 }}
-              onClick={triggerSim}
-              className="rounded-full bg-gradient-to-r from-amber-300 to-rose-300 px-3 py-1 text-xs font-black text-black shadow-lg"
-            >
-              <Swords size={14} /> Simulate
-            </motion.button>
+            <p className="text-[11px] font-semibold text-white/80 line-clamp-2 sm:text-sm">
+              {char.shortDesc || char.longDesc || "No description yet."}
+            </p>
           </div>
         </div>
-        <CardHeader className="space-y-2">
-          <div className="flex items-center gap-3">
-            <Insignia label={char.faction?.[0] || char.name} size={32} variant={char.faction?.length ? "faction" : "character"} />
-            <CardTitle className="text-xl text-white drop-shadow-[0_1px_6px_rgba(0,0,0,0.6)] sm:text-2xl">
-              <button onClick={() => onOpen(char)} className="bg-gradient-to-r from-white via-amber-100 to-white bg-clip-text text-left text-transparent">
-                {char.name}
-              </button>
-            </CardTitle>
+        <div className="flex flex-1 flex-col gap-3 p-4">
+          {!!quickFacts.length && (
+            <div className="flex flex-wrap gap-1.5">
+              {quickFacts.map((fact) => (
+                <span
+                  key={fact}
+                  className="rounded-full border border-white/20 bg-white/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.3em] text-white/70"
+                >
+                  {fact}
+                </span>
+              ))}
+            </div>
+          )}
+          {!!quickFilters.length && (
+            <div className="flex flex-wrap gap-1.5">
+              {quickFilters.map((item) => (
+                <button
+                  key={`${item.key}-${item.value}`}
+                  type="button"
+                  onClick={() => onFacet(item)}
+                  className="rounded-full border border-white/20 bg-white/5 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-white/75 transition hover:bg-white/15"
+                >
+                  {item.value}
+                </button>
+              ))}
+            </div>
+          )}
+          {!!signaturePowers.length && (
+            <div className="space-y-1 text-[11px] font-semibold text-white/85">
+              {signaturePowers.map((power, index) => (
+                <div key={power.name} className="space-y-1">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="truncate pr-2">{power.name}</span>
+                    <span className="text-white/60">{power.level}/10</span>
+                  </div>
+                  {index === 0 && <PowerMeter level={power.level} />}
+                </div>
+              ))}
+            </div>
+          )}
+          <div className="mt-auto flex items-center justify-between text-[10px] font-bold uppercase tracking-[0.3em] text-white/60">
+            <button
+              type="button"
+              onClick={openProfile}
+              className="rounded-full border border-white/20 bg-white/10 px-3 py-1 text-white transition hover:bg-white/20"
+            >
+              Open Profile
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                triggerSim();
+              }}
+              className="rounded-full border border-white/20 bg-white/5 px-3 py-1 text-white transition hover:bg-white/15"
+            >
+              Add to Sim
+            </button>
           </div>
-          <CardDescription className="line-clamp-2 text-xs text-white/80 sm:text-sm">
-            {char.shortDesc || char.longDesc || "No description yet."}
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <div className="flex flex-wrap gap-2 text-[11px] sm:text-xs">
-            {char.gender && <FacetChip onClick={() => onFacet({ key: "gender", value: char.gender })}>{char.gender}</FacetChip>}
-            {char.alignment && <FacetChip onClick={() => onFacet({ key: "alignment", value: char.alignment })}>{char.alignment}</FacetChip>}
-            {(char.locations || []).slice(0, 2).map((loc) => (
-              <FacetChip key={loc} onClick={() => onFacet({ key: "locations", value: loc })}>
-                {loc}
-              </FacetChip>
-            ))}
-            {(char.faction || []).slice(0, 1).map((faction) => (
-              <FacetChip key={faction} onClick={() => onFacet({ key: "faction", value: faction })}>
-                {faction}
-              </FacetChip>
-            ))}
-          </div>
-          <div className="space-y-1 text-[11px] font-bold text-white sm:text-xs">
-            {(char.powers || []).slice(0, 1).map((power) => (
-              <div key={power.name} className="flex items-center justify-between">
-                <span className="truncate pr-2">{power.name}</span>
-                <span>{power.level}/10</span>
-              </div>
-            ))}
-            <PowerMeter level={char.powers?.[0]?.level ?? 0} />
-          </div>
-        </CardContent>
-        <CardFooter className="flex items-center justify-between">
-          <div className="flex gap-2">
-            <Button variant="gradient" size="sm" className="text-[11px]" onClick={() => onOpen(char)}>
-              Read <ArrowRight className="h-4 w-4" />
-            </Button>
-          </div>
-        </CardFooter>
+        </div>
       </Card>
     </motion.div>
   );
 }
-
 function Gallery({ images, cover, name }) {
   const [index, setIndex] = useState(0);
   const sources = [cover, ...(images || [])].filter(Boolean);
@@ -1253,7 +1265,7 @@ function CharacterGrid({ data, onOpen, onFacet, onUseInSim, highlightId, mobileC
   const slice = data.slice(0, page * PAGE_SIZE);
   const mobileClass = mobileColumns >= 3 ? "grid-cols-3" : "grid-cols-2";
   return (
-    <div className={cx("grid gap-6 pb-24", mobileClass, "sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4")}> 
+    <div className={cx("grid gap-4 pb-24 sm:gap-6", mobileClass, "sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4")}>
       {slice.map((c) => (
         <CharacterCard
           key={c.id}
@@ -1399,11 +1411,14 @@ function ArenaCard({ char, position, onRelease, onOpen, health, isWinner, showX 
   const powers = char.powers || [];
   const visiblePowers = expanded ? powers : powers.slice(0, 4);
   const hasMorePowers = powers.length > 4;
+  const topLocations = (char.locations || []).slice(0, 2);
+  const topFactions = (char.faction || []).slice(0, 2);
+  const topTags = (char.tags || []).slice(0, 3);
   return (
     <motion.div
       layout
       className={cx(
-        "relative h-full rounded-3xl border border-slate-700 bg-slate-950/90 p-4 text-left text-slate-100 shadow-[0_25px_80px_rgba(6,7,12,0.65)] sm:p-5",
+        "relative h-full rounded-3xl border border-slate-700 bg-slate-950/90 p-3 text-left text-slate-100 shadow-[0_25px_80px_rgba(6,7,12,0.65)] sm:p-5",
         isWinner ? "ring-4 ring-emerald-400 scale-[1.02]" : "",
         showX ? "ring-2 ring-red-500" : ""
       )}
@@ -1420,14 +1435,28 @@ function ArenaCard({ char, position, onRelease, onOpen, health, isWinner, showX 
           X
         </motion.div>
       )}
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <Badge className="bg-slate-800/80 text-slate-200">Combatant {position}</Badge>
-        <div className="flex items-center gap-2 text-xs">
-          <Button variant="ghost" size="sm" className="text-[11px]" onClick={() => onOpen(char)}>
-            Details
+      <div className="flex flex-wrap items-center justify-between gap-2 text-[10px] sm:text-xs">
+        <Badge className="bg-slate-800/80 px-3 py-1 text-[10px] uppercase tracking-[0.3em] text-slate-200">Combatant {position}</Badge>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-9 px-3 text-[10px] sm:h-auto sm:text-[11px]"
+            onClick={() => onOpen(char)}
+            aria-label="View combatant details"
+          >
+            <span className="hidden sm:inline">Details</span>
+            <ArrowRight className="h-3.5 w-3.5 sm:hidden" />
           </Button>
-          <Button variant="outline" size="sm" className="text-[11px]" onClick={() => onRelease(char.id)}>
-            Release
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-9 px-3 text-[10px] sm:h-auto sm:text-[11px]"
+            onClick={() => onRelease(char.id)}
+            aria-label="Remove combatant"
+          >
+            <X className="mr-0 h-3.5 w-3.5 sm:mr-2" />
+            <span className="hidden sm:inline">Release</span>
           </Button>
         </div>
       </div>
@@ -1443,15 +1472,15 @@ function ArenaCard({ char, position, onRelease, onOpen, health, isWinner, showX 
           />
         </div>
       </button>
-      <div className="mt-5 flex items-start gap-3">
+      <div className="mt-4 flex items-start gap-3">
         <ImageSafe
           src={char.cover || char.gallery[0]}
           alt={char.name}
           fallbackLabel={char.name}
-          className="h-28 w-28 rounded-2xl border border-slate-700 object-cover sm:h-32 sm:w-32"
+          className="h-24 w-24 rounded-2xl border border-slate-700 object-cover sm:h-32 sm:w-32"
         />
-        <div className="flex-1 space-y-3 text-[11px] sm:text-xs">
-          <div className="text-lg font-black text-white sm:text-xl">{char.name}</div>
+        <div className="flex-1 space-y-3 text-[10px] sm:text-xs">
+          <div className="text-base font-black text-white sm:text-xl">{char.name}</div>
           <div className="grid grid-cols-2 gap-2">
             {char.gender && (
               <div>
@@ -1478,45 +1507,45 @@ function ArenaCard({ char, position, onRelease, onOpen, health, isWinner, showX 
               </div>
             )}
           </div>
-          {!!(char.locations || []).length && (
+          {!!topLocations.length && (
             <div>
               <div className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Locations</div>
-              <div className="flex flex-wrap gap-1.5">
-                {(char.locations || []).map((loc) => (
-                  <Badge key={loc} className="bg-slate-800/70 text-white">
+              <div className="flex flex-wrap gap-1">
+                {topLocations.map((loc) => (
+                  <span key={loc} className="rounded-full bg-slate-800/80 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-white">
                     {loc}
-                  </Badge>
+                  </span>
                 ))}
               </div>
             </div>
           )}
-          {!!(char.faction || []).length && (
+          {!!topFactions.length && (
             <div>
               <div className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Factions</div>
-              <div className="flex flex-wrap gap-1.5">
-                {(char.faction || []).map((faction) => (
-                  <Badge key={faction} className="bg-slate-800/70 text-white">
+              <div className="flex flex-wrap gap-1">
+                {topFactions.map((faction) => (
+                  <span key={faction} className="rounded-full bg-slate-800/80 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-white">
                     {faction}
-                  </Badge>
+                  </span>
                 ))}
               </div>
             </div>
           )}
-          {!!(char.tags || []).length && (
+          {!!topTags.length && (
             <div>
               <div className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Tags</div>
-              <div className="flex flex-wrap gap-1.5">
-                {(char.tags || []).map((tag) => (
-                  <Badge key={tag} className="bg-slate-800/70 text-white">
+              <div className="flex flex-wrap gap-1">
+                {topTags.map((tag) => (
+                  <span key={tag} className="rounded-full bg-slate-800/80 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-white">
                     {tag}
-                  </Badge>
+                  </span>
                 ))}
               </div>
             </div>
           )}
         </div>
       </div>
-      <div className="mt-5 space-y-2">
+      <div className="mt-4 space-y-2">
         {visiblePowers.map((power) => (
           <div key={power.name}>
             <div className="mb-1 flex items-center justify-between text-xs font-bold text-slate-200">
@@ -2112,7 +2141,11 @@ function HeroSection({
             </div>
           </div>
           <div className="flex items-center justify-center">
-            <CatalogViz total={totalCharacters} />
+            <div className="flex min-h-[160px] w-full max-w-xs flex-col items-center justify-center gap-2 rounded-3xl border border-white/20 bg-black/50 p-6 text-center shadow-[0_18px_48px_rgba(8,10,28,0.45)]">
+              <span className="text-[10px] font-bold uppercase tracking-[0.35em] text-white/60">Universe Size</span>
+              <span className="text-4xl font-black text-white sm:text-5xl">{totalCharacters}</span>
+              <span className="text-xs font-semibold uppercase tracking-wide text-white/70">Legends catalogued</span>
+            </div>
           </div>
         </div>
       </div>
@@ -2299,8 +2332,10 @@ function HeroSection({
           >
             Explore Universe
           </Button>
-          <div className="ml-auto flex items-center gap-4 rounded-3xl border border-white/20 bg-white/10 px-3 py-2 text-xs font-semibold text-white/80 sm:text-sm">
-            <CatalogViz total={totalCharacters} />
+          <div className="ml-auto flex items-center gap-3 rounded-3xl border border-white/20 bg-white/10 px-3 py-2 text-xs font-semibold text-white/80 sm:text-sm">
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-white/30 bg-black/60 text-[10px] font-black uppercase tracking-[0.35em] text-white/70">
+              Lore
+            </div>
             <div className="flex flex-col gap-0.5 text-right">
               <span className="text-[10px] font-bold uppercase tracking-[0.35em] text-white/60">Living Codex</span>
               <span className="text-base font-black text-white sm:text-lg">{totalCharacters} Legends catalogued</span>
@@ -2322,7 +2357,7 @@ export default function LoremakerApp() {
   const [arenaSlots, setArenaSlots] = useState({ left: null, right: null });
   const [arenaPulseKey, setArenaPulseKey] = useState(0);
   const [highlightedId, setHighlightedId] = useState(null);
-  const [showArena, setShowArena] = useState(true);
+  const [showArena, setShowArena] = useState(false);
   const [openModal, setOpenModal] = useState(false);
   const [currentCharacter, setCurrentCharacter] = useState(null);
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -2438,39 +2473,57 @@ export default function LoremakerApp() {
     <div className="relative min-h-screen w-full overflow-x-hidden bg-[#050813] text-white">
       <CosmicBackdrop />
       <Aurora className="opacity-70" />
-      <header className="sticky top-0 z-40 border-b border-white/10 bg-black/55 backdrop-blur-2xl">
-        <div className="mx-auto flex w-full max-w-7xl flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center">
-          <div className="flex items-center justify-between gap-3 sm:w-auto">
+      <header className="sticky top-0 z-40 border-b border-white/10 bg-black/60 backdrop-blur-2xl">
+        <div className="mx-auto w-full max-w-7xl space-y-3 px-3 py-4 sm:px-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-3">
               <LoreShield onClick={() => window.location.reload()} />
-              <div className="hidden flex-col text-[10px] font-semibold uppercase tracking-[0.35em] text-white/60 sm:flex">
-                <span>Pulse of the Loremaker</span>
+              <div className="flex flex-col text-[10px] font-semibold uppercase tracking-[0.35em] text-white/60">
+                <span className="hidden sm:inline">Pulse of the Loremaker</span>
                 <span className="text-white/80">Daily featured lore drops</span>
               </div>
             </div>
+            <nav className="hidden items-center gap-3 text-[11px] font-bold uppercase tracking-[0.4em] text-white/60 sm:flex">
+              <button
+                type="button"
+                onClick={() => window.location.reload()}
+                className="rounded-full border border-white/35 px-3 py-1 text-white transition hover:bg-white/10"
+              >
+                Loremaker
+              </button>
+            </nav>
             <div className="flex items-center gap-2 sm:hidden">
-              <Button variant="ghost" size="sm" className="text-[11px] font-bold" onClick={() => setFiltersOpen(true)}>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-10 w-10 p-0"
+                onClick={() => setFiltersOpen(true)}
+                aria-label="Open filters"
+              >
                 <Filter className="h-4 w-4" />
               </Button>
-              <Button variant="ghost" size="sm" className="text-[11px] font-bold" onClick={() => setShowArena((prev) => !prev)}>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-10 w-10 p-0"
+                onClick={() => setShowArena((prev) => !prev)}
+                aria-label={showArena ? "Hide arena" : "Open arena"}
+              >
                 <Swords className="h-4 w-4" />
               </Button>
-              <Button variant="ghost" size="sm" className="text-[11px] font-bold" onClick={() => refetch()}>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-10 w-10 p-0"
+                onClick={() => refetch()}
+                aria-label="Sync universe"
+              >
                 <RefreshCcw className="h-4 w-4" />
               </Button>
             </div>
           </div>
-          <nav className="hidden flex-1 items-center gap-3 text-[11px] font-bold uppercase tracking-[0.4em] text-white/60 sm:flex">
-            <button
-              type="button"
-              onClick={() => window.location.reload()}
-              className="rounded-full border border-white/35 px-3 py-1 text-white transition hover:bg-white/10"
-            >
-              Loremaker
-            </button>
-          </nav>
-          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-1 sm:flex-row sm:items-center">
-            <div className="relative w-full sm:max-w-sm">
+          <div className="grid grid-cols-4 gap-2 sm:flex sm:flex-wrap sm:items-center sm:justify-end">
+            <div className="relative col-span-4 sm:order-1 sm:flex-1 sm:max-w-sm">
               <Input
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
@@ -2479,49 +2532,65 @@ export default function LoremakerApp() {
               />
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/70" />
             </div>
-            <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:items-center sm:justify-end">
-              <div className="relative col-span-2 sm:col-auto">
-                <select
-                  value={sortMode}
-                  onChange={(event) => setSortMode(event.target.value)}
-                  className="w-full appearance-none rounded-xl border border-white/25 bg-black/60 px-3 py-2 pr-9 text-[11px] font-bold uppercase tracking-wide text-white/80 shadow-inner backdrop-blur focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300 sm:text-xs"
-                >
-                  {SORT_OPTIONS.map((item) => (
-                    <option key={item.value} value={item.value} className="bg-black text-white">
-                      {item.label}
-                    </option>
-                  ))}
-                </select>
-                <ArrowDown className="pointer-events-none absolute right-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-white/70" />
-              </div>
-              <Button
-                variant="gradient"
-                size="sm"
-                onClick={() => setFiltersOpen(true)}
-                className="col-span-1 shadow-[0_15px_40px_rgba(250,204,21,0.3)] sm:col-auto"
+            <div className="relative col-span-4 sm:order-2 sm:w-48">
+              <select
+                value={sortMode}
+                onChange={(event) => setSortMode(event.target.value)}
+                className="w-full appearance-none rounded-xl border border-white/25 bg-black/60 px-3 py-2 pr-9 text-[11px] font-bold uppercase tracking-wide text-white/80 shadow-inner backdrop-blur focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300 sm:text-xs"
               >
-                <Filter className="h-4 w-4" /> Filters
-              </Button>
-              <Button variant="outline" size="sm" onClick={clearFilters} className="col-span-1 sm:col-auto">
-                <X size={14} /> Clear
-              </Button>
-              <Button
-                variant="subtle"
-                size="sm"
-                onClick={() => setShowArena((prev) => !prev)}
-                className="col-span-2 sm:col-auto"
-              >
-                <Swords size={14} /> {showArena ? "Hide Arena" : "Arena"}
-              </Button>
-              <Button variant="dark" size="sm" onClick={() => refetch()} className="col-span-2 sm:col-auto">
-                <RefreshCcw size={14} /> Sync
-              </Button>
+                {SORT_OPTIONS.map((item) => (
+                  <option key={item.value} value={item.value} className="bg-black text-white">
+                    {item.label}
+                  </option>
+                ))}
+              </select>
+              <ArrowDown className="pointer-events-none absolute right-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-white/70" />
             </div>
+            <Button
+              variant="gradient"
+              size="sm"
+              onClick={() => setFiltersOpen(true)}
+              className="col-span-1 shadow-[0_15px_40px_rgba(250,204,21,0.3)] sm:order-3 sm:col-auto"
+              aria-label="Open filters"
+            >
+              <Filter className="h-4 w-4" />
+              <span className="hidden sm:inline">Filters</span>
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={clearFilters}
+              className="col-span-1 sm:order-4 sm:col-auto"
+              aria-label="Clear filters"
+            >
+              <X size={14} />
+              <span className="hidden sm:inline">Clear</span>
+            </Button>
+            <Button
+              variant="subtle"
+              size="sm"
+              onClick={() => setShowArena((prev) => !prev)}
+              className="col-span-1 sm:order-5 sm:col-auto"
+              aria-label={showArena ? "Hide arena" : "Open arena"}
+            >
+              <Swords size={14} />
+              <span className="hidden sm:inline">{showArena ? "Hide Arena" : "Arena"}</span>
+            </Button>
+            <Button
+              variant="dark"
+              size="sm"
+              onClick={() => refetch()}
+              className="col-span-1 sm:order-6 sm:col-auto"
+              aria-label="Sync universe"
+            >
+              <RefreshCcw size={14} />
+              <span className="hidden sm:inline">Sync</span>
+            </Button>
           </div>
         </div>
       </header>
 
-      <main className="mx-auto max-w-7xl space-y-10 px-4 py-8">
+      <main className="mx-auto max-w-7xl space-y-10 px-3 py-8 sm:px-4">
         {loading && (
           <div className="rounded-3xl border border-white/15 bg-white/5 px-6 py-4 text-sm font-semibold text-white/80">
             Synchronising the universe…
