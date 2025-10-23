@@ -5,6 +5,7 @@ import {
   RefreshCcw,
   X,
   ArrowDown,
+  ArrowUp,
   ArrowRight,
   ChevronLeft,
   ChevronRight,
@@ -17,9 +18,6 @@ import {
   Library,
   Crown,
   Swords,
-  MessageCircle,
-  Send,
-  Bot,
 } from "lucide-react";
 
 /**
@@ -106,13 +104,6 @@ const SHEET_ID = "1nbAsU-zNe4HbM0bBLlYofi1pHhneEjEIWfW22JODBeM";
 const SHEET_NAME = "Characters";
 const GVIZ_URL = (sheetName) =>
   `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(sheetName)}`;
-
-const CHATBOT_WEBHOOK =
-  typeof window === "undefined"
-    ? process.env.NEXT_PUBLIC_LOREMAKER_CHAT_WEBHOOK || ""
-    : window?.__NEXT_DATA__?.props?.pageProps?.chatbotWebhook ||
-      process.env.NEXT_PUBLIC_LOREMAKER_CHAT_WEBHOOK ||
-      "";
 
 const TRACK_VISIT_WEBHOOK =
   typeof window === "undefined"
@@ -303,6 +294,146 @@ function fillDailyPowers(c) {
   return { ...c, powers };
 }
 
+const uniqueSorted = (values) => Array.from(new Set(values.filter(Boolean))).sort((a, b) => a.localeCompare(b));
+
+function computeFeatured(characters) {
+  if (!characters || !characters.length) {
+    return { character: null, faction: null, location: null, power: null };
+  }
+  const rng = seededRandom(`featured|${todayKey()}`);
+  const pick = (arr) => {
+    if (!arr.length) return null;
+    const index = Math.floor(rng() * arr.length);
+    return arr[index] || arr[arr.length - 1] || null;
+  };
+
+  const character = pick(characters);
+  const factions = uniqueSorted(characters.flatMap((char) => normaliseArray(char.faction)));
+  const locations = uniqueSorted(characters.flatMap((char) => normaliseArray(char.locations)));
+  const powers = uniqueSorted(characters.flatMap((char) => (char.powers || []).map((power) => power.name)));
+
+  const faction = pick(factions);
+  const location = pick(locations);
+  const power = pick(powers);
+
+  const factionMembers = faction
+    ? characters.filter((char) => normaliseArray(char.faction).includes(faction))
+    : [];
+  const locationResidents = location
+    ? characters.filter((char) => normaliseArray(char.locations).includes(location))
+    : [];
+  const powerWielders = power
+    ? characters.filter((char) => (char.powers || []).some((p) => p.name === power))
+    : [];
+
+  return {
+    character: character || null,
+    faction: faction
+      ? { name: faction, members: factionMembers.slice(0, 8) }
+      : null,
+    location: location
+      ? { name: location, residents: locationResidents.slice(0, 8) }
+      : null,
+    power: power
+      ? { name: power, wielders: powerWielders.slice(0, 8) }
+      : null,
+  };
+}
+
+function normaliseArray(value) {
+  if (value == null) return [];
+  if (Array.isArray(value)) return value.filter(Boolean);
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    return trimmed ? [trimmed] : [];
+  }
+  return [value];
+}
+
+function getCharacterValues(character, key) {
+  switch (key) {
+    case "gender":
+    case "alignment":
+    case "status":
+    case "era":
+      return normaliseArray(character[key]);
+    case "locations":
+      return normaliseArray(character.locations);
+    case "faction":
+      return normaliseArray(character.faction);
+    case "tags":
+      return normaliseArray(character.tags);
+    case "stories":
+      return normaliseArray(character.stories);
+    case "powers":
+      return normaliseArray((character.powers || []).map((power) => power.name));
+    case "alias":
+    case "aliases":
+      return normaliseArray(character.alias);
+    case "id":
+    case "name":
+      return normaliseArray(character[key]);
+    default:
+      return normaliseArray(character[key]);
+  }
+}
+
+function matchesFilters(character, filters = {}, combineAND = false, query = "") {
+  const terms = query
+    .toLowerCase()
+    .split(/\s+/)
+    .map((term) => term.trim())
+    .filter(Boolean);
+
+  if (terms.length) {
+    const searchable = [
+      character.id,
+      character.name,
+      character.gender,
+      character.alignment,
+      character.status,
+      character.era,
+      (character.alias || []).join(" "),
+      (character.locations || []).join(" "),
+      (character.faction || []).join(" "),
+      (character.tags || []).join(" "),
+      (character.stories || []).join(" "),
+      (character.powers || []).map((power) => power.name).join(" "),
+      character.shortDesc,
+      character.longDesc,
+    ]
+      .filter(Boolean)
+      .join(" \n ")
+      .toLowerCase();
+
+    const queryMatch = terms.every((term) => searchable.includes(term));
+    if (!queryMatch) {
+      return false;
+    }
+  }
+
+  if (!filters || !Object.keys(filters).length) return true;
+
+  const entries = Object.entries(filters).filter(([, value]) => {
+    if (value == null) return false;
+    if (Array.isArray(value)) return value.length > 0;
+    return String(value).trim().length > 0;
+  });
+
+  if (!entries.length) return true;
+
+  return entries.every(([key, selected]) => {
+    const desired = normaliseArray(selected).map((value) => String(value).toLowerCase());
+    if (!desired.length) return true;
+
+    const available = getCharacterValues(character, key).map((value) => String(value).toLowerCase());
+    if (!available.length) return false;
+
+    const comparator = combineAND ? "every" : "some";
+    return desired[comparator]((needle) => available.includes(needle));
+  });
+}
+
 function useCharacters() {
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -381,6 +512,269 @@ function Aurora({ className = "" }) {
       </motion.div>
       <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(255,255,255,0.09),transparent_65%)]" />
     </motion.div>
+  );
+}
+
+function CosmicBackdrop() {
+  const stars = useMemo(
+    () =>
+      Array.from({ length: 28 }, (_, index) => ({
+        id: `star-${index}`,
+        size: Math.random() * 2.2 + 0.8,
+        top: Math.random() * 100,
+        left: Math.random() * 100,
+        delay: Math.random() * 6,
+      })),
+    []
+  );
+  const nebulas = useMemo(
+    () =>
+      Array.from({ length: 5 }, (_, index) => ({
+        id: `nebula-${index}`,
+        size: Math.random() * 60 + 40,
+        top: Math.random() * 100,
+        left: Math.random() * 100,
+        hue: Math.floor(Math.random() * 360),
+        duration: Math.random() * 18 + 18,
+      })),
+    []
+  );
+  const comets = useMemo(
+    () =>
+      Array.from({ length: 3 }, (_, index) => ({
+        id: `comet-${index}`,
+        top: Math.random() * 100,
+        delay: index * 8,
+      })),
+    []
+  );
+  return (
+    <div className="pointer-events-none absolute inset-0 -z-30 overflow-hidden">
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(26,32,68,0.85),#050611_65%)]" />
+      {nebulas.map((nebula) => (
+        <motion.span
+          key={nebula.id}
+          className="absolute rounded-full blur-3xl"
+          style={{
+            width: `${nebula.size}vmin`,
+            height: `${nebula.size}vmin`,
+            top: `${nebula.top}%`,
+            left: `${nebula.left}%`,
+            background: `radial-gradient(circle at 30% 30%, rgba(255,255,255,0.08), hsla(${nebula.hue},80%,60%,0.22), transparent 70%)`,
+          }}
+          animate={{ opacity: [0.25, 0.55, 0.2], scale: [1, 1.06, 0.98] }}
+          transition={{ duration: nebula.duration, repeat: Infinity, ease: "easeInOut" }}
+        />
+      ))}
+      {stars.map((star) => (
+        <motion.span
+          key={star.id}
+          className="absolute rounded-full bg-white/90"
+          style={{
+            width: `${star.size}px`,
+            height: `${star.size}px`,
+            top: `${star.top}%`,
+            left: `${star.left}%`,
+            boxShadow: "0 0 6px rgba(255,255,255,0.45)",
+          }}
+          animate={{ opacity: [0.15, 0.75, 0.3] }}
+          transition={{ duration: 4.5, delay: star.delay, repeat: Infinity, ease: "easeInOut" }}
+        />
+      ))}
+      {comets.map((comet) => (
+        <motion.span
+          key={comet.id}
+          className="absolute h-px w-48 bg-gradient-to-r from-transparent via-cyan-200/80 to-transparent"
+          style={{ top: `${comet.top}%` }}
+          initial={{ x: "-20%", opacity: 0 }}
+          animate={{ x: "120%", opacity: [0, 1, 0] }}
+          transition={{ duration: 22, delay: comet.delay, repeat: Infinity, ease: "easeInOut" }}
+        />
+      ))}
+    </div>
+  );
+}
+
+function HeroHalo() {
+  const rings = useMemo(
+    () =>
+      [
+        { size: 120, top: "-15%", left: "-18%", duration: 44 },
+        { size: 140, top: "55%", left: "-12%", duration: 52 },
+        { size: 160, top: "-10%", left: "58%", duration: 48 },
+        { size: 180, top: "50%", left: "62%", duration: 58 },
+      ],
+    []
+  );
+  return (
+    <div className="pointer-events-none absolute inset-0 -z-10 overflow-hidden">
+      {rings.map((ring, index) => (
+        <motion.div
+          key={`ring-${ring.size}-${index}`}
+          className="absolute rounded-full border border-white/10"
+          style={{
+            width: `${ring.size}vmin`,
+            height: `${ring.size}vmin`,
+            top: ring.top,
+            left: ring.left,
+            mixBlendMode: "screen",
+          }}
+          animate={{ rotate: index % 2 === 0 ? 360 : -360, scale: [1, 1.03, 0.97, 1] }}
+          transition={{ duration: ring.duration, repeat: Infinity, ease: "linear" }}
+        />
+      ))}
+      <motion.div
+        className="absolute inset-0"
+        animate={{ opacity: [0.35, 0.55, 0.3] }}
+        transition={{ duration: 16, repeat: Infinity, ease: "easeInOut" }}
+      >
+        <div className="absolute inset-[8%] rounded-full border border-amber-400/15" style={{ mixBlendMode: "screen" }} />
+        <div className="absolute inset-[18%] rounded-full border border-fuchsia-400/10" style={{ mixBlendMode: "screen" }} />
+      </motion.div>
+    </div>
+  );
+}
+
+function LoreShield({ size = 56, onClick }) {
+  const idRef = useRef(() => `lore-${Math.random().toString(36).slice(2)}`);
+  const gradientId = useMemo(() => idRef.current(), []);
+  const generateAura = useCallback(() => {
+    const hue = Math.floor(Math.random() * 360);
+    return {
+      hue,
+      glow: 0.5 + Math.random() * 0.6,
+      rotate: (Math.random() - 0.5) * 8,
+      scale: 0.94 + Math.random() * 0.12,
+      flare: 0.4 + Math.random() * 0.6,
+      sheen: (hue + 60) % 360,
+    };
+  }, []);
+  const [aura, setAura] = useState(() => generateAura());
+  const sparks = useMemo(
+    () =>
+      Array.from({ length: 4 }).map((_, index) => ({
+        id: `spark-${index}`,
+        delay: 0.6 + index * 0.35,
+        x: (Math.random() - 0.5) * 26,
+        y: (Math.random() - 0.5) * 32,
+        scale: 0.5 + Math.random() * 0.9,
+      })),
+    []
+  );
+
+  useEffect(() => {
+    const interval = setInterval(() => setAura(generateAura()), 2600);
+    return () => clearInterval(interval);
+  }, [generateAura]);
+
+  const dramaticSurge = useCallback(() => {
+    setAura((prev) => ({
+      ...generateAura(),
+      glow: prev.glow + 0.6,
+      scale: prev.scale + 0.08,
+    }));
+  }, [generateAura]);
+
+  const handleClick = (event) => {
+    dramaticSurge();
+    if (onClick) {
+      onClick(event);
+    } else {
+      window.location.reload();
+    }
+  };
+
+  return (
+    <motion.button
+      type="button"
+      onClick={handleClick}
+      onHoverStart={dramaticSurge}
+      whileHover={{
+        scale: aura.scale + 0.14,
+        rotate: aura.rotate * 2,
+        boxShadow: `0 0 45px rgba(255,255,255,${0.45 + aura.glow * 0.2})`,
+        filter: "brightness(1.18) saturate(1.4)",
+      }}
+      whileTap={{
+        scale: 0.9,
+        rotate: -aura.rotate * 2,
+        boxShadow: `0 0 60px rgba(255,255,255,0.85)`,
+        filter: "contrast(1.2)",
+      }}
+      animate={{
+        rotate: aura.rotate,
+        scale: aura.scale,
+        boxShadow: `0 0 ${24 + aura.glow * 26}px rgba(99,102,241,${0.35 + aura.glow * 0.25})`,
+      }}
+      transition={{ type: "spring", stiffness: 200, damping: 15 }}
+      className="relative inline-flex items-center justify-center overflow-visible rounded-[22px] border border-white/30 bg-black/40 p-2"
+      aria-label="Reload Loremaker"
+    >
+      <svg width={size} height={size} viewBox="0 0 64 64" className="drop-shadow-[0_6px_24px_rgba(0,0,0,0.45)]">
+        <defs>
+          <linearGradient id={`${gradientId}-fill`} x1="0" x2="1" y1="0" y2="1">
+            <stop offset="0%" stopColor={`hsla(${aura.hue},88%,70%,0.85)`} />
+            <stop offset="60%" stopColor={`hsla(${(aura.hue + 140) % 360},82%,65%,0.9)`} />
+            <stop offset="100%" stopColor={`hsla(${aura.sheen},80%,72%,0.95)`} />
+          </linearGradient>
+          <radialGradient id={`${gradientId}-inner`} cx="0.5" cy="0.35" r="0.75">
+            <stop offset="0%" stopColor="rgba(255,255,255,0.95)" />
+            <stop offset="45%" stopColor={`hsla(${aura.hue},90%,80%,${0.45 + aura.flare * 0.3})`} />
+            <stop offset="100%" stopColor="rgba(15,23,42,0.1)" />
+          </radialGradient>
+        </defs>
+        <path
+          d="M32 4 L8 16 L8 36 C8 49 19 58 32 61 C45 58 56 49 56 36 L56 16 Z"
+          fill={`url(#${gradientId}-fill)`}
+          stroke="rgba(255,255,255,0.6)"
+          strokeWidth="1.4"
+        />
+        <path
+          d="M32 11 L17 18 L17 34 C17 43 23 50 32 52 C41 50 47 43 47 34 L47 18 Z"
+          fill={`url(#${gradientId}-inner)`}
+        />
+        <text
+          x="32"
+          y="38"
+          textAnchor="middle"
+          fontFamily="var(--font-sans, 'Inter', 'Segoe UI', sans-serif)"
+          fontWeight="900"
+          fontSize="16"
+          fill="#0f172a"
+          style={{ filter: "drop-shadow(0 1px 4px rgba(255,255,255,0.75))" }}
+        >
+          LORE
+        </text>
+      </svg>
+      {sparks.map((spark) => (
+        <motion.span
+          key={spark.id}
+          className="pointer-events-none absolute h-10 w-10 rounded-full bg-gradient-to-br from-amber-300/70 via-fuchsia-400/60 to-indigo-400/70 blur-md"
+          style={{
+            left: `calc(50% + ${spark.x}px)`,
+            top: `calc(50% + ${spark.y}px)`,
+            transform: "translate(-50%, -50%)",
+          }}
+          animate={{
+            opacity: [0.15, 0.65, 0.35, 0.2],
+            scale: [spark.scale, spark.scale * 1.4, spark.scale * 0.9, spark.scale],
+            rotate: [0, 15, -12, 0],
+          }}
+          transition={{ duration: 3.6, repeat: Infinity, delay: spark.delay, ease: "easeInOut" }}
+        />
+      ))}
+      <motion.span
+        className="pointer-events-none absolute inset-0 rounded-[22px]"
+        animate={{
+          boxShadow: [
+            "0 0 0 rgba(255,255,255,0)",
+            `0 0 24px rgba(148,163,255,${0.2 + aura.glow * 0.2})`,
+            "0 0 0 rgba(255,255,255,0)",
+          ],
+        }}
+        transition={{ duration: 2.8, repeat: Infinity, ease: "easeInOut" }}
+      />
+    </motion.button>
   );
 }
 
@@ -497,31 +891,9 @@ const SORT_OPTIONS = [
   { value: "faction", label: "By Faction" },
   { value: "az", label: "A-Z" },
   { value: "za", label: "Z-A" },
-  { value: "power", label: "From Most Powerful" },
-  { value: "power-low", label: "From Least Powerful" },
+  { value: "most", label: "From Most Powerful" },
+  { value: "least", label: "From Least Powerful" },
 ];
-
-function SortBar({ option, setOption }) {
-  return (
-    <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-white/15 bg-white/8 px-4 py-3">
-      <span className="text-xs font-bold uppercase tracking-wide text-white/70">Sort</span>
-      <div className="relative">
-        <select
-          value={option}
-          onChange={(event) => setOption(event.target.value)}
-          className="appearance-none rounded-xl border border-white/30 bg-black/70 px-4 py-2 pr-10 text-sm font-bold text-white shadow-inner focus:outline-none"
-        >
-          {SORT_OPTIONS.map((item) => (
-            <option key={item.value} value={item.value} className="bg-black text-white">
-              {item.label}
-            </option>
-          ))}
-        </select>
-        <ArrowDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/70" />
-      </div>
-    </div>
-  );
-}
 
 function CharacterCard({ char, onOpen, onFacet, onUseInSim, highlight }) {
   const [pulse, setPulse] = useState(false);
@@ -536,86 +908,142 @@ function CharacterCard({ char, onOpen, onFacet, onUseInSim, highlight }) {
     onUseInSim(char.id);
     setTimeout(() => setPulse(false), 700);
   };
+  const quickFacts = [char.gender, char.status, char.alignment, char.era]
+    .filter(Boolean)
+    .slice(0, 3);
+  const quickFilters = [
+    ...(char.locations || []).slice(0, 2).map((value) => ({ key: "locations", value })),
+    ...(char.faction || []).slice(0, 1).map((value) => ({ key: "faction", value })),
+    ...(char.tags || []).slice(0, 1).map((value) => ({ key: "tag", value })),
+  ];
+  const signaturePowers = [...(char.powers || [])]
+    .sort((a, b) => (Number(b.level) || 0) - (Number(a.level) || 0))
+    .slice(0, 2);
+  const openProfile = () => onOpen(char);
+  const handleProfileKey = (event) => {
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      openProfile();
+    }
+  };
   return (
     <motion.div
       layout
-      animate={pulse ? { rotate: [0, -2, 2, -1, 1, 0], scale: [1, 1.02, 0.98, 1.01, 1] } : { rotate: 0, scale: 1 }}
-      transition={{ type: "spring", stiffness: 230, damping: 18 }}
+      animate={pulse ? { rotate: [0, -1.5, 1.5, -0.75, 0.75, 0], scale: [1, 1.02, 0.99, 1.01, 1] } : { rotate: 0, scale: 1 }}
+      transition={{ type: "spring", stiffness: 230, damping: 20 }}
     >
-      <Card className={cx("overflow-hidden bg-white/8", highlight ? "ring-2 ring-amber-300" : "")}
+      <Card className={cx("flex h-full flex-col overflow-hidden bg-white/8", highlight ? "ring-2 ring-amber-300" : "")}>
+        <div
+          role="button"
+          tabIndex={0}
+          onClick={openProfile}
+          onKeyDown={handleProfileKey}
+          className="group relative block aspect-[3/4] w-full overflow-hidden"
         >
-        <div className="relative">
-          <button onClick={() => onOpen(char)} className="block h-56 w-full overflow-hidden">
-            <ImageSafe
-              src={char.cover || char.gallery[0]}
-              alt={char.name}
-              fallbackLabel={char.name}
-              className="h-56 w-full object-cover transition-transform duration-500 hover:scale-105"
-            />
-          </button>
-          <div className="absolute left-4 top-4 flex flex-col gap-2">
-            <div className="cursor-pointer" onClick={() => onOpen(char)}>
-              <Insignia label={char.faction?.[0] || char.name} size={44} variant={char.faction?.length ? "faction" : "character"} />
+          <ImageSafe
+            src={char.cover || char.gallery[0]}
+            alt={char.name}
+            fallbackLabel={char.name}
+            className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+          />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/30 to-transparent transition duration-500 group-hover:from-black/70" />
+          <div className="absolute left-4 top-4 flex items-center gap-2">
+            <Insignia label={char.faction?.[0] || char.name} size={40} variant={char.faction?.length ? "faction" : "character"} />
+            {char.alias?.[0] && (
+              <span className="hidden rounded-full bg-white/15 px-3 py-1 text-[10px] font-bold uppercase tracking-wide text-white/80 sm:inline">
+                {char.alias[0]}
+              </span>
+            )}
+          </div>
+          <motion.button
+            type="button"
+            whileTap={{ scale: 0.92 }}
+            onClick={(event) => {
+              event.stopPropagation();
+              triggerSim();
+            }}
+            className="absolute right-4 top-4 inline-flex items-center gap-1.5 rounded-full bg-gradient-to-r from-amber-300 to-rose-300 px-3 py-1 text-[10px] font-black uppercase tracking-wide text-black shadow-lg"
+          >
+            <Swords size={14} />
+            <span className="hidden sm:inline">Sim</span>
+          </motion.button>
+          <div className="absolute inset-x-4 bottom-4 flex flex-col gap-1">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-lg font-black text-white sm:text-xl">{char.name}</span>
+              {char.status && (
+                <span className="rounded-full bg-white/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.3em] text-white/80">
+                  {char.status}
+                </span>
+              )}
             </div>
-            <motion.button
-              whileTap={{ scale: 0.92 }}
-              onClick={triggerSim}
-              className="rounded-full bg-gradient-to-r from-amber-300 to-rose-300 px-3 py-1 text-xs font-black text-black shadow-lg"
-            >
-              <Swords size={14} /> Simulate
-            </motion.button>
+            <p className="text-[11px] font-semibold text-white/80 line-clamp-2 sm:text-sm">
+              {char.shortDesc || char.longDesc || "No description yet."}
+            </p>
           </div>
         </div>
-        <CardHeader className="space-y-2">
-          <div className="flex items-center gap-3">
-            <Insignia label={char.faction?.[0] || char.name} size={32} variant={char.faction?.length ? "faction" : "character"} />
-            <CardTitle className="text-2xl text-white drop-shadow-[0_1px_6px_rgba(0,0,0,0.6)]">
-              <button onClick={() => onOpen(char)} className="bg-gradient-to-r from-white via-amber-100 to-white bg-clip-text text-left text-transparent">
-                {char.name}
-              </button>
-            </CardTitle>
+        <div className="flex flex-1 flex-col gap-3 p-4">
+          {!!quickFacts.length && (
+            <div className="flex flex-wrap gap-1.5">
+              {quickFacts.map((fact) => (
+                <span
+                  key={fact}
+                  className="rounded-full border border-white/20 bg-white/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.3em] text-white/70"
+                >
+                  {fact}
+                </span>
+              ))}
+            </div>
+          )}
+          {!!quickFilters.length && (
+            <div className="flex flex-wrap gap-1.5">
+              {quickFilters.map((item) => (
+                <button
+                  key={`${item.key}-${item.value}`}
+                  type="button"
+                  onClick={() => onFacet(item)}
+                  className="rounded-full border border-white/20 bg-white/5 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-white/75 transition hover:bg-white/15"
+                >
+                  {item.value}
+                </button>
+              ))}
+            </div>
+          )}
+          {!!signaturePowers.length && (
+            <div className="space-y-1 text-[11px] font-semibold text-white/85">
+              {signaturePowers.map((power, index) => (
+                <div key={power.name} className="space-y-1">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="truncate pr-2">{power.name}</span>
+                    <span className="text-white/60">{power.level}/10</span>
+                  </div>
+                  {index === 0 && <PowerMeter level={power.level} />}
+                </div>
+              ))}
+            </div>
+          )}
+          <div className="mt-auto flex items-center justify-between text-[10px] font-bold uppercase tracking-[0.3em] text-white/60">
+            <button
+              type="button"
+              onClick={openProfile}
+              className="rounded-full border border-white/20 bg-white/10 px-3 py-1 text-white transition hover:bg-white/20"
+            >
+              Open Profile
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                triggerSim();
+              }}
+              className="rounded-full border border-white/20 bg-white/5 px-3 py-1 text-white transition hover:bg-white/15"
+            >
+              Add to Sim
+            </button>
           </div>
-          <CardDescription className="line-clamp-2 text-white/80">
-            {char.shortDesc || char.longDesc || "No description yet."}
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <div className="flex flex-wrap gap-2">
-            {char.gender && <FacetChip onClick={() => onFacet({ key: "gender", value: char.gender })}>{char.gender}</FacetChip>}
-            {char.alignment && <FacetChip onClick={() => onFacet({ key: "alignment", value: char.alignment })}>{char.alignment}</FacetChip>}
-            {(char.locations || []).slice(0, 2).map((loc) => (
-              <FacetChip key={loc} onClick={() => onFacet({ key: "locations", value: loc })}>
-                {loc}
-              </FacetChip>
-            ))}
-            {(char.faction || []).slice(0, 1).map((faction) => (
-              <FacetChip key={faction} onClick={() => onFacet({ key: "faction", value: faction })}>
-                {faction}
-              </FacetChip>
-            ))}
-          </div>
-          <div className="space-y-1 text-xs font-bold text-white">
-            {(char.powers || []).slice(0, 1).map((power) => (
-              <div key={power.name} className="flex items-center justify-between">
-                <span className="truncate pr-2">{power.name}</span>
-                <span>{power.level}/10</span>
-              </div>
-            ))}
-            <PowerMeter level={char.powers?.[0]?.level ?? 0} />
-          </div>
-        </CardContent>
-        <CardFooter className="flex items-center justify-between">
-          <div className="flex gap-2">
-            <Button variant="gradient" size="sm" onClick={() => onOpen(char)}>
-              Read <ArrowRight className="h-4 w-4" />
-            </Button>
-          </div>
-        </CardFooter>
+        </div>
       </Card>
     </motion.div>
   );
 }
-
 function Gallery({ images, cover, name }) {
   const [index, setIndex] = useState(0);
   const sources = [cover, ...(images || [])].filter(Boolean);
@@ -821,7 +1249,7 @@ function CharacterModal({ open, onClose, char, onFacet, onUseInSim }) {
 }
 
 const PAGE_SIZE = 24;
-function CharacterGrid({ data, onOpen, onFacet, onUseInSim, highlightId }) {
+function CharacterGrid({ data, onOpen, onFacet, onUseInSim, highlightId, mobileColumns = 2 }) {
   const [page, setPage] = useState(1);
   useEffect(() => setPage(1), [data]);
   useEffect(() => {
@@ -835,8 +1263,9 @@ function CharacterGrid({ data, onOpen, onFacet, onUseInSim, highlightId }) {
     return () => window.removeEventListener("scroll", handler);
   }, [data.length]);
   const slice = data.slice(0, page * PAGE_SIZE);
+  const mobileClass = mobileColumns >= 3 ? "grid-cols-3" : "grid-cols-2";
   return (
-    <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-6 pb-24">
+    <div className={cx("grid gap-4 pb-24 sm:gap-6", mobileClass, "sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4")}>
       {slice.map((c) => (
         <CharacterCard
           key={c.id}
@@ -943,6 +1372,32 @@ function duel(c1, c2) {
   };
 }
 
+function computeBattleTimeline(charA, charB) {
+  const summary = duel(charA, charB);
+  const timeline = summary.logs.map((phase) => ({
+    round: phase.swing,
+    strikeA: Math.round(phase.offensive1),
+    strikeB: Math.round(phase.offensive2),
+    luckA: phase.luck1,
+    luckB: phase.luck2,
+    damageToB: phase.dmg1,
+    damageToA: phase.dmg2,
+    healthA: phase.h1,
+    healthB: phase.h2,
+  }));
+
+  return {
+    timeline,
+    winner: summary.winner,
+    loser: summary.loser,
+    finalScoreA: summary.breakdown.s1,
+    finalScoreB: summary.breakdown.s2,
+    finalHealthA: summary.h1,
+    finalHealthB: summary.h2,
+    breakdown: summary.breakdown,
+  };
+}
+
 function ArenaCard({ char, position, onRelease, onOpen, health, isWinner, showX }) {
   if (!char) {
     return (
@@ -951,12 +1406,19 @@ function ArenaCard({ char, position, onRelease, onOpen, health, isWinner, showX 
       </div>
     );
   }
+  const [expanded, setExpanded] = useState(false);
   const healthGradient = health > 60 ? "from-emerald-300 to-emerald-500" : health > 30 ? "from-amber-300 to-amber-500" : "from-rose-400 to-red-500";
+  const powers = char.powers || [];
+  const visiblePowers = expanded ? powers : powers.slice(0, 4);
+  const hasMorePowers = powers.length > 4;
+  const topLocations = (char.locations || []).slice(0, 2);
+  const topFactions = (char.faction || []).slice(0, 2);
+  const topTags = (char.tags || []).slice(0, 3);
   return (
     <motion.div
       layout
       className={cx(
-        "relative h-full rounded-3xl border border-slate-700 bg-slate-950/90 p-5 text-left text-slate-100 shadow-[0_25px_80px_rgba(6,7,12,0.65)]",
+        "relative h-full rounded-3xl border border-slate-700 bg-slate-950/90 p-3 text-left text-slate-100 shadow-[0_25px_80px_rgba(6,7,12,0.65)] sm:p-5",
         isWinner ? "ring-4 ring-emerald-400 scale-[1.02]" : "",
         showX ? "ring-2 ring-red-500" : ""
       )}
@@ -973,14 +1435,28 @@ function ArenaCard({ char, position, onRelease, onOpen, health, isWinner, showX 
           X
         </motion.div>
       )}
-      <div className="flex items-center justify-between">
-        <Badge className="bg-slate-800/80 text-slate-200">Combatant {position}</Badge>
+      <div className="flex flex-wrap items-center justify-between gap-2 text-[10px] sm:text-xs">
+        <Badge className="bg-slate-800/80 px-3 py-1 text-[10px] uppercase tracking-[0.3em] text-slate-200">Combatant {position}</Badge>
         <div className="flex items-center gap-2">
-          <Button variant="ghost" size="sm" onClick={() => onOpen(char)}>
-            Details
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-9 px-3 text-[10px] sm:h-auto sm:text-[11px]"
+            onClick={() => onOpen(char)}
+            aria-label="View combatant details"
+          >
+            <span className="hidden sm:inline">Details</span>
+            <ArrowRight className="h-3.5 w-3.5 sm:hidden" />
           </Button>
-          <Button variant="outline" size="sm" onClick={() => onRelease(char.id)}>
-            Release
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-9 px-3 text-[10px] sm:h-auto sm:text-[11px]"
+            onClick={() => onRelease(char.id)}
+            aria-label="Remove combatant"
+          >
+            <X className="mr-0 h-3.5 w-3.5 sm:mr-2" />
+            <span className="hidden sm:inline">Release</span>
           </Button>
         </div>
       </div>
@@ -996,15 +1472,15 @@ function ArenaCard({ char, position, onRelease, onOpen, health, isWinner, showX 
           />
         </div>
       </button>
-      <div className="mt-5 flex items-start gap-4">
+      <div className="mt-4 flex items-start gap-3">
         <ImageSafe
           src={char.cover || char.gallery[0]}
           alt={char.name}
           fallbackLabel={char.name}
-          className="h-32 w-32 rounded-2xl border border-slate-700 object-cover"
+          className="h-24 w-24 rounded-2xl border border-slate-700 object-cover sm:h-32 sm:w-32"
         />
-        <div className="flex-1 space-y-3 text-xs">
-          <div className="text-lg font-black text-white">{char.name}</div>
+        <div className="flex-1 space-y-3 text-[10px] sm:text-xs">
+          <div className="text-base font-black text-white sm:text-xl">{char.name}</div>
           <div className="grid grid-cols-2 gap-2">
             {char.gender && (
               <div>
@@ -1031,46 +1507,46 @@ function ArenaCard({ char, position, onRelease, onOpen, health, isWinner, showX 
               </div>
             )}
           </div>
-          {!!(char.locations || []).length && (
+          {!!topLocations.length && (
             <div>
               <div className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Locations</div>
-              <div className="flex flex-wrap gap-1.5">
-                {(char.locations || []).map((loc) => (
-                  <Badge key={loc} className="bg-slate-800/70 text-white">
+              <div className="flex flex-wrap gap-1">
+                {topLocations.map((loc) => (
+                  <span key={loc} className="rounded-full bg-slate-800/80 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-white">
                     {loc}
-                  </Badge>
+                  </span>
                 ))}
               </div>
             </div>
           )}
-          {!!(char.faction || []).length && (
+          {!!topFactions.length && (
             <div>
               <div className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Factions</div>
-              <div className="flex flex-wrap gap-1.5">
-                {(char.faction || []).map((faction) => (
-                  <Badge key={faction} className="bg-slate-800/70 text-white">
+              <div className="flex flex-wrap gap-1">
+                {topFactions.map((faction) => (
+                  <span key={faction} className="rounded-full bg-slate-800/80 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-white">
                     {faction}
-                  </Badge>
+                  </span>
                 ))}
               </div>
             </div>
           )}
-          {!!(char.tags || []).length && (
+          {!!topTags.length && (
             <div>
               <div className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Tags</div>
-              <div className="flex flex-wrap gap-1.5">
-                {(char.tags || []).map((tag) => (
-                  <Badge key={tag} className="bg-slate-800/70 text-white">
+              <div className="flex flex-wrap gap-1">
+                {topTags.map((tag) => (
+                  <span key={tag} className="rounded-full bg-slate-800/80 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-white">
                     {tag}
-                  </Badge>
+                  </span>
                 ))}
               </div>
             </div>
           )}
         </div>
       </div>
-      <div className="mt-5 space-y-2">
-        {(char.powers || []).map((power) => (
+      <div className="mt-4 space-y-2">
+        {visiblePowers.map((power) => (
           <div key={power.name}>
             <div className="mb-1 flex items-center justify-between text-xs font-bold text-slate-200">
               <span className="truncate pr-2">{power.name}</span>
@@ -1079,6 +1555,15 @@ function ArenaCard({ char, position, onRelease, onOpen, health, isWinner, showX 
             <PowerMeter level={power.level} accent="crimson" />
           </div>
         ))}
+        {hasMorePowers && (
+          <button
+            type="button"
+            onClick={() => setExpanded((state) => !state)}
+            className="w-full rounded-full border border-slate-700/70 bg-slate-900/80 px-3 py-1.5 text-[11px] font-bold uppercase tracking-wide text-slate-200 transition hover:bg-slate-800"
+          >
+            {expanded ? "Hide extended powers" : `Reveal all ${powers.length} powers`}
+          </button>
+        )}
       </div>
       {!!(char.stories || []).length && (
         <div className="mt-4">
@@ -1198,17 +1683,30 @@ function BattleArena({ characters, slots, setSlots, onOpenCharacter, pulseKey })
           </div>
         </CardHeader>
         <CardContent className="space-y-6">
-          <div className="grid gap-5 lg:grid-cols-[1fr_auto_1fr]">
-            <ArenaCard
-              char={left}
-              position="A"
-              onRelease={release}
-              onOpen={onOpenCharacter}
-              health={health.left}
-              isWinner={result?.winner?.id === left?.id}
-              showX={showX === left?.id}
-            />
-            <div className="flex flex-col items-center justify-center gap-3">
+          <div className="grid grid-cols-2 gap-4 lg:auto-rows-min lg:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]">
+            <div className="col-span-1 min-w-0 lg:col-span-1 lg:col-start-1 lg:row-start-1">
+              <ArenaCard
+                char={left}
+                position="A"
+                onRelease={release}
+                onOpen={onOpenCharacter}
+                health={health.left}
+                isWinner={result?.winner?.id === left?.id}
+                showX={showX === left?.id}
+              />
+            </div>
+            <div className="col-span-1 order-2 min-w-0 lg:order-none lg:col-span-1 lg:col-start-3 lg:row-start-1">
+              <ArenaCard
+                char={right}
+                position="B"
+                onRelease={release}
+                onOpen={onOpenCharacter}
+                health={health.right}
+                isWinner={result?.winner?.id === right?.id}
+                showX={showX === right?.id}
+              />
+            </div>
+            <div className="order-3 col-span-2 flex flex-col items-center justify-center gap-3 rounded-3xl border border-slate-800/60 bg-[#0f1329]/80 p-4 text-center lg:order-none lg:col-span-1 lg:col-start-2 lg:row-start-1 lg:row-end-2 lg:self-stretch lg:justify-self-center lg:p-5">
               <motion.div
                 animate={battleState}
                 variants={swordVariants}
@@ -1217,32 +1715,26 @@ function BattleArena({ characters, slots, setSlots, onOpenCharacter, pulseKey })
               >
                 <Swords className="h-10 w-10" />
               </motion.div>
-              <div className="flex flex-col gap-2 text-xs font-bold text-slate-300">
-                <Button variant="outline" size="sm" onClick={runRandom}>
+              <div className="flex flex-col gap-2 text-[11px] font-bold text-slate-200 sm:text-xs">
+                <Button variant="outline" size="sm" onClick={runRandom} className="text-[11px]">
                   Random Duel
                 </Button>
-                <Button variant="gradient" size="sm" onClick={runBattle}>
+                <Button variant="gradient" size="sm" onClick={runBattle} className="text-[11px]">
                   Fight
                 </Button>
-                <Button variant="destructive" size="sm" onClick={reset}>
+                <Button variant="destructive" size="sm" onClick={reset} className="text-[11px]">
                   Reset Arena
                 </Button>
+                <span className="text-[10px] font-semibold uppercase tracking-[0.3em] text-slate-400">
+                  Tap combatants to view dossiers
+                </span>
               </div>
             </div>
-            <ArenaCard
-              char={right}
-              position="B"
-              onRelease={release}
-              onOpen={onOpenCharacter}
-              health={health.right}
-              isWinner={result?.winner?.id === right?.id}
-              showX={showX === right?.id}
-            />
           </div>
           {timeline.length > 0 && (
             <div className="rounded-2xl border border-white/10 bg-[#0f1329]/80 p-4 text-xs backdrop-blur">
               <div className="mb-2 text-sm font-black uppercase tracking-wide text-slate-200">Battle Flow</div>
-              <div className="grid gap-3 md:grid-cols-3">
+              <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3">
                 {timeline.map((phase) => (
                   <div key={phase.round} className="rounded-xl border border-white/10 bg-[#141a38]/80 p-3 text-slate-200">
                     <div className="text-[11px] font-bold uppercase tracking-wide text-slate-400">Round {phase.round}</div>
@@ -1355,297 +1847,499 @@ function runDevTests() {
   console.groupEnd();
 }
 
-const CHAT_WEBHOOK = process.env.NEXT_PUBLIC_LOREMAKER_CHATBOT_WEBHOOK;
-const TRACK_WEBHOOK = process.env.NEXT_PUBLIC_LOREMAKER_TRACK_WEBHOOK;
 
-function ChatWidget() {
-  const [open, setOpen] = useState(false);
-  const [messages, setMessages] = useState([
-    { role: "system", text: "Welcome to the Loremaker concierge. Ask about heroes, factions, or lore!" },
-  ]);
-  const [pending, setPending] = useState(false);
-  const inputRef = useRef(null);
+function ScrollShortcuts() {
+  const [showTop, setShowTop] = useState(false);
+  const [showBottom, setShowBottom] = useState(false);
 
-  const sendMessage = async (event) => {
-    event.preventDefault();
-    const value = inputRef.current?.value?.trim();
-    if (!value) return;
-    setMessages((prev) => [...prev, { role: "user", text: value }]);
-    setPending(true);
-    inputRef.current.value = "";
-    try {
-      if (CHAT_WEBHOOK) {
-        const res = await fetch(CHAT_WEBHOOK, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ message: value, timestamp: new Date().toISOString() }),
-        });
-        const data = await res.json().catch(() => ({}));
-        const reply = data?.reply || data?.message || "The Lore council acknowledges your request.";
-        setMessages((prev) => [...prev, { role: "assistant", text: reply }]);
-      } else {
-        setMessages((prev) => [
-          ...prev,
-          { role: "assistant", text: "Webhook not configured yet, but the Loremaker hears you." },
-        ]);
-      }
-    } catch (err) {
-      setMessages((prev) => [...prev, { role: "assistant", text: "Signal lost in the aether. Try again soon." }]);
-      console.error(err);
-    } finally {
-      setPending(false);
-    }
-  };
+  useEffect(() => {
+    const handler = () => {
+      const { scrollTop, scrollHeight, clientHeight } = document.documentElement;
+      setShowTop(scrollTop > 240);
+      setShowBottom(scrollTop + clientHeight < scrollHeight - 240);
+    };
+    handler();
+    window.addEventListener("scroll", handler, { passive: true });
+    return () => window.removeEventListener("scroll", handler);
+  }, []);
 
   return (
     <>
-      {showTop && (
-        <motion.button
-          onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
-          whileHover={{ scale: 1.08, rotate: [-2, 2, 0] }}
-          whileTap={{ scale: 0.95, rotate: 0 }}
-          animate={{ y: [0, -6, 0], boxShadow: [
-            "0 0 0 rgba(0,0,0,0.2)",
-            "0 12px 24px rgba(251,191,36,0.35)",
-            "0 0 0 rgba(0,0,0,0.2)",
-          ] }}
-          transition={{ duration: 2.4, repeat: Infinity, ease: "easeInOut" }}
-          className="fixed bottom-5 right-5 z-40 rounded-full border border-amber-300/60 bg-black/80 p-3 text-white shadow-xl"
-          aria-label="Back to top"
-          title="Back to top"
-        >
-          <ArrowUp />
-        </motion.button>
-      )}
-      {showBottom && (
-        <motion.button
-          onClick={() => window.scrollTo({ top: document.documentElement.scrollHeight, behavior: "smooth" })}
-          whileHover={{ scale: 1.08, rotate: [2, -2, 0] }}
-          whileTap={{ scale: 0.95, rotate: 0 }}
-          animate={{ y: [0, 6, 0], boxShadow: [
-            "0 0 0 rgba(0,0,0,0.2)",
-            "0 -12px 24px rgba(148,163,184,0.35)",
-            "0 0 0 rgba(0,0,0,0.2)",
-          ] }}
-          transition={{ duration: 2.6, repeat: Infinity, ease: "easeInOut" }}
-          className="fixed bottom-5 right-24 z-40 rounded-full border border-white/30 bg-black/80 p-3 text-white shadow-xl"
-          aria-label="Back to bottom"
-          title="Back to bottom"
-        >
-          <ArrowDown />
-        </motion.button>
-      )}
+      <AnimatePresence>
+        {showTop && (
+          <motion.button
+            key="scroll-top"
+            type="button"
+            onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+            initial={{ opacity: 0, y: 24 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 24 }}
+            whileHover={{ scale: 1.08, rotate: [-2, 2, 0] }}
+            whileTap={{ scale: 0.92, rotate: 0 }}
+            transition={{ duration: 0.35 }}
+            className="fixed bottom-5 right-5 z-40 rounded-full border border-amber-300/60 bg-black/80 p-3 text-white shadow-xl"
+            aria-label="Back to top"
+          >
+            <ArrowUp className="h-4 w-4" />
+          </motion.button>
+        )}
+      </AnimatePresence>
+      <AnimatePresence>
+        {showBottom && (
+          <motion.button
+            key="scroll-bottom"
+            type="button"
+            onClick={() => window.scrollTo({ top: document.documentElement.scrollHeight, behavior: "smooth" })}
+            initial={{ opacity: 0, y: 24 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 24 }}
+            whileHover={{ scale: 1.08, rotate: [2, -2, 0] }}
+            whileTap={{ scale: 0.92, rotate: 0 }}
+            transition={{ duration: 0.35 }}
+            className="fixed bottom-5 right-20 z-40 rounded-full border border-white/30 bg-black/80 p-3 text-white shadow-xl"
+            aria-label="Skip to bottom"
+          >
+            <ArrowDown className="h-4 w-4" />
+          </motion.button>
+        )}
+      </AnimatePresence>
     </>
   );
 }
 
-function Controls({ query, setQuery, setOpenFilters, sortMode, setSortMode, onClear, onJumpArena }) {
+function FilterDrawer({ open, onClose, children }) {
+  useEffect(() => {
+    if (!open) return undefined;
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previous;
+    };
+  }, [open]);
+
   return (
-    <div className="flex flex-col md:flex-row md:items-center gap-3 justify-between">
-      <div className="flex-1">
-        <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search characters, powers, locations…" />
-      </div>
-      <div className="flex items-center gap-2">
-        <select
-          value={sortMode}
-          onChange={(e) => setSortMode(e.target.value)}
-          className="rounded-xl border border-amber-300/60 bg-gradient-to-r from-black/80 via-slate-900/80 to-black/70 px-3 py-2 text-sm font-black text-amber-200"
-        >
-          <option value="default">Default</option>
-          <option value="random">Random</option>
-          <option value="faction">By Faction</option>
-          <option value="az">A-Z</option>
-          <option value="za">Z-A</option>
-          <option value="most">From Most Powerful</option>
-          <option value="least">From Least Powerful</option>
-        </select>
-        <Button variant="outline" onClick={() => setOpenFilters(true)} className="font-bold border-amber-300 bg-amber-300/20 text-amber-200">
-          <Filter className="mr-1" size={16} /> Filters
-        </Button>
-        <Button variant="ghost" onClick={onClear} className="font-bold">Clear</Button>
-        <Button variant="secondary" onClick={onJumpArena} className="font-bold">Arena</Button>
-      </div>
-    </div>
+    <AnimatePresence>
+      {open && (
+        <>
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-40 bg-black/70 backdrop-blur-sm"
+            onClick={onClose}
+          />
+          <motion.aside
+            initial={{ x: "100%" }}
+            animate={{ x: 0 }}
+            exit={{ x: "100%" }}
+            transition={{ type: "spring", stiffness: 200, damping: 26 }}
+            className="fixed inset-y-0 right-0 z-50 w-full max-w-md overflow-y-auto border-l border-white/10 bg-[#070a19] shadow-[0_40px_120px_rgba(7,10,25,0.6)]"
+          >
+            <div className="flex items-center justify-between border-b border-white/10 px-5 py-4">
+              <div className="text-xs font-bold uppercase tracking-[0.35em] text-white/70">Filters</div>
+              <Button variant="ghost" onClick={onClose} className="text-xs font-bold uppercase tracking-wide text-white/80">
+                <X size={14} /> Close
+              </Button>
+            </div>
+            <div className="pb-12">{children}</div>
+          </motion.aside>
+        </>
+      )}
+    </AnimatePresence>
   );
 }
 
-function ChatDock() {
-  const [open, setOpen] = useState(false);
-  const [messages, setMessages] = useState([
-    {
-      role: "bot",
-      text: "Welcome to the Loremaker concierge. Ask about characters, battles, or request spreadsheet syncs!",
-      ts: Date.now(),
-    },
-  ]);
-  const [input, setInput] = useState("");
-  const [sending, setSending] = useState(false);
-  const trailRef = useRef(null);
+
+function HeroSection({
+  totalCharacters,
+  featured,
+  onOpenFilters,
+  onScrollToCharacters,
+  onOpenCharacter,
+  onFacet,
+}) {
+  const slides = useMemo(() => {
+    const base = [
+      { key: "intro", label: "Menelek Makonnen Presents", data: { title: "The Loremaker Universe", blurb: "Author Menelek Makonnen opens the living universe — an ever-growing nexus of characters, factions, and cosmic forces awaiting your exploration." } },
+      { key: "character", label: "Featured Character", data: featured?.character },
+      { key: "faction", label: "Featured Faction", data: featured?.faction },
+      { key: "location", label: "Featured Location", data: featured?.location },
+      { key: "power", label: "Featured Power", data: featured?.power },
+    ];
+    return base.filter((slide) => slide.key === "intro" || slide.data);
+  }, [featured?.character, featured?.faction, featured?.location, featured?.power]);
+  const [index, setIndex] = useState(0);
+  const [direction, setDirection] = useState(1);
+  const autoPlayed = useRef(false);
 
   useEffect(() => {
-    if (open) trailRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [open, messages]);
+    setIndex(0);
+    autoPlayed.current = false;
+  }, [featured?.character?.id, featured?.faction?.name, featured?.location?.name, featured?.power?.name]);
 
-  const sendMessage = async () => {
-    const content = input.trim();
-    if (!content) return;
-    setMessages((prev) => [...prev, { role: "user", text: content, ts: Date.now() }]);
-    setInput("");
-    setSending(true);
-    try {
-      if (!CHATBOT_WEBHOOK) {
-        setMessages((prev) => [
-          ...prev,
-          {
-            role: "bot",
-            text: "Chatbot webhook is not configured yet. Please add NEXT_PUBLIC_LOREMAKER_CHAT_WEBHOOK.",
-            ts: Date.now(),
-          },
-        ]);
-      } else {
-        const payload = {
-          message: content,
-          timestamp: new Date().toISOString(),
-          source: "loremaker",
-        };
-        const res = await fetch(CHATBOT_WEBHOOK, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        });
-        let reply = "Our lore AI has received your message!";
-        if (res.ok) {
-          const data = await res.json().catch(() => null);
-          reply = data?.reply || data?.message || reply;
-        }
-        setMessages((prev) => [...prev, { role: "bot", text: reply, ts: Date.now() }]);
-      }
-    } catch (err) {
-      setMessages((prev) => [
-        ...prev,
-        {
-          role: "bot",
-          text: "We couldn't reach the chatbot right now. Please try again shortly.",
-          ts: Date.now(),
-        },
-      ]);
-    } finally {
-      setSending(false);
+  useEffect(() => {
+    if (slides.length <= 1 || autoPlayed.current) return undefined;
+    const timer = setTimeout(() => {
+      setDirection(1);
+      setIndex((prev) => (prev + 1) % slides.length);
+      autoPlayed.current = true;
+    }, 3600);
+    return () => clearTimeout(timer);
+  }, [slides.length]);
+
+  const current = slides[index] || slides[0];
+
+  const goPrev = () => {
+    setDirection(-1);
+    setIndex((prev) => (prev - 1 + slides.length) % slides.length);
+  };
+
+  const goNext = () => {
+    setDirection(1);
+    setIndex((prev) => (prev + 1) % slides.length);
+  };
+
+  const renderCharacter = (slide) => {
+    const char = slide.data;
+    if (!char) {
+      return (
+        <div className="flex min-h-[260px] flex-col justify-center gap-4 rounded-[32px] border border-white/15 bg-black/50 p-8 text-white">
+          <div className="text-xs font-bold uppercase tracking-[0.35em] text-white/60">Featured Character</div>
+          <p className="text-base font-semibold text-white/70 sm:text-lg">Loading today’s legend…</p>
+        </div>
+      );
+    }
+    const images = [char.cover, ...(char.gallery || [])].filter(Boolean);
+    const heroImage = images[0];
+    const accentImages = images.slice(1, 3);
+    const topPowers = [...(char.powers || [])]
+      .sort((a, b) => (Number(b.level) || 0) - (Number(a.level) || 0))
+      .slice(0, 3);
+    const openProfile = () => onOpenCharacter?.(char);
+    const handleFacetClick = (event, payload) => {
+      event.stopPropagation();
+      if (payload?.value) onFacet?.(payload);
+      openProfile();
+    };
+    return (
+      <div
+        role="button"
+        tabIndex={0}
+        onClick={openProfile}
+        onKeyDown={(event) => {
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            openProfile();
+          }
+        }}
+        className="relative flex min-h-[320px] flex-col justify-between overflow-hidden rounded-[32px] border border-white/15 bg-black/60 p-8 text-white lg:flex-row"
+      >
+        {heroImage && (
+          <motion.div
+            className="absolute inset-0"
+            initial={{ scale: 1.05, opacity: 0.6 }}
+            animate={{ scale: 1.12, opacity: 0.85 }}
+            transition={{ duration: 18, repeat: Infinity, repeatType: "reverse", ease: "easeInOut" }}
+            style={{
+              backgroundImage: `url(${heroImage})`,
+              backgroundSize: "cover",
+              backgroundPosition: "center",
+              filter: "saturate(1.15) brightness(0.9)",
+            }}
+          />
+        )}
+        <div className="absolute inset-0 bg-gradient-to-br from-black/85 via-black/70 to-indigo-900/70" />
+        <div className="relative z-10 flex-1 space-y-5 pr-0 sm:pr-8">
+          <Badge className="bg-white/15 text-white/85">{slide.label}</Badge>
+          <h2 className="text-3xl font-black tracking-tight sm:text-5xl">{char.name}</h2>
+          <p className="text-sm font-semibold text-white/80 sm:text-base lg:text-lg">
+            {char.shortDesc || char.longDesc?.slice(0, 220) || "A legend awaits their tale to be told."}
+          </p>
+          <div className="flex flex-wrap gap-2 text-[11px] sm:text-xs">
+            {char.gender && (
+              <FacetChip onClick={(event) => handleFacetClick(event, { key: "gender", value: char.gender })}>
+                Gender: {char.gender}
+              </FacetChip>
+            )}
+            {(char.faction || []).map((faction) => (
+              <FacetChip key={faction} onClick={(event) => handleFacetClick(event, { key: "faction", value: faction })}>
+                {faction}
+              </FacetChip>
+            ))}
+          </div>
+          <div className="space-y-3">
+            <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wide text-white/70 sm:text-xs">
+              <Atom size={14} /> Top Powers
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {topPowers.map((power) => (
+                <button
+                  key={power.name}
+                  type="button"
+                  onClick={(event) => handleFacetClick(event, { key: "powers", value: power.name })}
+                  className="rounded-full bg-white/10 px-3 py-1 text-[11px] font-bold uppercase tracking-wide text-white/90 transition hover:bg-white/20"
+                >
+                  {power.name} • {power.level}/10
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+        <div className="relative z-10 mt-6 flex flex-1 items-end justify-end gap-4 lg:mt-0 lg:flex-col">
+          {accentImages.map((src, idx) => (
+            <motion.div
+              key={src}
+              className="relative h-28 w-28 overflow-hidden rounded-2xl border border-white/20 shadow-[0_15px_40px_rgba(9,12,28,0.6)] sm:h-32 sm:w-32"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.15 * idx, duration: 0.45 }}
+              style={{ backgroundImage: `url(${src})`, backgroundSize: "cover", backgroundPosition: "center" }}
+            >
+              <div className="absolute inset-0 bg-gradient-to-t from-black/65 to-transparent" />
+            </motion.div>
+          ))}
+          {!accentImages.length && (
+            <div className="rounded-2xl border border-dashed border-white/25 bg-black/40 px-4 py-6 text-center text-xs font-semibold text-white/70 sm:text-sm">
+              Classified imagery — open dossier
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  const renderIntro = (slide) => {
+    const title = slide.data?.title || "The Loremaker Universe";
+    const blurb =
+      slide.data?.blurb ||
+      "Step beyond the veil into Menelek Makonnen’s ever-expanding universe where every dossier unlocks new connections.";
+    return (
+      <div className="relative overflow-hidden rounded-[32px] border border-white/15 bg-gradient-to-br from-black/70 via-indigo-900/60 to-fuchsia-700/45 p-8 text-white md:p-12">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.12),transparent_55%)]" />
+        <motion.div
+          className="absolute -right-32 top-1/4 h-72 w-72 rounded-full bg-amber-400/20 blur-3xl"
+          animate={{ opacity: [0.25, 0.5, 0.28], scale: [1, 1.06, 0.96] }}
+          transition={{ duration: 16, repeat: Infinity, ease: "easeInOut" }}
+        />
+        <div className="relative z-10 grid gap-8 lg:grid-cols-[3fr_2fr] lg:items-center">
+          <div className="space-y-6">
+            <div className="text-xs font-bold uppercase tracking-[0.35em] text-white/70">{slide.label}</div>
+            <h2 className="text-3xl font-black tracking-tight sm:text-5xl lg:text-6xl">{title}</h2>
+            <p className="max-w-xl text-sm font-semibold text-white/80 sm:text-base lg:text-lg">{blurb}</p>
+            <div className="flex flex-wrap gap-3">
+              <Button variant="gradient" size="lg" onClick={onScrollToCharacters} className="shadow-[0_18px_48px_rgba(253,230,138,0.35)]">
+                Discover the Universe
+              </Button>
+              <Button variant="outline" size="lg" onClick={onOpenFilters} className="border-white/60 text-white/90 hover:bg-white/10">
+                Shape Your Lore Feed
+              </Button>
+            </div>
+            <div className="flex flex-wrap gap-2 text-[11px] font-semibold uppercase tracking-[0.35em] text-white/70 sm:text-xs">
+              <span>Daily sync across every device</span>
+              <span className="hidden sm:inline">•</span>
+              <span>One universe — countless stories</span>
+            </div>
+          </div>
+          <div className="flex items-center justify-center">
+            <div className="flex min-h-[160px] w-full max-w-xs flex-col items-center justify-center gap-2 rounded-3xl border border-white/20 bg-black/50 p-6 text-center shadow-[0_18px_48px_rgba(8,10,28,0.45)]">
+              <span className="text-[10px] font-bold uppercase tracking-[0.35em] text-white/60">Universe Size</span>
+              <span className="text-4xl font-black text-white sm:text-5xl">{totalCharacters}</span>
+              <span className="text-xs font-semibold uppercase tracking-wide text-white/70">Legends catalogued</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const renderRoster = (slide, icon, facetKey) => {
+    const payload = slide.data;
+    if (!payload?.name) {
+      return (
+        <div className="flex min-h-[220px] flex-col justify-center gap-3 rounded-[32px] border border-white/10 bg-white/6 p-8 text-white">
+          <div className="text-xs font-bold uppercase tracking-[0.35em] text-white/70">{slide.label}</div>
+          <p className="text-sm font-semibold text-white/70">Daily highlight synchronising…</p>
+        </div>
+      );
+    }
+    const members = payload.members || payload.residents || payload.wielders || [];
+    const descriptor =
+      slide.key === "faction"
+        ? `Allies sworn to ${payload.name}`
+        : slide.key === "location"
+          ? `Key figures shaping ${payload.name}`
+          : `Masters of ${payload.name}`;
+    return (
+      <div className="grid gap-8 rounded-[32px] border border-white/15 bg-black/40 p-8 text-white lg:grid-cols-[2fr_3fr]">
+        <div className="space-y-4">
+          <div className="flex items-center gap-3 text-xs font-bold uppercase tracking-[0.35em] text-white/70">
+            {icon}
+            {slide.label}
+          </div>
+          <h3 className="text-2xl font-black sm:text-4xl">{payload.name}</h3>
+          <p className="text-sm font-semibold text-white/75">{descriptor}</p>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              variant="gradient"
+              size="sm"
+              onClick={() => {
+                onFacet?.({ key: facetKey, value: payload.name });
+              }}
+              className="shadow-[0_10px_30px_rgba(250,204,21,0.25)]"
+            >
+              Filter by {payload.name}
+            </Button>
+          </div>
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2">
+          {members.slice(0, 6).map((member) => (
+            <button
+              key={member.id || member.name}
+              type="button"
+              onClick={() => onOpenCharacter?.(member)}
+              className="flex items-center gap-3 rounded-3xl border border-white/15 bg-white/10 p-3 text-left transition hover:bg-white/20"
+            >
+              <Insignia label={member.name} size={40} variant={slide.key === "faction" ? "faction" : "character"} />
+              <div className="flex flex-col text-xs">
+                <span className="text-sm font-black text-white">{member.name}</span>
+                <span className="text-white/70">{member.alias?.[0] || member.shortDesc?.slice(0, 40) || "Open dossier"}</span>
+              </div>
+            </button>
+          ))}
+          {!members.length && (
+            <div className="flex h-32 items-center justify-center rounded-3xl border border-dashed border-white/15 bg-white/5 text-xs font-semibold text-white/60">
+              Awaiting intel on key figures.
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  const renderSlide = (slide) => {
+    switch (slide.key) {
+      case "intro":
+        return renderIntro(slide);
+      case "character":
+        return renderCharacter(slide);
+      case "faction":
+        return renderRoster(slide, <Layers className="h-6 w-6" />, "faction");
+      case "location":
+        return renderRoster(slide, <MapPin className="h-6 w-6" />, "locations");
+      case "power":
+        return renderRoster(slide, <Atom className="h-6 w-6" />, "powers");
+      default:
+        return null;
     }
   };
 
   return (
-    <div className="fixed bottom-6 left-6 z-50 text-white">
-      <motion.button
-        onClick={() => setOpen((v) => !v)}
-        whileHover={{ scale: 1.08 }}
-        whileTap={{ scale: 0.94 }}
-        className="flex items-center gap-2 rounded-full border border-white/30 bg-black/70 px-4 py-2 font-bold shadow-lg"
-      >
-        <MessageCircle size={16} /> {open ? "Hide" : "Chat"}
-      </motion.button>
-      <AnimatePresence>
-        {open && (
-          <motion.div
-            initial={{ opacity: 0, scale: 0.9, y: 20 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.9, y: 20 }}
-            transition={{ type: "spring", stiffness: 220, damping: 26 }}
-            className="mt-3 w-72 rounded-2xl border border-white/20 bg-black/80 p-3 backdrop-blur"
-          >
-            <div className="mb-2 flex items-center gap-2 text-sm font-extrabold">
-              <Bot size={16} /> Loremaker Live Chat
-            </div>
-            <div className="mb-3 max-h-64 space-y-2 overflow-y-auto pr-1 text-xs">
-              {messages.map((msg) => (
-                <div
-                  key={msg.ts + msg.role}
-                  className={cx(
-                    "rounded-xl border px-3 py-2",
-                    msg.role === "user"
-                      ? "ml-8 border-amber-300/40 bg-amber-300/10 text-amber-100"
-                      : "mr-8 border-white/20 bg-white/10 text-white"
-                  )}
-                >
-                  {msg.text}
-                </div>
-              ))}
-              <div ref={trailRef} />
-            </div>
-            <div className="flex items-center gap-2">
-              <Input
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                placeholder="Send a message to the lore team"
-                className="flex-1 border-white/30 bg-white/10"
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey) {
-                    e.preventDefault();
-                    sendMessage();
-                  }
-                }}
-              />
-              <Button onClick={sendMessage} disabled={sending} className="px-3">
-                <Send size={16} />
-              </Button>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </div>
-  );
-}
-
-function HeroSection({ totalCharacters, onFilterClick, onScrollToFilters }) {
-  return (
-    <section className="relative overflow-hidden rounded-[36px] border border-white/15 bg-gradient-to-br from-indigo-900/60 via-fuchsia-700/40 to-amber-500/20 shadow-[0_40px_120px_rgba(12,9,32,0.55)]">
+    <section className="relative overflow-hidden rounded-[36px] border border-white/15 bg-gradient-to-br from-indigo-900/60 via-fuchsia-700/40 to-amber-500/25 shadow-[0_40px_120px_rgba(12,9,32,0.55)]">
+      <HeroHalo />
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.18),transparent_55%)]" />
-      <div className="absolute inset-x-0 top-0 h-32 bg-gradient-to-b from-black/40 to-transparent" />
-      <div className="absolute -left-24 bottom-0 h-72 w-72 rounded-full bg-amber-400/10 blur-3xl" />
-      <div className="absolute -right-20 -top-10 h-72 w-72 rounded-full bg-fuchsia-500/10 blur-3xl" />
-      <div className="relative z-10 flex flex-col gap-12 px-6 py-16 sm:px-10 md:px-16">
+      <div className="absolute inset-x-0 top-0 h-32 bg-gradient-to-b from-black/50 to-transparent" />
+      <div className="absolute -left-24 bottom-0 h-72 w-72 rounded-full bg-amber-400/15 blur-3xl" />
+      <div className="absolute -right-20 -top-10 h-72 w-72 rounded-full bg-fuchsia-500/15 blur-3xl" />
+      <div className="relative z-10 flex flex-col gap-10 px-6 py-14 sm:px-10 md:px-16">
         <nav className="flex flex-col gap-4 text-[11px] font-semibold uppercase tracking-[0.4em] text-white/70 sm:flex-row sm:items-center sm:justify-between">
-          <span className="font-black text-white">Loremaker</span>
-          <div className="flex items-center gap-6">
-            <a href="/" className="transition-colors hover:text-white">
-              Home
-            </a>
-            <span className="rounded-full border border-white/35 px-3 py-1 text-white">
-              Loremaker
-            </span>
+          <div className="flex items-center gap-2 text-white">
+            <Clock size={12} /> {todayKey()} • Daily Lore Sequence
           </div>
+          <button
+            type="button"
+            onClick={() => window.location.reload()}
+            className="self-start rounded-full border border-white/35 px-3 py-1 text-white transition hover:bg-white/10 sm:self-auto"
+          >
+            Loremaker
+          </button>
         </nav>
-        <div className="grid gap-12 lg:grid-cols-[3fr_2fr]">
-          <div className="space-y-6">
-            <h1 className="text-4xl font-black leading-tight text-white drop-shadow-lg sm:text-5xl md:text-6xl">
-              Chronicle every legend in Menelek Makonnen’s expanding cosmos.
-            </h1>
-            <p className="text-lg font-semibold text-white/85 md:text-xl">
-              Filter the archive, dive into detailed dossiers, and summon characters into the Arena.
-            </p>
-            <div className="flex flex-wrap items-center gap-4">
-              <Button variant="gradient" size="lg" onClick={onFilterClick} className="shadow-[0_18px_48px_rgba(253,230,138,0.35)]">
-                Launch Filters
-              </Button>
-              <Button
-                variant="outline"
-                size="lg"
-                onClick={onScrollToFilters}
-                className="border-white/50 text-white/85 hover:bg-white/10"
+
+        <div className="relative">
+          {slides.length > 1 && (
+            <>
+              <button
+                type="button"
+                onClick={goPrev}
+                className="absolute left-2 top-1/2 z-20 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full border border-white/40 bg-black/60 text-white shadow-lg transition hover:bg-black/80"
+                aria-label="Previous highlight"
               >
-                Browse Archive
-              </Button>
+                <ChevronLeft className="h-4 w-4" />
+              </button>
+              <button
+                type="button"
+                onClick={goNext}
+                className="absolute right-2 top-1/2 z-20 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full border border-white/40 bg-black/60 text-white shadow-lg transition hover:bg-black/80"
+                aria-label="Next highlight"
+              >
+                <ChevronRight className="h-4 w-4" />
+              </button>
+            </>
+          )}
+          <div className="overflow-hidden rounded-[36px]">
+            <AnimatePresence mode="wait" initial={false} custom={direction}>
+              <motion.div
+                key={current?.key}
+                custom={direction}
+                initial={{ opacity: 0, x: direction > 0 ? 140 : -140 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: direction > 0 ? -140 : 140 }}
+                transition={{ duration: 0.85, ease: "easeInOut" }}
+                className="relative"
+              >
+                {renderSlide(current)}
+              </motion.div>
+            </AnimatePresence>
+          </div>
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-3 text-xs font-bold uppercase tracking-wide text-white/70">
+            <span>
+              {index + 1} / {slides.length} — {current?.label}
+            </span>
+            <div className="flex items-center gap-2">
+              {slides.map((slide, idx) => (
+                <button
+                  key={slide.key}
+                  type="button"
+                  onClick={() => {
+                    setDirection(idx > index ? 1 : -1);
+                    setIndex(idx);
+                  }}
+                  className={cx(
+                    "h-2 w-6 rounded-full transition",
+                    idx === index ? "bg-white" : "bg-white/30 hover:bg-white/60"
+                  )}
+                  aria-label={`Show ${slide.label}`}
+                />
+              ))}
             </div>
           </div>
-          <div className="flex flex-col justify-end gap-6">
-            <div className="rounded-3xl border border-white/25 bg-black/40 px-6 py-6 backdrop-blur-xl">
-              <div className="text-[11px] font-bold uppercase tracking-[0.4em] text-white/60">Archive</div>
-              <div className="mt-3 text-5xl font-black text-white sm:text-6xl">{totalCharacters}</div>
-              <div className="mt-2 text-sm font-semibold text-white/70">Characters catalogued</div>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-4">
+          <Button
+            variant="gradient"
+            size="lg"
+            onClick={onOpenFilters}
+            className="shadow-[0_18px_48px_rgba(253,230,138,0.35)]"
+          >
+            Launch Filters
+          </Button>
+          <Button
+            variant="outline"
+            size="lg"
+            onClick={onScrollToCharacters}
+            className="border-white/60 text-white/90 hover:bg-white/10"
+          >
+            Explore Universe
+          </Button>
+          <div className="ml-auto flex items-center gap-3 rounded-3xl border border-white/20 bg-white/10 px-3 py-2 text-xs font-semibold text-white/80 sm:text-sm">
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-white/30 bg-black/60 text-[10px] font-black uppercase tracking-[0.35em] text-white/70">
+              Lore
             </div>
-            <p className="text-sm font-semibold text-white/70">
-              From primordial factions to whispered alliances, every dossier is ready for your next encounter.
-            </p>
+            <div className="flex flex-col gap-0.5 text-right">
+              <span className="text-[10px] font-bold uppercase tracking-[0.35em] text-white/60">Living Codex</span>
+              <span className="text-base font-black text-white sm:text-lg">{totalCharacters} Legends catalogued</span>
+            </div>
           </div>
         </div>
       </div>
@@ -1663,9 +2357,11 @@ export default function LoremakerApp() {
   const [arenaSlots, setArenaSlots] = useState({ left: null, right: null });
   const [arenaPulseKey, setArenaPulseKey] = useState(0);
   const [highlightedId, setHighlightedId] = useState(null);
-  const [showArena, setShowArena] = useState(true);
+  const [showArena, setShowArena] = useState(false);
   const [openModal, setOpenModal] = useState(false);
   const [currentCharacter, setCurrentCharacter] = useState(null);
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [mobileColumns, setMobileColumns] = useState(2);
   const visitTracked = useRef(false);
 
   const selectedIds = useMemo(
@@ -1692,10 +2388,6 @@ export default function LoremakerApp() {
   }, []);
 
   const clearFilters = useCallback(() => {
-    setFilters({});
-  }, []);
-
-  const clearAll = useCallback(() => {
     setFilters({});
     setCombineAND(false);
     setQuery("");
@@ -1755,6 +2447,8 @@ export default function LoremakerApp() {
     }
   }, [filtered, sortMode]);
 
+  const featured = useMemo(() => computeFeatured(data), [data]);
+
   useEffect(() => {
     if (visitTracked.current) return;
     if (!TRACK_VISIT_WEBHOOK || typeof window === "undefined") return;
@@ -1771,57 +2465,135 @@ export default function LoremakerApp() {
     }).catch(() => {});
   }, [data.length]);
 
-  const scrollToFilters = useCallback(() => {
-    document.getElementById("filters-panel")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  const scrollToCharacters = useCallback(() => {
+    document.getElementById("characters-grid")?.scrollIntoView({ behavior: "smooth", block: "start" });
   }, []);
 
   return (
-    <div className="relative min-h-screen bg-[#070813] text-white">
-      <Aurora />
-      <header className="sticky top-0 z-40 border-b border-white/10 bg-black/40 backdrop-blur-xl">
-        <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-3 px-4 py-3">
-          <div className="flex items-center gap-2">
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/15">
-              <Insignia label="Lore" size={32} variant="site" />
+    <div className="relative min-h-screen w-full overflow-x-hidden bg-[#050813] text-white">
+      <CosmicBackdrop />
+      <Aurora className="opacity-70" />
+      <header className="sticky top-0 z-40 border-b border-white/10 bg-black/60 backdrop-blur-2xl">
+        <div className="mx-auto w-full max-w-7xl space-y-3 px-3 py-4 sm:px-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <LoreShield onClick={() => window.location.reload()} />
+              <div className="flex flex-col text-[10px] font-semibold uppercase tracking-[0.35em] text-white/60">
+                <span className="hidden sm:inline">Pulse of the Loremaker</span>
+                <span className="text-white/80">Daily featured lore drops</span>
+              </div>
             </div>
-            <div className="text-2xl font-black tracking-tight">Loremaker Universe</div>
+            <nav className="hidden items-center gap-3 text-[11px] font-bold uppercase tracking-[0.4em] text-white/60 sm:flex">
+              <button
+                type="button"
+                onClick={() => window.location.reload()}
+                className="rounded-full border border-white/35 px-3 py-1 text-white transition hover:bg-white/10"
+              >
+                Loremaker
+              </button>
+            </nav>
+            <div className="flex items-center gap-2 sm:hidden">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-10 w-10 p-0"
+                onClick={() => setFiltersOpen(true)}
+                aria-label="Open filters"
+              >
+                <Filter className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-10 w-10 p-0"
+                onClick={() => setShowArena((prev) => !prev)}
+                aria-label={showArena ? "Hide arena" : "Open arena"}
+              >
+                <Swords className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-10 w-10 p-0"
+                onClick={() => refetch()}
+                aria-label="Sync universe"
+              >
+                <RefreshCcw className="h-4 w-4" />
+              </Button>
+            </div>
           </div>
-          <nav className="ml-6 hidden items-center gap-4 text-[11px] font-bold uppercase tracking-[0.4em] text-white/60 sm:flex">
-            <a href="/" className="transition-colors hover:text-white">
-              Home
-            </a>
-            <span className="rounded-full border border-white/35 px-3 py-1 text-white">Loremaker</span>
-          </nav>
-          <div className="ml-auto flex flex-wrap items-center gap-2">
-            <div className="relative">
+          <div className="grid grid-cols-4 gap-2 sm:flex sm:flex-wrap sm:items-center sm:justify-end">
+            <div className="relative col-span-4 sm:order-1 sm:flex-1 sm:max-w-sm">
               <Input
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
                 placeholder="Search characters, powers, locations, tags..."
-                className="w-72 bg-white/15 pl-9"
+                className="w-full bg-white/15 pl-9 text-sm sm:text-base"
               />
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/70" />
             </div>
-            <Button variant="gradient" onClick={scrollToFilters} className="shadow-[0_15px_40px_rgba(250,204,21,0.3)]">
-              <Filter className="h-4 w-4" /> Filters
+            <div className="relative col-span-4 sm:order-2 sm:w-48">
+              <select
+                value={sortMode}
+                onChange={(event) => setSortMode(event.target.value)}
+                className="w-full appearance-none rounded-xl border border-white/25 bg-black/60 px-3 py-2 pr-9 text-[11px] font-bold uppercase tracking-wide text-white/80 shadow-inner backdrop-blur focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300 sm:text-xs"
+              >
+                {SORT_OPTIONS.map((item) => (
+                  <option key={item.value} value={item.value} className="bg-black text-white">
+                    {item.label}
+                  </option>
+                ))}
+              </select>
+              <ArrowDown className="pointer-events-none absolute right-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-white/70" />
+            </div>
+            <Button
+              variant="gradient"
+              size="sm"
+              onClick={() => setFiltersOpen(true)}
+              className="col-span-1 shadow-[0_15px_40px_rgba(250,204,21,0.3)] sm:order-3 sm:col-auto"
+              aria-label="Open filters"
+            >
+              <Filter className="h-4 w-4" />
+              <span className="hidden sm:inline">Filters</span>
             </Button>
-            <Button variant="outline" onClick={clearFilters}>
-              <X size={14} /> Clear
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={clearFilters}
+              className="col-span-1 sm:order-4 sm:col-auto"
+              aria-label="Clear filters"
+            >
+              <X size={14} />
+              <span className="hidden sm:inline">Clear</span>
             </Button>
-            <Button variant="subtle" onClick={() => setShowArena((prev) => !prev)}>
-              <Swords size={14} /> {showArena ? "Hide Arena" : "Arena"}
+            <Button
+              variant="subtle"
+              size="sm"
+              onClick={() => setShowArena((prev) => !prev)}
+              className="col-span-1 sm:order-5 sm:col-auto"
+              aria-label={showArena ? "Hide arena" : "Open arena"}
+            >
+              <Swords size={14} />
+              <span className="hidden sm:inline">{showArena ? "Hide Arena" : "Arena"}</span>
             </Button>
-            <Button variant="dark" onClick={() => refetch()}>
-              <RefreshCcw size={14} /> Sync
+            <Button
+              variant="dark"
+              size="sm"
+              onClick={() => refetch()}
+              className="col-span-1 sm:order-6 sm:col-auto"
+              aria-label="Sync universe"
+            >
+              <RefreshCcw size={14} />
+              <span className="hidden sm:inline">Sync</span>
             </Button>
           </div>
         </div>
       </header>
 
-      <main className="mx-auto max-w-7xl space-y-10 px-4 py-8">
+      <main className="mx-auto max-w-7xl space-y-10 px-3 py-8 sm:px-4">
         {loading && (
           <div className="rounded-3xl border border-white/15 bg-white/5 px-6 py-4 text-sm font-semibold text-white/80">
-            Synchronising the archive…
+            Synchronising the universe…
           </div>
         )}
         {!loading && error && (
@@ -1832,22 +2604,12 @@ export default function LoremakerApp() {
 
         <HeroSection
           totalCharacters={data.length}
-          onFilterClick={scrollToFilters}
-          onScrollToFilters={scrollToFilters}
+          featured={featured}
+          onOpenFilters={() => setFiltersOpen(true)}
+          onScrollToCharacters={scrollToCharacters}
+          onOpenCharacter={openCharacter}
+          onFacet={handleFacet}
         />
-
-        <div id="filters-panel" className="mt-10">
-          <Controls
-            query={query}
-            setQuery={setQuery}
-            setOpenFilters={() => scrollToFilters()}
-            sortMode={sortMode}
-            setSortMode={setSortMode}
-            onClear={clearAll}
-            onJumpArena={() => document.getElementById("arena-anchor")?.scrollIntoView({ behavior: "smooth", block: "start" })}
-          />
-        </div>
-
         {showArena && (
           <div id="arena-anchor" className="mt-10">
             <BattleArena
@@ -1864,16 +2626,39 @@ export default function LoremakerApp() {
           <div className="flex flex-wrap items-center gap-2 text-xs font-semibold uppercase tracking-[0.3em] text-white/60">
             <Users size={14} /> {filtered.length} heroes ready
           </div>
-          <SortBar option={sortMode} setOption={setSortMode} />
+          <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-white/70">
+            <span>Mobile Density</span>
+            <button
+              type="button"
+              onClick={() => setMobileColumns(2)}
+              className={cx(
+                "rounded-full border px-3 py-1 transition",
+                mobileColumns === 2 ? "border-white bg-white/20 text-white" : "border-white/30 text-white/70 hover:bg-white/10"
+              )}
+            >
+              Duo
+            </button>
+            <button
+              type="button"
+              onClick={() => setMobileColumns(3)}
+              className={cx(
+                "rounded-full border px-3 py-1 transition",
+                mobileColumns === 3 ? "border-white bg-white/20 text-white" : "border-white/30 text-white/70 hover:bg-white/10"
+              )}
+            >
+              Trio
+            </button>
+          </div>
         </section>
 
-        <div className="mt-6">
+        <div id="characters-grid" className="mt-6">
           <CharacterGrid
             data={sorted.filter((c) => !selectedIds.includes(c.id))}
             onOpen={openCharacter}
             onFacet={handleFacet}
             onUseInSim={onUseInSim}
             highlightId={highlightedId}
+            mobileColumns={mobileColumns}
           />
         </div>
       </main>
@@ -1886,7 +2671,18 @@ export default function LoremakerApp() {
           onUseInSim={useInSim}
         />
 
-        <ChatDock />
+        <FilterDrawer open={filtersOpen} onClose={() => setFiltersOpen(false)}>
+          <SidebarFilters
+            data={data}
+            filters={filters}
+            setFilters={setFilters}
+            combineAND={combineAND}
+            setCombineAND={setCombineAND}
+            onClear={clearFilters}
+          />
+        </FilterDrawer>
+
+        <ScrollShortcuts />
     </div>
   );
 }
