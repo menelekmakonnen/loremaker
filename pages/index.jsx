@@ -515,6 +515,170 @@ function Aurora({ className = "" }) {
   );
 }
 
+function CosmicBackdrop() {
+  const stars = useMemo(
+    () =>
+      Array.from({ length: 28 }, (_, index) => ({
+        id: `star-${index}`,
+        size: Math.random() * 2.2 + 0.8,
+        top: Math.random() * 100,
+        left: Math.random() * 100,
+        delay: Math.random() * 6,
+      })),
+    []
+  );
+  const nebulas = useMemo(
+    () =>
+      Array.from({ length: 5 }, (_, index) => ({
+        id: `nebula-${index}`,
+        size: Math.random() * 60 + 40,
+        top: Math.random() * 100,
+        left: Math.random() * 100,
+        hue: Math.floor(Math.random() * 360),
+        duration: Math.random() * 18 + 18,
+      })),
+    []
+  );
+  const comets = useMemo(
+    () =>
+      Array.from({ length: 3 }, (_, index) => ({
+        id: `comet-${index}`,
+        top: Math.random() * 100,
+        delay: index * 8,
+      })),
+    []
+  );
+  return (
+    <div className="pointer-events-none absolute inset-0 -z-30 overflow-hidden">
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(26,32,68,0.85),#050611_65%)]" />
+      {nebulas.map((nebula) => (
+        <motion.span
+          key={nebula.id}
+          className="absolute rounded-full blur-3xl"
+          style={{
+            width: `${nebula.size}vmin`,
+            height: `${nebula.size}vmin`,
+            top: `${nebula.top}%`,
+            left: `${nebula.left}%`,
+            background: `radial-gradient(circle at 30% 30%, rgba(255,255,255,0.08), hsla(${nebula.hue},80%,60%,0.22), transparent 70%)`,
+          }}
+          animate={{ opacity: [0.25, 0.55, 0.2], scale: [1, 1.06, 0.98] }}
+          transition={{ duration: nebula.duration, repeat: Infinity, ease: "easeInOut" }}
+        />
+      ))}
+      {stars.map((star) => (
+        <motion.span
+          key={star.id}
+          className="absolute rounded-full bg-white/90"
+          style={{
+            width: `${star.size}px`,
+            height: `${star.size}px`,
+            top: `${star.top}%`,
+            left: `${star.left}%`,
+            boxShadow: "0 0 6px rgba(255,255,255,0.45)",
+          }}
+          animate={{ opacity: [0.15, 0.75, 0.3] }}
+          transition={{ duration: 4.5, delay: star.delay, repeat: Infinity, ease: "easeInOut" }}
+        />
+      ))}
+      {comets.map((comet) => (
+        <motion.span
+          key={comet.id}
+          className="absolute h-px w-48 bg-gradient-to-r from-transparent via-cyan-200/80 to-transparent"
+          style={{ top: `${comet.top}%` }}
+          initial={{ x: "-20%", opacity: 0 }}
+          animate={{ x: "120%", opacity: [0, 1, 0] }}
+          transition={{ duration: 22, delay: comet.delay, repeat: Infinity, ease: "easeInOut" }}
+        />
+      ))}
+    </div>
+  );
+}
+
+function HeroHalo() {
+  const rings = useMemo(
+    () =>
+      [
+        { size: 120, top: "-15%", left: "-18%", duration: 44 },
+        { size: 140, top: "55%", left: "-12%", duration: 52 },
+        { size: 160, top: "-10%", left: "58%", duration: 48 },
+        { size: 180, top: "50%", left: "62%", duration: 58 },
+      ],
+    []
+  );
+  return (
+    <div className="pointer-events-none absolute inset-0 -z-10 overflow-hidden">
+      {rings.map((ring, index) => (
+        <motion.div
+          key={`ring-${ring.size}-${index}`}
+          className="absolute rounded-full border border-white/10"
+          style={{
+            width: `${ring.size}vmin`,
+            height: `${ring.size}vmin`,
+            top: ring.top,
+            left: ring.left,
+            mixBlendMode: "screen",
+          }}
+          animate={{ rotate: index % 2 === 0 ? 360 : -360, scale: [1, 1.03, 0.97, 1] }}
+          transition={{ duration: ring.duration, repeat: Infinity, ease: "linear" }}
+        />
+      ))}
+      <motion.div
+        className="absolute inset-0"
+        animate={{ opacity: [0.35, 0.55, 0.3] }}
+        transition={{ duration: 16, repeat: Infinity, ease: "easeInOut" }}
+      >
+        <div className="absolute inset-[8%] rounded-full border border-amber-400/15" style={{ mixBlendMode: "screen" }} />
+        <div className="absolute inset-[18%] rounded-full border border-fuchsia-400/10" style={{ mixBlendMode: "screen" }} />
+      </motion.div>
+    </div>
+  );
+}
+
+function CatalogViz({ total }) {
+  const segments = useMemo(() => {
+    const circumference = 2 * Math.PI * 32;
+    return [0.26, 0.18, 0.22, 0.14, 0.2].map((ratio, index) => ({
+      key: `seg-${index}`,
+      length: circumference * ratio,
+      offset: (circumference * index * 0.18) % circumference,
+      hue: 30 + index * 48,
+    }));
+  }, []);
+  return (
+    <div className="relative flex items-center justify-center">
+      <motion.div
+        className="relative flex h-24 w-24 items-center justify-center rounded-full border border-white/25 bg-black/60 p-3 shadow-[0_12px_40px_rgba(12,18,48,0.55)]"
+        animate={{ rotate: 360 }}
+        transition={{ duration: 48, repeat: Infinity, ease: "linear" }}
+      >
+        <svg viewBox="0 0 80 80" className="h-full w-full">
+          <g transform="translate(40,40)">
+            {segments.map((segment, index) => (
+              <motion.circle
+                key={segment.key}
+                r="32"
+                fill="transparent"
+                stroke={`hsla(${segment.hue},80%,60%,0.75)`}
+                strokeWidth="4"
+                strokeDasharray={`${segment.length} 200`}
+                strokeDashoffset={-segment.offset}
+                animate={{ strokeDashoffset: [segment.offset * -1, segment.offset * -1 - segment.length, segment.offset * -1] }}
+                transition={{ duration: 14 + index * 2.5, repeat: Infinity, ease: "easeInOut" }}
+                style={{ filter: "drop-shadow(0 0 6px hsla(45,100%,75%,0.3))" }}
+              />
+            ))}
+          </g>
+        </svg>
+        <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center text-center">
+          <span className="text-[9px] font-bold uppercase tracking-[0.3em] text-white/60">Universe</span>
+          <span className="text-lg font-black text-white sm:text-xl">{total}</span>
+        </div>
+      </motion.div>
+    </div>
+  );
+}
+
 function LoreShield({ size = 56, onClick }) {
   const idRef = useRef(() => `lore-${Math.random().toString(36).slice(2)}`);
   const gradientId = useMemo(() => idRef.current(), []);
@@ -821,18 +985,18 @@ function CharacterCard({ char, onOpen, onFacet, onUseInSim, highlight }) {
         <CardHeader className="space-y-2">
           <div className="flex items-center gap-3">
             <Insignia label={char.faction?.[0] || char.name} size={32} variant={char.faction?.length ? "faction" : "character"} />
-            <CardTitle className="text-2xl text-white drop-shadow-[0_1px_6px_rgba(0,0,0,0.6)]">
+            <CardTitle className="text-xl text-white drop-shadow-[0_1px_6px_rgba(0,0,0,0.6)] sm:text-2xl">
               <button onClick={() => onOpen(char)} className="bg-gradient-to-r from-white via-amber-100 to-white bg-clip-text text-left text-transparent">
                 {char.name}
               </button>
             </CardTitle>
           </div>
-          <CardDescription className="line-clamp-2 text-white/80">
+          <CardDescription className="line-clamp-2 text-xs text-white/80 sm:text-sm">
             {char.shortDesc || char.longDesc || "No description yet."}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-2 text-[11px] sm:text-xs">
             {char.gender && <FacetChip onClick={() => onFacet({ key: "gender", value: char.gender })}>{char.gender}</FacetChip>}
             {char.alignment && <FacetChip onClick={() => onFacet({ key: "alignment", value: char.alignment })}>{char.alignment}</FacetChip>}
             {(char.locations || []).slice(0, 2).map((loc) => (
@@ -846,7 +1010,7 @@ function CharacterCard({ char, onOpen, onFacet, onUseInSim, highlight }) {
               </FacetChip>
             ))}
           </div>
-          <div className="space-y-1 text-xs font-bold text-white">
+          <div className="space-y-1 text-[11px] font-bold text-white sm:text-xs">
             {(char.powers || []).slice(0, 1).map((power) => (
               <div key={power.name} className="flex items-center justify-between">
                 <span className="truncate pr-2">{power.name}</span>
@@ -858,7 +1022,7 @@ function CharacterCard({ char, onOpen, onFacet, onUseInSim, highlight }) {
         </CardContent>
         <CardFooter className="flex items-center justify-between">
           <div className="flex gap-2">
-            <Button variant="gradient" size="sm" onClick={() => onOpen(char)}>
+            <Button variant="gradient" size="sm" className="text-[11px]" onClick={() => onOpen(char)}>
               Read <ArrowRight className="h-4 w-4" />
             </Button>
           </div>
@@ -1230,12 +1394,16 @@ function ArenaCard({ char, position, onRelease, onOpen, health, isWinner, showX 
       </div>
     );
   }
+  const [expanded, setExpanded] = useState(false);
   const healthGradient = health > 60 ? "from-emerald-300 to-emerald-500" : health > 30 ? "from-amber-300 to-amber-500" : "from-rose-400 to-red-500";
+  const powers = char.powers || [];
+  const visiblePowers = expanded ? powers : powers.slice(0, 4);
+  const hasMorePowers = powers.length > 4;
   return (
     <motion.div
       layout
       className={cx(
-        "relative h-full rounded-3xl border border-slate-700 bg-slate-950/90 p-5 text-left text-slate-100 shadow-[0_25px_80px_rgba(6,7,12,0.65)]",
+        "relative h-full rounded-3xl border border-slate-700 bg-slate-950/90 p-4 text-left text-slate-100 shadow-[0_25px_80px_rgba(6,7,12,0.65)] sm:p-5",
         isWinner ? "ring-4 ring-emerald-400 scale-[1.02]" : "",
         showX ? "ring-2 ring-red-500" : ""
       )}
@@ -1252,13 +1420,13 @@ function ArenaCard({ char, position, onRelease, onOpen, health, isWinner, showX 
           X
         </motion.div>
       )}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <Badge className="bg-slate-800/80 text-slate-200">Combatant {position}</Badge>
-        <div className="flex items-center gap-2">
-          <Button variant="ghost" size="sm" onClick={() => onOpen(char)}>
+        <div className="flex items-center gap-2 text-xs">
+          <Button variant="ghost" size="sm" className="text-[11px]" onClick={() => onOpen(char)}>
             Details
           </Button>
-          <Button variant="outline" size="sm" onClick={() => onRelease(char.id)}>
+          <Button variant="outline" size="sm" className="text-[11px]" onClick={() => onRelease(char.id)}>
             Release
           </Button>
         </div>
@@ -1275,15 +1443,15 @@ function ArenaCard({ char, position, onRelease, onOpen, health, isWinner, showX 
           />
         </div>
       </button>
-      <div className="mt-5 flex items-start gap-4">
+      <div className="mt-5 flex items-start gap-3">
         <ImageSafe
           src={char.cover || char.gallery[0]}
           alt={char.name}
           fallbackLabel={char.name}
-          className="h-32 w-32 rounded-2xl border border-slate-700 object-cover"
+          className="h-28 w-28 rounded-2xl border border-slate-700 object-cover sm:h-32 sm:w-32"
         />
-        <div className="flex-1 space-y-3 text-xs">
-          <div className="text-lg font-black text-white">{char.name}</div>
+        <div className="flex-1 space-y-3 text-[11px] sm:text-xs">
+          <div className="text-lg font-black text-white sm:text-xl">{char.name}</div>
           <div className="grid grid-cols-2 gap-2">
             {char.gender && (
               <div>
@@ -1349,7 +1517,7 @@ function ArenaCard({ char, position, onRelease, onOpen, health, isWinner, showX 
         </div>
       </div>
       <div className="mt-5 space-y-2">
-        {(char.powers || []).map((power) => (
+        {visiblePowers.map((power) => (
           <div key={power.name}>
             <div className="mb-1 flex items-center justify-between text-xs font-bold text-slate-200">
               <span className="truncate pr-2">{power.name}</span>
@@ -1358,6 +1526,15 @@ function ArenaCard({ char, position, onRelease, onOpen, health, isWinner, showX 
             <PowerMeter level={power.level} accent="crimson" />
           </div>
         ))}
+        {hasMorePowers && (
+          <button
+            type="button"
+            onClick={() => setExpanded((state) => !state)}
+            className="w-full rounded-full border border-slate-700/70 bg-slate-900/80 px-3 py-1.5 text-[11px] font-bold uppercase tracking-wide text-slate-200 transition hover:bg-slate-800"
+          >
+            {expanded ? "Hide extended powers" : `Reveal all ${powers.length} powers`}
+          </button>
+        )}
       </div>
       {!!(char.stories || []).length && (
         <div className="mt-4">
@@ -1477,17 +1654,30 @@ function BattleArena({ characters, slots, setSlots, onOpenCharacter, pulseKey })
           </div>
         </CardHeader>
         <CardContent className="space-y-6">
-          <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] gap-5">
-            <ArenaCard
-              char={left}
-              position="A"
-              onRelease={release}
-              onOpen={onOpenCharacter}
-              health={health.left}
-              isWinner={result?.winner?.id === left?.id}
-              showX={showX === left?.id}
-            />
-            <div className="flex min-w-[110px] flex-col items-center justify-center gap-3">
+          <div className="grid grid-cols-2 gap-4 lg:auto-rows-min lg:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]">
+            <div className="col-span-1 min-w-0 lg:col-span-1 lg:col-start-1 lg:row-start-1">
+              <ArenaCard
+                char={left}
+                position="A"
+                onRelease={release}
+                onOpen={onOpenCharacter}
+                health={health.left}
+                isWinner={result?.winner?.id === left?.id}
+                showX={showX === left?.id}
+              />
+            </div>
+            <div className="col-span-1 order-2 min-w-0 lg:order-none lg:col-span-1 lg:col-start-3 lg:row-start-1">
+              <ArenaCard
+                char={right}
+                position="B"
+                onRelease={release}
+                onOpen={onOpenCharacter}
+                health={health.right}
+                isWinner={result?.winner?.id === right?.id}
+                showX={showX === right?.id}
+              />
+            </div>
+            <div className="order-3 col-span-2 flex flex-col items-center justify-center gap-3 rounded-3xl border border-slate-800/60 bg-[#0f1329]/80 p-4 text-center lg:order-none lg:col-span-1 lg:col-start-2 lg:row-start-1 lg:row-end-2 lg:self-stretch lg:justify-self-center lg:p-5">
               <motion.div
                 animate={battleState}
                 variants={swordVariants}
@@ -1496,32 +1686,26 @@ function BattleArena({ characters, slots, setSlots, onOpenCharacter, pulseKey })
               >
                 <Swords className="h-10 w-10" />
               </motion.div>
-              <div className="flex flex-col gap-2 text-xs font-bold text-slate-300">
-                <Button variant="outline" size="sm" onClick={runRandom}>
+              <div className="flex flex-col gap-2 text-[11px] font-bold text-slate-200 sm:text-xs">
+                <Button variant="outline" size="sm" onClick={runRandom} className="text-[11px]">
                   Random Duel
                 </Button>
-                <Button variant="gradient" size="sm" onClick={runBattle}>
+                <Button variant="gradient" size="sm" onClick={runBattle} className="text-[11px]">
                   Fight
                 </Button>
-                <Button variant="destructive" size="sm" onClick={reset}>
+                <Button variant="destructive" size="sm" onClick={reset} className="text-[11px]">
                   Reset Arena
                 </Button>
+                <span className="text-[10px] font-semibold uppercase tracking-[0.3em] text-slate-400">
+                  Tap combatants to view dossiers
+                </span>
               </div>
             </div>
-            <ArenaCard
-              char={right}
-              position="B"
-              onRelease={release}
-              onOpen={onOpenCharacter}
-              health={health.right}
-              isWinner={result?.winner?.id === right?.id}
-              showX={showX === right?.id}
-            />
           </div>
           {timeline.length > 0 && (
             <div className="rounded-2xl border border-white/10 bg-[#0f1329]/80 p-4 text-xs backdrop-blur">
               <div className="mb-2 text-sm font-black uppercase tracking-wide text-slate-200">Battle Flow</div>
-              <div className="grid gap-3 md:grid-cols-3">
+              <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3">
                 {timeline.map((phase) => (
                   <div key={phase.round} className="rounded-xl border border-white/10 bg-[#141a38]/80 p-3 text-slate-200">
                     <div className="text-[11px] font-bold uppercase tracking-wide text-slate-400">Round {phase.round}</div>
@@ -1745,15 +1929,16 @@ function HeroSection({
   onOpenCharacter,
   onFacet,
 }) {
-  const slides = useMemo(
-    () => [
+  const slides = useMemo(() => {
+    const base = [
+      { key: "intro", label: "Menelek Makonnen Presents", data: { title: "The Loremaker Universe", blurb: "Author Menelek Makonnen opens the living universe — an ever-growing nexus of characters, factions, and cosmic forces awaiting your exploration." } },
       { key: "character", label: "Featured Character", data: featured?.character },
       { key: "faction", label: "Featured Faction", data: featured?.faction },
       { key: "location", label: "Featured Location", data: featured?.location },
       { key: "power", label: "Featured Power", data: featured?.power },
-    ],
-    [featured?.character, featured?.faction, featured?.location, featured?.power]
-  );
+    ];
+    return base.filter((slide) => slide.key === "intro" || slide.data);
+  }, [featured?.character, featured?.faction, featured?.location, featured?.power]);
   const [index, setIndex] = useState(0);
   const [direction, setDirection] = useState(1);
   const autoPlayed = useRef(false);
@@ -1789,13 +1974,15 @@ function HeroSection({
     const char = slide.data;
     if (!char) {
       return (
-        <div className="flex min-h-[260px] flex-col justify-center gap-4 rounded-[32px] bg-white/5 p-8 text-white">
+        <div className="flex min-h-[260px] flex-col justify-center gap-4 rounded-[32px] border border-white/15 bg-black/50 p-8 text-white">
           <div className="text-xs font-bold uppercase tracking-[0.35em] text-white/60">Featured Character</div>
-          <p className="text-lg font-semibold text-white/70">Loading today’s legend…</p>
+          <p className="text-base font-semibold text-white/70 sm:text-lg">Loading today’s legend…</p>
         </div>
       );
     }
-    const images = [char.cover, ...(char.gallery || [])].filter(Boolean).slice(0, 3);
+    const images = [char.cover, ...(char.gallery || [])].filter(Boolean);
+    const heroImage = images[0];
+    const accentImages = images.slice(1, 3);
     const topPowers = [...(char.powers || [])]
       .sort((a, b) => (Number(b.level) || 0) - (Number(a.level) || 0))
       .slice(0, 3);
@@ -1816,15 +2003,30 @@ function HeroSection({
             openProfile();
           }
         }}
-        className="grid gap-10 rounded-[32px] border border-white/15 bg-gradient-to-br from-black/60 via-indigo-900/50 to-fuchsia-700/40 p-8 text-white lg:grid-cols-[3fr_2fr]"
+        className="relative flex min-h-[320px] flex-col justify-between overflow-hidden rounded-[32px] border border-white/15 bg-black/60 p-8 text-white lg:flex-row"
       >
-        <div className="space-y-5">
-          <Badge className="bg-white/15 text-white/80">{slide.label}</Badge>
-          <h2 className="text-4xl font-black tracking-tight sm:text-5xl">{char.name}</h2>
-          <p className="text-base font-semibold text-white/80 md:text-lg">
-            {char.shortDesc || char.longDesc?.slice(0, 200) || "A legend awaits their tale to be told."}
+        {heroImage && (
+          <motion.div
+            className="absolute inset-0"
+            initial={{ scale: 1.05, opacity: 0.6 }}
+            animate={{ scale: 1.12, opacity: 0.85 }}
+            transition={{ duration: 18, repeat: Infinity, repeatType: "reverse", ease: "easeInOut" }}
+            style={{
+              backgroundImage: `url(${heroImage})`,
+              backgroundSize: "cover",
+              backgroundPosition: "center",
+              filter: "saturate(1.15) brightness(0.9)",
+            }}
+          />
+        )}
+        <div className="absolute inset-0 bg-gradient-to-br from-black/85 via-black/70 to-indigo-900/70" />
+        <div className="relative z-10 flex-1 space-y-5 pr-0 sm:pr-8">
+          <Badge className="bg-white/15 text-white/85">{slide.label}</Badge>
+          <h2 className="text-3xl font-black tracking-tight sm:text-5xl">{char.name}</h2>
+          <p className="text-sm font-semibold text-white/80 sm:text-base lg:text-lg">
+            {char.shortDesc || char.longDesc?.slice(0, 220) || "A legend awaits their tale to be told."}
           </p>
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-2 text-[11px] sm:text-xs">
             {char.gender && (
               <FacetChip onClick={(event) => handleFacetClick(event, { key: "gender", value: char.gender })}>
                 Gender: {char.gender}
@@ -1837,7 +2039,7 @@ function HeroSection({
             ))}
           </div>
           <div className="space-y-3">
-            <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wide text-white/70">
+            <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wide text-white/70 sm:text-xs">
               <Atom size={14} /> Top Powers
             </div>
             <div className="flex flex-wrap gap-2">
@@ -1846,7 +2048,7 @@ function HeroSection({
                   key={power.name}
                   type="button"
                   onClick={(event) => handleFacetClick(event, { key: "powers", value: power.name })}
-                  className="rounded-full bg-white/10 px-3 py-1 text-xs font-bold uppercase tracking-wide text-white/90 transition hover:bg-white/20"
+                  className="rounded-full bg-white/10 px-3 py-1 text-[11px] font-bold uppercase tracking-wide text-white/90 transition hover:bg-white/20"
                 >
                   {power.name} • {power.level}/10
                 </button>
@@ -1854,24 +2056,64 @@ function HeroSection({
             </div>
           </div>
         </div>
-        <div className="grid gap-4 sm:grid-cols-2">
-          {images.map((src, idx) => (
+        <div className="relative z-10 mt-6 flex flex-1 items-end justify-end gap-4 lg:mt-0 lg:flex-col">
+          {accentImages.map((src, idx) => (
             <motion.div
               key={src}
-              className="relative overflow-hidden rounded-3xl border border-white/15"
-              initial={{ opacity: 0, y: 16 }}
+              className="relative h-28 w-28 overflow-hidden rounded-2xl border border-white/20 shadow-[0_15px_40px_rgba(9,12,28,0.6)] sm:h-32 sm:w-32"
+              initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: idx * 0.1, duration: 0.4 }}
+              transition={{ delay: 0.15 * idx, duration: 0.45 }}
+              style={{ backgroundImage: `url(${src})`, backgroundSize: "cover", backgroundPosition: "center" }}
             >
-              <img src={src} alt={`${char.name} portrait ${idx + 1}`} className="h-44 w-full object-cover" />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/65 to-transparent" />
             </motion.div>
           ))}
-          {!images.length && (
-            <div className="flex h-44 items-center justify-center rounded-3xl border border-dashed border-white/20 bg-white/5 text-sm font-semibold text-white/70">
-              Image dossier classified
+          {!accentImages.length && (
+            <div className="rounded-2xl border border-dashed border-white/25 bg-black/40 px-4 py-6 text-center text-xs font-semibold text-white/70 sm:text-sm">
+              Classified imagery — open dossier
             </div>
           )}
+        </div>
+      </div>
+    );
+  };
+
+  const renderIntro = (slide) => {
+    const title = slide.data?.title || "The Loremaker Universe";
+    const blurb =
+      slide.data?.blurb ||
+      "Step beyond the veil into Menelek Makonnen’s ever-expanding universe where every dossier unlocks new connections.";
+    return (
+      <div className="relative overflow-hidden rounded-[32px] border border-white/15 bg-gradient-to-br from-black/70 via-indigo-900/60 to-fuchsia-700/45 p-8 text-white md:p-12">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.12),transparent_55%)]" />
+        <motion.div
+          className="absolute -right-32 top-1/4 h-72 w-72 rounded-full bg-amber-400/20 blur-3xl"
+          animate={{ opacity: [0.25, 0.5, 0.28], scale: [1, 1.06, 0.96] }}
+          transition={{ duration: 16, repeat: Infinity, ease: "easeInOut" }}
+        />
+        <div className="relative z-10 grid gap-8 lg:grid-cols-[3fr_2fr] lg:items-center">
+          <div className="space-y-6">
+            <div className="text-xs font-bold uppercase tracking-[0.35em] text-white/70">{slide.label}</div>
+            <h2 className="text-3xl font-black tracking-tight sm:text-5xl lg:text-6xl">{title}</h2>
+            <p className="max-w-xl text-sm font-semibold text-white/80 sm:text-base lg:text-lg">{blurb}</p>
+            <div className="flex flex-wrap gap-3">
+              <Button variant="gradient" size="lg" onClick={onScrollToCharacters} className="shadow-[0_18px_48px_rgba(253,230,138,0.35)]">
+                Discover the Universe
+              </Button>
+              <Button variant="outline" size="lg" onClick={onOpenFilters} className="border-white/60 text-white/90 hover:bg-white/10">
+                Shape Your Lore Feed
+              </Button>
+            </div>
+            <div className="flex flex-wrap gap-2 text-[11px] font-semibold uppercase tracking-[0.35em] text-white/70 sm:text-xs">
+              <span>Daily sync across every device</span>
+              <span className="hidden sm:inline">•</span>
+              <span>One universe — countless stories</span>
+            </div>
+          </div>
+          <div className="flex items-center justify-center">
+            <CatalogViz total={totalCharacters} />
+          </div>
         </div>
       </div>
     );
@@ -1901,7 +2143,7 @@ function HeroSection({
             {icon}
             {slide.label}
           </div>
-          <h3 className="text-3xl font-black sm:text-4xl">{payload.name}</h3>
+          <h3 className="text-2xl font-black sm:text-4xl">{payload.name}</h3>
           <p className="text-sm font-semibold text-white/75">{descriptor}</p>
           <div className="flex flex-wrap gap-2">
             <Button
@@ -1944,6 +2186,8 @@ function HeroSection({
 
   const renderSlide = (slide) => {
     switch (slide.key) {
+      case "intro":
+        return renderIntro(slide);
       case "character":
         return renderCharacter(slide);
       case "faction":
@@ -1958,11 +2202,12 @@ function HeroSection({
   };
 
   return (
-    <section className="relative overflow-hidden rounded-[36px] border border-white/15 bg-gradient-to-br from-indigo-900/60 via-fuchsia-700/35 to-amber-500/20 shadow-[0_40px_120px_rgba(12,9,32,0.55)]">
+    <section className="relative overflow-hidden rounded-[36px] border border-white/15 bg-gradient-to-br from-indigo-900/60 via-fuchsia-700/40 to-amber-500/25 shadow-[0_40px_120px_rgba(12,9,32,0.55)]">
+      <HeroHalo />
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.18),transparent_55%)]" />
-      <div className="absolute inset-x-0 top-0 h-32 bg-gradient-to-b from-black/40 to-transparent" />
-      <div className="absolute -left-24 bottom-0 h-72 w-72 rounded-full bg-amber-400/10 blur-3xl" />
-      <div className="absolute -right-20 -top-10 h-72 w-72 rounded-full bg-fuchsia-500/10 blur-3xl" />
+      <div className="absolute inset-x-0 top-0 h-32 bg-gradient-to-b from-black/50 to-transparent" />
+      <div className="absolute -left-24 bottom-0 h-72 w-72 rounded-full bg-amber-400/15 blur-3xl" />
+      <div className="absolute -right-20 -top-10 h-72 w-72 rounded-full bg-fuchsia-500/15 blur-3xl" />
       <div className="relative z-10 flex flex-col gap-10 px-6 py-14 sm:px-10 md:px-16">
         <nav className="flex flex-col gap-4 text-[11px] font-semibold uppercase tracking-[0.4em] text-white/70 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-2 text-white">
@@ -2050,12 +2295,16 @@ function HeroSection({
             variant="outline"
             size="lg"
             onClick={onScrollToCharacters}
-            className="border-white/50 text-white/85 hover:bg-white/10"
+            className="border-white/60 text-white/90 hover:bg-white/10"
           >
-            Browse Archive
+            Explore Universe
           </Button>
-          <div className="ml-auto flex items-center gap-3 rounded-3xl border border-white/20 bg-white/10 px-5 py-3 text-sm font-semibold text-white/80">
-            <Crown size={16} /> {totalCharacters} characters catalogued
+          <div className="ml-auto flex items-center gap-4 rounded-3xl border border-white/20 bg-white/10 px-3 py-2 text-xs font-semibold text-white/80 sm:text-sm">
+            <CatalogViz total={totalCharacters} />
+            <div className="flex flex-col gap-0.5 text-right">
+              <span className="text-[10px] font-bold uppercase tracking-[0.35em] text-white/60">Living Codex</span>
+              <span className="text-base font-black text-white sm:text-lg">{totalCharacters} Legends catalogued</span>
+            </div>
           </div>
         </div>
       </div>
@@ -2186,18 +2435,32 @@ export default function LoremakerApp() {
   }, []);
 
   return (
-    <div className="relative min-h-screen overflow-x-hidden bg-[#070813] text-white">
-      <Aurora />
-      <header className="sticky top-0 z-40 border-b border-white/10 bg-black/40 backdrop-blur-xl">
-        <div className="mx-auto flex w-full max-w-7xl flex-wrap items-center gap-3 px-4 py-3">
-          <div className="flex items-center gap-3">
-            <LoreShield onClick={() => window.location.reload()} />
-            <div className="hidden flex-col text-[10px] font-semibold uppercase tracking-[0.35em] text-white/60 sm:flex">
-              <span>Pulse of the Loremaker</span>
-              <span className="text-white/80">Daily featured lore drops</span>
+    <div className="relative min-h-screen w-full overflow-x-hidden bg-[#050813] text-white">
+      <CosmicBackdrop />
+      <Aurora className="opacity-70" />
+      <header className="sticky top-0 z-40 border-b border-white/10 bg-black/55 backdrop-blur-2xl">
+        <div className="mx-auto flex w-full max-w-7xl flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center">
+          <div className="flex items-center justify-between gap-3 sm:w-auto">
+            <div className="flex items-center gap-3">
+              <LoreShield onClick={() => window.location.reload()} />
+              <div className="hidden flex-col text-[10px] font-semibold uppercase tracking-[0.35em] text-white/60 sm:flex">
+                <span>Pulse of the Loremaker</span>
+                <span className="text-white/80">Daily featured lore drops</span>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 sm:hidden">
+              <Button variant="ghost" size="sm" className="text-[11px] font-bold" onClick={() => setFiltersOpen(true)}>
+                <Filter className="h-4 w-4" />
+              </Button>
+              <Button variant="ghost" size="sm" className="text-[11px] font-bold" onClick={() => setShowArena((prev) => !prev)}>
+                <Swords className="h-4 w-4" />
+              </Button>
+              <Button variant="ghost" size="sm" className="text-[11px] font-bold" onClick={() => refetch()}>
+                <RefreshCcw className="h-4 w-4" />
+              </Button>
             </div>
           </div>
-          <nav className="ml-4 hidden items-center gap-3 text-[11px] font-bold uppercase tracking-[0.4em] text-white/60 sm:flex">
+          <nav className="hidden flex-1 items-center gap-3 text-[11px] font-bold uppercase tracking-[0.4em] text-white/60 sm:flex">
             <button
               type="button"
               onClick={() => window.location.reload()}
@@ -2206,22 +2469,22 @@ export default function LoremakerApp() {
               Loremaker
             </button>
           </nav>
-          <div className="ml-auto flex w-full flex-wrap items-center gap-2 sm:w-auto">
-            <div className="relative flex-1 min-w-[200px] sm:flex-none">
+          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-1 sm:flex-row sm:items-center">
+            <div className="relative w-full sm:max-w-sm">
               <Input
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
                 placeholder="Search characters, powers, locations, tags..."
-                className="w-full bg-white/15 pl-9"
+                className="w-full bg-white/15 pl-9 text-sm sm:text-base"
               />
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/70" />
             </div>
-            <div className="flex items-center gap-2">
-              <div className="relative">
+            <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:items-center sm:justify-end">
+              <div className="relative col-span-2 sm:col-auto">
                 <select
                   value={sortMode}
                   onChange={(event) => setSortMode(event.target.value)}
-                  className="appearance-none rounded-xl border border-white/30 bg-black/70 px-3 py-2 pr-9 text-xs font-bold uppercase tracking-wide text-white shadow-inner focus:outline-none"
+                  className="w-full appearance-none rounded-xl border border-white/25 bg-black/60 px-3 py-2 pr-9 text-[11px] font-bold uppercase tracking-wide text-white/80 shadow-inner backdrop-blur focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300 sm:text-xs"
                 >
                   {SORT_OPTIONS.map((item) => (
                     <option key={item.value} value={item.value} className="bg-black text-white">
@@ -2233,18 +2496,24 @@ export default function LoremakerApp() {
               </div>
               <Button
                 variant="gradient"
+                size="sm"
                 onClick={() => setFiltersOpen(true)}
-                className="shadow-[0_15px_40px_rgba(250,204,21,0.3)]"
+                className="col-span-1 shadow-[0_15px_40px_rgba(250,204,21,0.3)] sm:col-auto"
               >
                 <Filter className="h-4 w-4" /> Filters
               </Button>
-              <Button variant="outline" onClick={clearFilters}>
+              <Button variant="outline" size="sm" onClick={clearFilters} className="col-span-1 sm:col-auto">
                 <X size={14} /> Clear
               </Button>
-              <Button variant="subtle" onClick={() => setShowArena((prev) => !prev)}>
+              <Button
+                variant="subtle"
+                size="sm"
+                onClick={() => setShowArena((prev) => !prev)}
+                className="col-span-2 sm:col-auto"
+              >
                 <Swords size={14} /> {showArena ? "Hide Arena" : "Arena"}
               </Button>
-              <Button variant="dark" onClick={() => refetch()}>
+              <Button variant="dark" size="sm" onClick={() => refetch()} className="col-span-2 sm:col-auto">
                 <RefreshCcw size={14} /> Sync
               </Button>
             </div>
@@ -2255,7 +2524,7 @@ export default function LoremakerApp() {
       <main className="mx-auto max-w-7xl space-y-10 px-4 py-8">
         {loading && (
           <div className="rounded-3xl border border-white/15 bg-white/5 px-6 py-4 text-sm font-semibold text-white/80">
-            Synchronising the archive…
+            Synchronising the universe…
           </div>
         )}
         {!loading && error && (
