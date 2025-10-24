@@ -1,0 +1,103 @@
+[
+  {
+    "id": "astra-nyx",
+    "name": "Astra Nyx",
+    "alias": ["The Eventide Seer"],
+    "gender": "Female",
+    "alignment": "Guardian",
+    "locations": ["Aurora Citadel", "Orion Verge"],
+    "status": "Active",
+    "era": "New Dawn",
+    "firstAppearance": "Chronicles of the Luminous",
+    "powers": [
+      { "name": "Stellar Precognition", "level": 8 },
+      { "name": "Nebula Weave", "level": 7 },
+      { "name": "Gravity Fold", "level": 6 }
+    ],
+    "faction": ["Celestial Wardens"],
+    "tags": ["mystic", "strategist"],
+    "shortDesc": "A visionary tactician who reads the afterglow of possible futures.",
+    "longDesc": "Once mortal, Astra now charts the tides of possibility to keep the universe in balance. Her visions ripple across worlds, whispering paths of hope to those brave enough to follow them.",
+    "stories": ["The Prism Rebellion", "Echoes of Meridian"],
+    "cover": "https://images.unsplash.com/photo-1521572462506-88c2e8e4b909?auto=format&fit=crop&w=800&q=80",
+    "gallery": [
+      "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=800&q=80",
+      "https://images.unsplash.com/photo-1521572462506-88c2e8e4b909?auto=format&fit=crop&w=800&q=80"
+    ]
+  },
+  {
+    "id": "menelik-makonnen",
+    "name": "Menelek Makonnen",
+    "alias": ["Architect of Lore"],
+    "gender": "Male",
+    "alignment": "Visionary",
+    "locations": ["Prime Forge", "Astral Archive"],
+    "status": "Eternal",
+    "era": "Founder's Era",
+    "firstAppearance": "Origins of the Loremaker",
+    "powers": [
+      { "name": "Mythic Synthesis", "level": 9 },
+      { "name": "Reality Script", "level": 8 },
+      { "name": "Chrono Drafting", "level": 7 }
+    ],
+    "faction": ["Loremaker Pantheon"],
+    "tags": ["creator", "legend"],
+    "shortDesc": "Founder of the universe who chisels new realities from thought alone.",
+    "longDesc": "Menelek writes and unwrites fate with a stroke of his quill, weaving destinies together like constellations. Every legend whispers his name, every timeline bends to his design.",
+    "stories": ["Birth of the Codex", "The Seeding"],
+    "cover": "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=800&q=80",
+    "gallery": [
+      "https://images.unsplash.com/photo-1462331940025-496dfbfc7564?auto=format&fit=crop&w=800&q=80"
+    ]
+  },
+  {
+    "id": "kaia-solstice",
+    "name": "Kaia Solstice",
+    "alias": ["Solar Vanguard"],
+    "gender": "Female",
+    "alignment": "Radiant",
+    "locations": ["Helios Bastion"],
+    "status": "Active",
+    "era": "Blazing Age",
+    "firstAppearance": "Siege of the Twin Suns",
+    "powers": [
+      { "name": "Solar Flare", "level": 8 },
+      { "name": "Corona Shield", "level": 7 },
+      { "name": "Fusion Lance", "level": 7 }
+    ],
+    "faction": ["Sol Dominion"],
+    "tags": ["warrior", "commander"],
+    "shortDesc": "Commander of the Sol Dominion who leads charges with a burning aegis.",
+    "longDesc": "Kaia wields stellar fire with impossible grace, igniting courage in those who stand behind her shield. Tales of her stand at the Twin Suns are sung across nebulae.",
+    "stories": ["The Ember Accord", "Rift of Embers"],
+    "cover": "https://images.unsplash.com/photo-1522198759638-76c3c3b1809b?auto=format&fit=crop&w=800&q=80",
+    "gallery": [
+      "https://images.unsplash.com/photo-1447430617419-95715602278e?auto=format&fit=crop&w=800&q=80"
+    ]
+  },
+  {
+    "id": "orik-typhoon",
+    "name": "Orik Typhoon",
+    "alias": ["Storm Herald"],
+    "gender": "Male",
+    "alignment": "Tempest",
+    "locations": ["Cyclone Frontier", "Nimbus Rift"],
+    "status": "Roving",
+    "era": "Tempest Cycle",
+    "firstAppearance": "Whispers of the Maelstrom",
+    "powers": [
+      { "name": "Cyclone Gauntlet", "level": 7 },
+      { "name": "Ion Surge", "level": 6 },
+      { "name": "Thunder March", "level": 8 }
+    ],
+    "faction": ["Skybound Freeblades"],
+    "tags": ["rogue", "navigator"],
+    "shortDesc": "A freeblade navigator who sails the edge of endless storms.",
+    "longDesc": "Orik rides lightning streams to map forbidden horizons. His arrival heralds change – sometimes salvation, sometimes chaos, always the storm.",
+    "stories": ["Tempest Veil", "Lightning Pact"],
+    "cover": "https://images.unsplash.com/photo-1472214103451-9374bd1c798e?auto=format&fit=crop&w=800&q=80",
+    "gallery": [
+      "https://images.unsplash.com/photo-1500534314209-a25ddb2bd429?auto=format&fit=crop&w=800&q=80"
+    ]
+  }
+]
