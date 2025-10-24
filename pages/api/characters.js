@@ -1,4 +1,4 @@
-import { fetchCharactersFromSheets } from "../../lib/characters";
+import { fetchCharactersFromSheets, isCharactersConfigError, publicCharactersError } from "../../lib/characters";
 
 export default async function handler(req, res) {
   if (req.method !== "GET") {
@@ -11,6 +11,7 @@ export default async function handler(req, res) {
     const data = await fetchCharactersFromSheets({ force });
     res.status(200).json({ data, fetchedAt: new Date().toISOString() });
   } catch (error) {
-    res.status(500).json({ error: error?.message || "Failed to load characters" });
+    const status = isCharactersConfigError(error) ? 503 : 500;
+    res.status(status).json({ error: publicCharactersError(error) });
   }
 }
