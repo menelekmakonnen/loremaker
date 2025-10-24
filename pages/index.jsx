@@ -2936,6 +2936,131 @@ function HeroSection({ featured, onOpenFilters, onScrollToCharacters, onOpenChar
           </Button>
         </div>
       </div>
+    );
+  };
+
+  const renderSlide = (slide) => {
+    switch (slide.key) {
+      case "intro":
+        return renderIntro(slide);
+      case "character":
+        return renderCharacter(slide);
+      case "faction":
+        return (
+          <RosterSlide
+            slide={slide}
+            icon={<Layers className="h-6 w-6" />}
+            facetKey="faction"
+            onFacet={onFacet}
+            onOpenCharacter={onOpenCharacter}
+            limit={isCompact ? 3 : 6}
+          />
+        );
+      case "location":
+        return (
+          <RosterSlide
+            slide={slide}
+            icon={<MapPin className="h-6 w-6" />}
+            facetKey="locations"
+            onFacet={onFacet}
+            onOpenCharacter={onOpenCharacter}
+            limit={isCompact ? 3 : 6}
+          />
+        );
+      case "power":
+        return (
+          <RosterSlide
+            slide={slide}
+            icon={<Atom className="h-6 w-6" />}
+            facetKey="powers"
+            onFacet={onFacet}
+            onOpenCharacter={onOpenCharacter}
+            limit={isCompact ? 3 : 6}
+          />
+        );
+      default:
+        return null;
+    }
+  };
+
+  return (
+    <section className="relative overflow-hidden rounded-[36px] border border-white/15 bg-gradient-to-br from-indigo-900/60 via-fuchsia-700/40 to-amber-500/25 shadow-[0_40px_120px_rgba(12,9,32,0.55)]">
+      <HeroHalo />
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.18),transparent_55%)]" />
+      <div className="absolute inset-x-0 top-0 h-32 bg-gradient-to-b from-black/50 to-transparent" />
+      <div className="absolute -left-24 bottom-0 h-72 w-72 rounded-full bg-amber-400/15 blur-3xl" />
+      <div className="absolute -right-20 -top-10 h-72 w-72 rounded-full bg-fuchsia-500/15 blur-3xl" />
+      <div className="relative z-10 flex flex-col gap-10 px-6 py-14 sm:px-10 md:px-16">
+        <nav className="flex flex-col gap-4 text-[11px] font-semibold uppercase tracking-[0.4em] text-white/70 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-2 text-white">
+            <Clock size={12} /> {todayKey()} • Daily Lore Sequence
+          </div>
+          <button
+            type="button"
+            onClick={() => window.location.reload()}
+            className="self-start rounded-full border border-white/35 px-3 py-1 text-white transition hover:bg-white/10 sm:self-auto"
+          >
+            Loremaker
+          </button>
+        </nav>
+
+        <div className="relative">
+          {slides.length > 1 && (
+            <>
+              <button
+                type="button"
+                onClick={goPrev}
+                className="absolute left-2 top-1/2 z-20 flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full border border-white/40 bg-black/70 text-white shadow-lg transition hover:bg-black/90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-300"
+                aria-label="Previous highlight"
+              >
+                <ChevronLeft className="h-6 w-6 sm:h-7 sm:w-7" />
+              </button>
+              <button
+                type="button"
+                onClick={goNext}
+                className="absolute right-2 top-1/2 z-20 flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full border border-white/40 bg-black/70 text-white shadow-lg transition hover:bg-black/90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-300"
+                aria-label="Next highlight"
+              >
+                <ChevronRight className="h-6 w-6 sm:h-7 sm:w-7" />
+              </button>
+            </>
+          )}
+          <div className="overflow-hidden rounded-[36px] h-[420px] sm:h-[500px] lg:h-[540px]">
+            <AnimatePresence mode="wait" initial={false} custom={direction}>
+              <motion.div
+                key={current?.key}
+                custom={direction}
+                initial={{ opacity: 0, x: direction > 0 ? 140 : -140 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: direction > 0 ? -140 : 140 }}
+                transition={{ duration: 0.85, ease: "easeInOut" }}
+                className="relative h-full"
+              >
+                {renderSlide(current)}
+              </motion.div>
+            </AnimatePresence>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-4">
+          <Button
+            variant="gradient"
+            size="lg"
+            onClick={onOpenFilters}
+            className="shadow-[0_18px_48px_rgba(253,230,138,0.35)]"
+          >
+            Launch Filters
+          </Button>
+          <Button
+            variant="outline"
+            size="lg"
+            onClick={onScrollToCharacters}
+            className="border-white/60 text-white/90 hover:bg-white/10"
+          >
+            Explore Universe
+          </Button>
+        </div>
+      </div>
     </section>
   );
 }
