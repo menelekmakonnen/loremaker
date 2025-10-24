@@ -491,6 +491,73 @@ function HeroHalo() {
   );
 }
 
+function RosterSlide({ slide, icon, facetKey, onFacet, onOpenCharacter, limit }) {
+  const payload = slide.data;
+  if (!payload?.name) {
+    return (
+      <div className="flex h-full flex-col justify-center gap-3 rounded-[32px] border border-white/10 bg-white/6 p-8 text-white">
+        <div className="text-xs font-bold uppercase tracking-[0.35em] text-white/70">{slide.label}</div>
+        <p className="text-sm font-semibold text-white/70">Daily highlight synchronising…</p>
+      </div>
+    );
+  }
+
+  const members = payload.members || payload.residents || payload.wielders || [];
+  const descriptor =
+    slide.key === "faction"
+      ? `Allies sworn to ${payload.name}`
+      : slide.key === "location"
+        ? `Key figures shaping ${payload.name}`
+        : `Masters of ${payload.name}`;
+
+  return (
+    <div className="grid h-full gap-8 rounded-[32px] border border-white/15 bg-black/40 p-8 text-white lg:grid-cols-[2fr_3fr]">
+      <div className="space-y-4">
+        <div className="flex items-center gap-3 text-xs font-bold uppercase tracking-[0.35em] text-white/70">
+          {icon}
+          {slide.label}
+        </div>
+        <h3 className="text-2xl font-black leading-tight text-balance sm:text-4xl">{payload.name}</h3>
+        <p className="text-sm font-semibold text-white/75">{descriptor}</p>
+        <div className="flex flex-wrap gap-2">
+          <Button
+            type="button"
+            variant="gradient"
+            size="sm"
+            onClick={() => {
+              onFacet?.({ key: facetKey, value: payload.name });
+            }}
+            className="shadow-[0_10px_30px_rgba(250,204,21,0.25)]"
+          >
+            Filter by {payload.name}
+          </Button>
+        </div>
+      </div>
+      <div className="grid gap-3 sm:grid-cols-2">
+        {members.slice(0, limit).map((member) => (
+          <button
+            key={member.id || member.name}
+            type="button"
+            onClick={() => onOpenCharacter?.(member)}
+            className="flex items-center gap-3 rounded-3xl border border-white/15 bg-white/10 p-3 text-left transition hover:bg-white/20"
+          >
+            <Insignia label={member.name} size={40} variant={slide.key === "faction" ? "faction" : "character"} />
+            <div className="flex flex-col text-xs">
+              <span className="text-sm font-black text-white">{member.name}</span>
+              <span className="text-white/70">{member.alias?.[0] || member.shortDesc?.slice(0, 40) || "Open dossier"}</span>
+            </div>
+          </button>
+        ))}
+        {!members.length && (
+          <div className="flex h-32 items-center justify-center rounded-3xl border border-dashed border-white/15 bg-white/5 text-xs font-semibold text-white/60">
+            Awaiting intel on key figures.
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function LoreShield({ size = 56, onClick }) {
   const idRef = useRef(() => `lore-${Math.random().toString(36).slice(2)}`);
   const gradientId = useMemo(() => idRef.current(), []);
@@ -2497,72 +2564,6 @@ function HeroSection({ featured, onOpenFilters, onScrollToCharacters, onOpenChar
     );
   };
 
-  const renderRoster = (slide, icon, facetKey) => {
-    const payload = slide.data;
-    if (!payload?.name) {
-      return (
-        <div className="flex h-full flex-col justify-center gap-3 rounded-[32px] border border-white/10 bg-white/6 p-8 text-white">
-          <div className="text-xs font-bold uppercase tracking-[0.35em] text-white/70">{slide.label}</div>
-          <p className="text-sm font-semibold text-white/70">Daily highlight synchronising…</p>
-        </div>
-      );
-    }
-    const members = payload.members || payload.residents || payload.wielders || [];
-    const descriptor =
-      slide.key === "faction"
-        ? `Allies sworn to ${payload.name}`
-        : slide.key === "location"
-          ? `Key figures shaping ${payload.name}`
-          : `Masters of ${payload.name}`;
-    const limit = isCompact ? 3 : 6;
-    return (
-      <div className="grid h-full gap-8 rounded-[32px] border border-white/15 bg-black/40 p-8 text-white lg:grid-cols-[2fr_3fr]">
-        <div className="space-y-4">
-          <div className="flex items-center gap-3 text-xs font-bold uppercase tracking-[0.35em] text-white/70">
-            {icon}
-            {slide.label}
-          </div>
-          <h3 className="text-2xl font-black leading-tight text-balance sm:text-4xl">{payload.name}</h3>
-          <p className="text-sm font-semibold text-white/75">{descriptor}</p>
-          <div className="flex flex-wrap gap-2">
-            <Button
-              type="button"
-              variant="gradient"
-              size="sm"
-              onClick={() => {
-                onFacet?.({ key: facetKey, value: payload.name });
-              }}
-              className="shadow-[0_10px_30px_rgba(250,204,21,0.25)]"
-            >
-              Filter by {payload.name}
-            </Button>
-          </div>
-        </div>
-        <div className="grid gap-3 sm:grid-cols-2">
-          {members.slice(0, limit).map((member) => (
-            <button
-              key={member.id || member.name}
-              type="button"
-              onClick={() => onOpenCharacter?.(member)}
-              className="flex items-center gap-3 rounded-3xl border border-white/15 bg-white/10 p-3 text-left transition hover:bg-white/20"
-            >
-              <Insignia label={member.name} size={40} variant={slide.key === "faction" ? "faction" : "character"} />
-              <div className="flex flex-col text-xs">
-                <span className="text-sm font-black text-white">{member.name}</span>
-                <span className="text-white/70">{member.alias?.[0] || member.shortDesc?.slice(0, 40) || "Open dossier"}</span>
-              </div>
-            </button>
-          ))}
-          {!members.length && (
-            <div className="flex h-32 items-center justify-center rounded-3xl border border-dashed border-white/15 bg-white/5 text-xs font-semibold text-white/60">
-              Awaiting intel on key figures.
-            </div>
-          )}
-        </div>
-      </div>
-    );
-  };
-
   const renderSlide = (slide) => {
     switch (slide.key) {
       case "intro":
@@ -2570,175 +2571,38 @@ function HeroSection({ featured, onOpenFilters, onScrollToCharacters, onOpenChar
       case "character":
         return renderCharacter(slide);
       case "faction":
-        return renderRoster(slide, <Layers className="h-6 w-6" />, "faction");
+        return (
+          <RosterSlide
+            slide={slide}
+            icon={<Layers className="h-6 w-6" />}
+            facetKey="faction"
+            onFacet={onFacet}
+            onOpenCharacter={onOpenCharacter}
+            limit={isCompact ? 3 : 6}
+          />
+        );
       case "location":
-        return renderRoster(slide, <MapPin className="h-6 w-6" />, "locations");
+        return (
+          <RosterSlide
+            slide={slide}
+            icon={<MapPin className="h-6 w-6" />}
+            facetKey="locations"
+            onFacet={onFacet}
+            onOpenCharacter={onOpenCharacter}
+            limit={isCompact ? 3 : 6}
+          />
+        );
       case "power":
-        return renderRoster(slide, <Atom className="h-6 w-6" />, "powers");
-      default:
-        return null;
-    }
-  };
-
-  return (
-    <section className="relative overflow-hidden rounded-[36px] border border-white/15 bg-gradient-to-br from-indigo-900/60 via-fuchsia-700/40 to-amber-500/25 shadow-[0_40px_120px_rgba(12,9,32,0.55)]">
-      <HeroHalo />
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.18),transparent_55%)]" />
-      <div className="absolute inset-x-0 top-0 h-32 bg-gradient-to-b from-black/50 to-transparent" />
-      <div className="absolute -left-24 bottom-0 h-72 w-72 rounded-full bg-amber-400/15 blur-3xl" />
-      <div className="absolute -right-20 -top-10 h-72 w-72 rounded-full bg-fuchsia-500/15 blur-3xl" />
-      <div className="relative z-10 flex flex-col gap-10 px-6 py-14 sm:px-10 md:px-16">
-        <nav className="flex flex-col gap-4 text-[11px] font-semibold uppercase tracking-[0.4em] text-white/70 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-2 text-white">
-            <Clock size={12} /> {todayKey()} • Daily Lore Sequence
-          </div>
-          <button
-            type="button"
-            onClick={() => window.location.reload()}
-            className="self-start rounded-full border border-white/35 px-3 py-1 text-white transition hover:bg-white/10 sm:self-auto"
-          >
-            Loremaker
-          </button>
-        </nav>
-
-        <div className="relative">
-          {slides.length > 1 && (
-            <>
-              <button
-                type="button"
-                onClick={goPrev}
-                className="absolute left-2 top-1/2 z-20 flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full border border-white/40 bg-black/70 text-white shadow-lg transition hover:bg-black/90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-300"
-                aria-label="Previous highlight"
-              >
-                <ChevronLeft className="h-6 w-6 sm:h-7 sm:w-7" />
-              </button>
-              <button
-                type="button"
-                onClick={goNext}
-                className="absolute right-2 top-1/2 z-20 flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full border border-white/40 bg-black/70 text-white shadow-lg transition hover:bg-black/90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-300"
-                aria-label="Next highlight"
-              >
-                <ChevronRight className="h-6 w-6 sm:h-7 sm:w-7" />
-              </button>
-            </>
-          )}
-          <div className="overflow-hidden rounded-[36px] h-[420px] sm:h-[500px] lg:h-[540px]">
-            <AnimatePresence mode="wait" initial={false} custom={direction}>
-              <motion.div
-                key={current?.key}
-                custom={direction}
-                initial={{ opacity: 0, x: direction > 0 ? 140 : -140 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: direction > 0 ? -140 : 140 }}
-                transition={{ duration: 0.85, ease: "easeInOut" }}
-                className="relative h-full"
-              >
-                {renderSlide(current)}
-              </motion.div>
-            </AnimatePresence>
-          </div>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-4">
-          <Button
-            variant="gradient"
-            size="lg"
-            onClick={onOpenFilters}
-            className="shadow-[0_18px_48px_rgba(253,230,138,0.35)]"
-          >
-            Launch Filters
-          </Button>
-          <Button
-            variant="outline"
-            size="lg"
-            onClick={onScrollToCharacters}
-            className="border-white/60 text-white/90 hover:bg-white/10"
-          >
-            Explore Universe
-          </Button>
-        </div>
-      </div>
-    );
-  };
-
-  const renderRoster = (slide, icon, facetKey) => {
-    const payload = slide.data;
-    if (!payload?.name) {
-      return (
-        <div className="flex h-full flex-col justify-center gap-3 rounded-[32px] border border-white/10 bg-white/6 p-8 text-white">
-          <div className="text-xs font-bold uppercase tracking-[0.35em] text-white/70">{slide.label}</div>
-          <p className="text-sm font-semibold text-white/70">Daily highlight synchronising…</p>
-        </div>
-      );
-    }
-    const members = payload.members || payload.residents || payload.wielders || [];
-    const descriptor =
-      slide.key === "faction"
-        ? `Allies sworn to ${payload.name}`
-        : slide.key === "location"
-          ? `Key figures shaping ${payload.name}`
-          : `Masters of ${payload.name}`;
-    const limit = isCompact ? 3 : 6;
-    return (
-      <div className="grid h-full gap-8 rounded-[32px] border border-white/15 bg-black/40 p-8 text-white lg:grid-cols-[2fr_3fr]">
-        <div className="space-y-4">
-          <div className="flex items-center gap-3 text-xs font-bold uppercase tracking-[0.35em] text-white/70">
-            {icon}
-            {slide.label}
-          </div>
-          <h3 className="text-2xl font-black leading-tight text-balance sm:text-4xl">{payload.name}</h3>
-          <p className="text-sm font-semibold text-white/75">{descriptor}</p>
-          <div className="flex flex-wrap gap-2">
-            <Button
-              type="button"
-              variant="gradient"
-              size="sm"
-              onClick={() => {
-                onFacet?.({ key: facetKey, value: payload.name });
-              }}
-              className="shadow-[0_10px_30px_rgba(250,204,21,0.25)]"
-            >
-              Filter by {payload.name}
-            </Button>
-          </div>
-        </div>
-        <div className="grid gap-3 sm:grid-cols-2">
-          {members.slice(0, limit).map((member) => (
-            <button
-              key={member.id || member.name}
-              type="button"
-              onClick={() => onOpenCharacter?.(member)}
-              className="flex items-center gap-3 rounded-3xl border border-white/15 bg-white/10 p-3 text-left transition hover:bg-white/20"
-            >
-              <Insignia label={member.name} size={40} variant={slide.key === "faction" ? "faction" : "character"} />
-              <div className="flex flex-col text-xs">
-                <span className="text-sm font-black text-white">{member.name}</span>
-                <span className="text-white/70">{member.alias?.[0] || member.shortDesc?.slice(0, 40) || "Open dossier"}</span>
-              </div>
-            </button>
-          ))}
-          {!members.length && (
-            <div className="flex h-32 items-center justify-center rounded-3xl border border-dashed border-white/15 bg-white/5 text-xs font-semibold text-white/60">
-              Awaiting intel on key figures.
-            </div>
-          )}
-        </div>
-      </div>
-    );
-  };
-
-  const renderSlide = (slide) => {
-    switch (slide.key) {
-      case "intro":
-        return renderIntro(slide);
-      case "character":
-        return renderCharacter(slide);
-      case "faction":
-        return renderRoster(slide, <Layers className="h-6 w-6" />, "faction");
-      case "location":
-        return renderRoster(slide, <MapPin className="h-6 w-6" />, "locations");
-      case "power":
-        return renderRoster(slide, <Atom className="h-6 w-6" />, "powers");
+        return (
+          <RosterSlide
+            slide={slide}
+            icon={<Atom className="h-6 w-6" />}
+            facetKey="powers"
+            onFacet={onFacet}
+            onOpenCharacter={onOpenCharacter}
+            limit={isCompact ? 3 : 6}
+          />
+        );
       default:
         return null;
     }
