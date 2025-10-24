@@ -1235,7 +1235,7 @@ function CharacterModal({ open, onClose, char, onFacet, onUseInSim }) {
 }
 
 const PAGE_SIZE = 24;
-function CharacterGrid({ data, onOpen, onFacet, onUseInSim, highlightId }) {
+function CharacterGrid({ data, onOpen, onFacet, onUseInSim, highlightId, mobileColumns = 2 }) {
   const [page, setPage] = useState(1);
   useEffect(() => setPage(1), [data]);
   useEffect(() => {
@@ -1249,6 +1249,7 @@ function CharacterGrid({ data, onOpen, onFacet, onUseInSim, highlightId }) {
     return () => window.removeEventListener("scroll", handler);
   }, [data.length]);
   const slice = data.slice(0, page * PAGE_SIZE);
+  const mobileClass = mobileColumns >= 3 ? "grid-cols-3" : "grid-cols-2";
   return (
     <div className="grid grid-cols-[repeat(auto-fit,minmax(150px,1fr))] gap-3 pb-24 sm:gap-5 lg:grid-cols-[repeat(auto-fit,minmax(200px,1fr))]">
       {slice.map((c) => (
@@ -2540,6 +2541,25 @@ function HeroSection({ featured, onOpenFilters, onScrollToCharacters, onOpenChar
             </div>
           </div>
         </div>
+
+        <div className="flex flex-wrap items-center gap-4">
+          <Button
+            variant="gradient"
+            size="lg"
+            onClick={onOpenFilters}
+            className="shadow-[0_18px_48px_rgba(253,230,138,0.35)]"
+          >
+            Launch Filters
+          </Button>
+          <Button
+            variant="outline"
+            size="lg"
+            onClick={onScrollToCharacters}
+            className="border-white/60 text-white/90 hover:bg-white/10"
+          >
+            Explore Universe
+          </Button>
+        </div>
       </div>
     );
   };
@@ -3076,6 +3096,7 @@ export default function LoremakerApp({ initialCharacters = [], initialError = nu
             onFacet={handleFacet}
             onUseInSim={onUseInSim}
             highlightId={highlightedId}
+            mobileColumns={mobileColumns}
           />
         </div>
       </main>
