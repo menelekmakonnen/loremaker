@@ -855,7 +855,6 @@ function ImageSafe({ src, alt, className = "", fallbackLabel }) {
       className={className}
       loading="lazy"
       referrerPolicy="no-referrer"
-      crossOrigin="anonymous"
     />
   );
 }
@@ -1839,6 +1838,17 @@ function BattleArena({ characters, slots, setSlots, onOpenCharacter, pulseKey })
               </div>
             </div>
           </div>
+          {result && (
+            <div className="rounded-2xl border border-white/10 bg-[#0d1126] px-4 py-5 text-center">
+              <div className="text-xs font-bold uppercase tracking-wide text-slate-500">Winner</div>
+              <div className="mt-2 rounded-xl bg-slate-900 px-4 py-3 text-lg font-black text-slate-100">
+                {result.winner.name}
+              </div>
+              <div className="mt-2 text-xs text-slate-400">
+                Final totals — {left?.name}: {result.finalScoreA} • {right?.name}: {result.finalScoreB}
+              </div>
+            </div>
+          )}
           {timeline.length > 0 && (
             <div className="rounded-2xl border border-white/10 bg-[#0f1329]/80 p-4 text-xs backdrop-blur">
               <div className="mb-2 text-sm font-black uppercase tracking-wide text-slate-200">Battle Flow</div>
@@ -1856,17 +1866,6 @@ function BattleArena({ characters, slots, setSlots, onOpenCharacter, pulseKey })
                     </div>
                   </div>
                 ))}
-              </div>
-            </div>
-          )}
-          {result && (
-            <div className="rounded-2xl border border-white/10 bg-[#0d1126] px-4 py-5 text-center">
-              <div className="text-xs font-bold uppercase tracking-wide text-slate-500">Winner</div>
-              <div className="mt-2 rounded-xl bg-slate-900 px-4 py-3 text-lg font-black text-slate-100">
-                {result.winner.name}
-              </div>
-              <div className="mt-2 text-xs text-slate-400">
-                Final totals — {left?.name}: {result.finalScoreA} • {right?.name}: {result.finalScoreB}
               </div>
             </div>
           )}
@@ -2164,10 +2163,9 @@ function ToolsBar({
   const [barHeight, setBarHeight] = useState(0);
   const [lastKnownHeight, setLastKnownHeight] = useState(0);
   const [mode, setMode] = useState("static");
-  const [floatingTop, setFloatingTop] = useState(null);
+  const [floatingTop, setFloatingTop] = useState(0);
   const [collapsed, setCollapsed] = useState(false);
   const [contentEl, setContentEl] = useState(null);
-  const DOCK_SPACING = 16;
 
   useEffect(() => {
     if (!contentEl || typeof ResizeObserver === "undefined") return undefined;
@@ -2195,22 +2193,34 @@ function ToolsBar({
 
     const update = () => {
       const rect = hero.getBoundingClientRect();
-      const effectiveHeight = barHeight || lastKnownHeight || 0;
+      const height = barHeight || lastKnownHeight || 0;
       const viewHeight = typeof window !== "undefined" ? window.innerHeight || 0 : 0;
-      if (rect.bottom <= DOCK_SPACING) {
+      if (!height) {
+        setMode("static");
+        setFloatingTop(0);
+        return;
+      }
+
+      const heroBottom = rect.bottom;
+      const heroTop = rect.top;
+      const threshold = height + 8;
+
+      if (heroBottom <= threshold) {
         setMode("fixed");
         setFloatingTop(0);
         return;
       }
-      if (rect.top <= DOCK_SPACING) {
-        const upperBound = viewHeight ? Math.max(DOCK_SPACING, viewHeight - effectiveHeight - DOCK_SPACING) : DOCK_SPACING;
-        const desiredTop = rect.bottom + DOCK_SPACING;
-        setMode("dock");
-        setFloatingTop(clamp(desiredTop, DOCK_SPACING, upperBound));
+
+      if (heroTop <= 0) {
+        const attachedTop = heroBottom - height;
+        const safe = clamp(attachedTop, 0, Math.max(viewHeight - height, 0));
+        setMode("attached");
+        setFloatingTop(safe);
         return;
       }
+
       setMode("static");
-      setFloatingTop(null);
+      setFloatingTop(0);
     };
 
     update();
@@ -2223,9 +2233,10 @@ function ToolsBar({
     };
   }, [barHeight, lastKnownHeight]);
 
+  const effectiveHeight = barHeight || lastKnownHeight || 0;
   const isFloating = mode !== "static";
-  const safeTop = mode === "fixed" ? 0 : floatingTop ?? DOCK_SPACING;
-  const placeholderHeight = isFloating ? lastKnownHeight + DOCK_SPACING : 0;
+  const safeTop = mode === "fixed" ? 0 : floatingTop;
+  const placeholderHeight = isFloating ? effectiveHeight : 0;
   const countLabel = hasActiveFilters ? `${filteredCount} / ${totalCount} in view` : `${totalCount} catalogued`;
 
   return (
@@ -2771,7 +2782,7 @@ function HeroSection({
       onPointerMove={handlePointerMove}
       onPointerLeave={handlePointerLeave}
       onPointerDown={handlePointerDown}
-      className="relative flex min-h-screen flex-col overflow-hidden rounded-[36px] border border-white/15 bg-[#0b0f24]/85 shadow-[0_40px_120px_rgba(12,9,32,0.55)]"
+      className="relative flex min-h-screen flex-col overflow-hidden border border-white/15 bg-[#0b0f24]/85 shadow-[0_40px_120px_rgba(12,9,32,0.55)]"
     >
       <HeroDynamicBackground pointer={pointer} ripples={ripples} />
       <HeroHalo />
