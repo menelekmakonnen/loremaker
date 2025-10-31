@@ -35,6 +35,7 @@ import {
   fetchCharactersFromSheets,
   todayKey,
   publicCharactersError,
+  seededRandom,
 } from "../lib/characters";
 
 /**
@@ -1591,13 +1592,13 @@ function ArenaCard({ char, position, onRelease, onOpen, health, isWinner, showX 
               </div>
             )}
             {char.alignment && (
-              <div>
+              <div className="hidden sm:block">
                 <div className="text-[9px] font-bold uppercase tracking-wide text-slate-400 sm:text-[10px]">Alignment</div>
                 <div className="text-xs font-extrabold text-white sm:text-sm">{char.alignment}</div>
               </div>
             )}
             {char.status && (
-              <div>
+              <div className="hidden sm:block">
                 <div className="text-[9px] font-bold uppercase tracking-wide text-slate-400 sm:text-[10px]">Status</div>
                 <div className="text-xs font-extrabold text-white sm:text-sm">{char.status}</div>
               </div>
@@ -1610,7 +1611,7 @@ function ArenaCard({ char, position, onRelease, onOpen, health, isWinner, showX 
             )}
           </div>
           {!!topLocations.length && (
-            <div>
+            <div className="hidden sm:block">
               <div className="text-[9px] font-bold uppercase tracking-wide text-slate-400 sm:text-[10px]">Locations</div>
               <div className="flex flex-wrap gap-1">
                 {topLocations.map((loc) => (
@@ -1634,7 +1635,7 @@ function ArenaCard({ char, position, onRelease, onOpen, health, isWinner, showX 
             </div>
           )}
           {!!topTags.length && (
-            <div>
+            <div className="hidden sm:block">
               <div className="text-[9px] font-bold uppercase tracking-wide text-slate-400 sm:text-[10px]">Tags</div>
               <div className="flex flex-wrap gap-1">
                 {topTags.map((tag) => (
@@ -1886,6 +1887,7 @@ function SidebarFilters({ data, filters, setFilters, combineAND, setCombineAND, 
   const statuses = useMemo(() => uniq(data.map((item) => item.status || "")), [data]);
   const stories = useMemo(() => uniq(data.flatMap((item) => item.stories || [])), [data]);
   const powers = useMemo(() => uniq(data.flatMap((item) => (item.powers || []).map((p) => p.name))), [data]);
+  const [searchTerm, setSearchTerm] = useState("");
 
   const toggle = (key, value, single = false) => {
     setFilters((prev) => {
@@ -1914,6 +1916,21 @@ function SidebarFilters({ data, filters, setFilters, combineAND, setCombineAND, 
           <Switch checked={combineAND} onCheckedChange={setCombineAND} aria-describedby={blendTooltipId} />
         </div>
       </div>
+      <div>
+        <label className="text-[11px] font-semibold uppercase tracking-[0.3em] text-white/60">
+          Search all filters
+        </label>
+        <div className="relative mt-2">
+          <Input
+            value={searchTerm}
+            onChange={(event) => setSearchTerm(event.target.value)}
+            placeholder="Type to narrow filters"
+            className="bg-black/40 pr-9 text-xs font-semibold text-white placeholder:text-white/50"
+            type="search"
+          />
+          <Search className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/60" aria-hidden="true" />
+        </div>
+      </div>
       <p id={blendTooltipId} className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-[11px] font-semibold leading-relaxed text-white/70">
         Blend finds legends that match any of your selections. Switch to AND for precise dossiers that match every chosen filter.
       </p>
@@ -1923,67 +1940,67 @@ function SidebarFilters({ data, filters, setFilters, combineAND, setCombineAND, 
       <FilterSection
         title="Gender / Sex"
         values={genders}
-        keyName="gender"
         single
         activeValues={filters.gender}
         onToggle={(value) => toggle("gender", value, true)}
+        searchTerm={searchTerm}
       />
       <FilterSection
         title="Alignment"
         values={alignments}
-        keyName="alignment"
         single
         activeValues={filters.alignment}
         onToggle={(value) => toggle("alignment", value, true)}
+        searchTerm={searchTerm}
       />
       <FilterSection
         title="Era"
         values={eras}
-        keyName="era"
         activeValues={filters.era || []}
         onToggle={(value) => toggle("era", value)}
+        searchTerm={searchTerm}
       />
       <FilterSection
         title="Locations"
         values={locations}
-        keyName="locations"
         activeValues={filters.locations || []}
         onToggle={(value) => toggle("locations", value)}
+        searchTerm={searchTerm}
       />
       <FilterSection
         title="Faction / Team"
         values={factions}
-        keyName="faction"
         activeValues={filters.faction || []}
         onToggle={(value) => toggle("faction", value)}
+        searchTerm={searchTerm}
       />
       <FilterSection
         title="Powers"
         values={powers}
-        keyName="powers"
         activeValues={filters.powers || []}
         onToggle={(value) => toggle("powers", value)}
+        searchTerm={searchTerm}
       />
       <FilterSection
         title="Tags"
         values={tags}
-        keyName="tags"
         activeValues={filters.tags || []}
         onToggle={(value) => toggle("tags", value)}
+        searchTerm={searchTerm}
       />
       <FilterSection
         title="Status"
         values={statuses}
-        keyName="status"
         activeValues={filters.status || []}
         onToggle={(value) => toggle("status", value)}
+        searchTerm={searchTerm}
       />
       <FilterSection
         title="Stories"
         values={stories}
-        keyName="stories"
         activeValues={filters.stories || []}
         onToggle={(value) => toggle("stories", value)}
+        searchTerm={searchTerm}
       />
     </div>
   );
@@ -2352,99 +2369,27 @@ function ToolsBar({
 }
 
 
-function groupByInitial(values) {
-  return values.reduce((acc, value) => {
-    const initial = value?.[0]?.toUpperCase() || "#";
-    if (!acc[initial]) acc[initial] = [];
-    acc[initial].push(value);
-    return acc;
-  }, {});
-}
-
-function FilterSection({ title, values, keyName, single, activeValues, onToggle }) {
-  const [term, setTerm] = useState("");
-  const [openGroups, setOpenGroups] = useState(new Set());
-
-  const filteredGroups = useMemo(() => {
-    const filtered = term
-      ? values.filter((value) => value.toLowerCase().includes(term.toLowerCase()))
-      : values;
-    const grouped = Object.entries(groupByInitial(filtered));
-    return grouped.sort((a, b) => a[0].localeCompare(b[0]));
-  }, [term, values]);
-
-  useEffect(() => {
-    const defaults = new Set(filteredGroups.slice(0, 3).map(([letter]) => letter));
-    setOpenGroups(defaults);
-  }, [filteredGroups]);
-
-  const handleToggle = useCallback((letter, open) => {
-    setOpenGroups((prev) => {
-      const next = new Set(prev);
-      if (open) {
-        next.add(letter);
-      } else {
-        next.delete(letter);
-      }
-      return next;
-    });
-  }, []);
-
+function FilterSection({ title, values, single, activeValues, onToggle, searchTerm }) {
   const currentValues = single ? (activeValues ? [activeValues] : []) : activeValues || [];
+  const filteredValues = useMemo(() => {
+    const term = searchTerm.trim().toLowerCase();
+    if (!term) return values;
+    return values.filter((value) => value.toLowerCase().includes(term));
+  }, [values, searchTerm]);
 
   return (
     <div className="space-y-2">
-      <div className="flex items-center justify-between gap-3">
-        <div className="text-xs font-extrabold uppercase tracking-wide text-white/75">{title}</div>
-        <label className="relative hidden min-w-[160px] sm:block">
-          <span className="sr-only">Search {title}</span>
-          <input
-            value={term}
-            onChange={(event) => setTerm(event.target.value)}
-            className="w-full rounded-lg border border-white/20 bg-black/40 px-3 py-1.5 text-xs font-semibold text-white placeholder:text-white/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300"
-            placeholder="Filter"
-            type="text"
-          />
-          <Search className="pointer-events-none absolute right-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-white/60" aria-hidden="true" />
-        </label>
-      </div>
-      <label className="relative sm:hidden">
-        <span className="sr-only">Search {title}</span>
-        <input
-          value={term}
-          onChange={(event) => setTerm(event.target.value)}
-          className="w-full rounded-lg border border-white/20 bg-black/40 px-3 py-2 text-xs font-semibold text-white placeholder:text-white/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300"
-          placeholder={`Find ${title.toLowerCase()}`}
-          type="text"
-        />
-        <Search className="pointer-events-none absolute right-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-white/60" aria-hidden="true" />
-      </label>
-      <div className="space-y-1.5">
-        {filteredGroups.map(([letter, items]) => (
-          <details
-            key={`${keyName}-${letter}`}
-            open={openGroups.has(letter)}
-            onToggle={(event) => handleToggle(letter, event.target.open)}
-            className="group rounded-xl border border-white/10 bg-white/5 p-3"
-          >
-            <summary className="flex cursor-pointer items-center justify-between text-[11px] font-bold uppercase tracking-[0.35em] text-white/70 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-300">
-              <span>{letter}</span>
-              <ChevronDown className="h-3 w-3 transition group-open:rotate-180" aria-hidden="true" />
-            </summary>
-            <div className="mt-2 flex max-h-40 flex-wrap gap-2 overflow-auto pr-1">
-              {items.map((value) => (
-                <FacetChip
-                  key={value}
-                  active={currentValues.includes(value)}
-                  onClick={() => onToggle(value)}
-                >
-                  {value}
-                </FacetChip>
-              ))}
-            </div>
-          </details>
-        ))}
-        {!filteredGroups.length && (
+      <div className="text-xs font-extrabold uppercase tracking-wide text-white/75">{title}</div>
+      <div className="max-h-48 overflow-y-auto rounded-xl border border-white/10 bg-white/5 p-3">
+        {filteredValues.length ? (
+          <div className="flex flex-wrap gap-2">
+            {filteredValues.map((value) => (
+              <FacetChip key={value} active={currentValues.includes(value)} onClick={() => onToggle(value)}>
+                {value}
+              </FacetChip>
+            ))}
+          </div>
+        ) : (
           <p className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-white/60">
             No matches
           </p>
