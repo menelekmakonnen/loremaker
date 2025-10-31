@@ -1,7 +1,6 @@
 import React, {
   useCallback,
   useEffect,
-  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -46,6 +45,10 @@ import {
 
 function cx(...classes) {
   return classes.filter(Boolean).join(" ");
+}
+
+function clamp(value, min, max) {
+  return Math.min(Math.max(value, min), max);
 }
 
 function Button({ variant = "solid", size = "md", className = "", children, as: Tag = "button", ...props }) {
@@ -491,6 +494,96 @@ function HeroHalo() {
   );
 }
 
+function HeroDynamicBackground({ pointer, ripples }) {
+  const palettes = useMemo(
+    () => [
+      ["rgba(254,240,199,0.95)", "rgba(249,200,255,0.72)", "rgba(120,166,255,0.6)", "rgba(9,13,34,0.92)"],
+      ["rgba(255,224,189,0.95)", "rgba(255,153,227,0.7)", "rgba(158,206,255,0.6)", "rgba(15,20,46,0.92)"],
+      ["rgba(236,233,255,0.92)", "rgba(198,215,255,0.75)", "rgba(255,182,222,0.55)", "rgba(12,14,36,0.92)"],
+      ["rgba(244,229,255,0.92)", "rgba(255,189,200,0.7)", "rgba(142,196,255,0.58)", "rgba(10,14,33,0.92)"],
+    ],
+    []
+  );
+  const [index, setIndex] = useState(0);
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setIndex((current) => (current + 1) % palettes.length);
+    }, 8000);
+    return () => clearInterval(timer);
+  }, [palettes.length]);
+
+  const stars = useMemo(
+    () =>
+      Array.from({ length: 42 }, (_, starIndex) => ({
+        id: `hero-star-${starIndex}`,
+        size: Math.random() * 1.8 + 0.8,
+        top: Math.random() * 100,
+        left: Math.random() * 100,
+        delay: Math.random() * 6,
+        duration: 3 + Math.random() * 4,
+      })),
+    []
+  );
+
+  const gradient = useMemo(() => {
+    const palette = palettes[index] || palettes[0];
+    return `radial-gradient(circle at ${pointer.x}% ${pointer.y}%, ${palette[0]}, ${palette[1]} 40%, ${palette[2]} 70%, ${palette[3]})`;
+  }, [index, palettes, pointer.x, pointer.y]);
+
+  return (
+    <div className="pointer-events-none absolute inset-0 -z-10 overflow-hidden">
+      <AnimatePresence mode="wait">
+        <motion.div
+          key={`lux-gradient-${index}`}
+          className="absolute inset-0"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 2.4, ease: "easeInOut" }}
+          style={{ background: gradient }}
+        />
+      </AnimatePresence>
+      <motion.div
+        className="absolute inset-0"
+        animate={{ backgroundPosition: ["0% 0%", "100% 100%", "0% 0%"], opacity: [0.7, 1, 0.7] }}
+        transition={{ duration: 16, repeat: Infinity, ease: "easeInOut" }}
+        style={{
+          backgroundImage:
+            "radial-gradient(ellipse at 20% 30%, rgba(255,255,255,0.14), transparent 60%), radial-gradient(ellipse at 80% 10%, rgba(255,255,255,0.1), transparent 55%), radial-gradient(ellipse at 50% 85%, rgba(255,255,255,0.08), transparent 65%)",
+        }}
+      />
+      {stars.map((star) => (
+        <motion.span
+          key={star.id}
+          className="absolute rounded-full bg-white shadow-[0_0_6px_rgba(255,255,255,0.75)]"
+          style={{
+            width: `${star.size}px`,
+            height: `${star.size}px`,
+            top: `${star.top}%`,
+            left: `${star.left}%`,
+          }}
+          animate={{ opacity: [0.2, 0.95, 0.2], scale: [1, 1.35, 1] }}
+          transition={{ duration: star.duration, delay: star.delay, repeat: Infinity, ease: "easeInOut" }}
+        />
+      ))}
+      {ripples.map((ripple) => (
+        <motion.span
+          key={ripple.id}
+          className="absolute rounded-full border border-white/60"
+          style={{
+            left: `${ripple.x}%`,
+            top: `${ripple.y}%`,
+            transform: "translate(-50%, -50%)",
+          }}
+          initial={{ opacity: 0.65, scale: 0 }}
+          animate={{ opacity: 0, scale: 5 }}
+          transition={{ duration: 0.9, ease: "easeOut" }}
+        />
+      ))}
+    </div>
+  );
+}
+
 function RosterSlide({ slide, icon, facetKey, onFacet, onOpenCharacter, limit }) {
   const payload = slide.data;
   if (!payload?.name) {
@@ -860,9 +953,9 @@ function CharacterCard({ char, onOpen, onFacet, onUseInSim, highlight }) {
     ...(char.faction || []).slice(0, 1).map((value) => ({ key: "faction", value })),
     ...(char.tags || []).slice(0, 1).map((value) => ({ key: "tag", value })),
   ];
-  const signaturePowers = [...(char.powers || [])]
-    .sort((a, b) => (Number(b.level) || 0) - (Number(a.level) || 0))
-    .slice(0, 2);
+  const highlightFacts = quickFacts.slice(0, 2);
+  const minimalFilters = quickFilters.slice(0, 3);
+  const description = char.shortDesc || char.longDesc || "No description yet.";
   const openProfile = () => onOpen(char);
   const handleProfileKey = (event) => {
     if (event.key === "Enter" || event.key === " ") {
@@ -877,24 +970,29 @@ function CharacterCard({ char, onOpen, onFacet, onUseInSim, highlight }) {
       animate={pulse ? { rotate: [0, -1.5, 1.5, -0.75, 0.75, 0], scale: [1, 1.02, 0.99, 1.01, 1] } : { rotate: 0, scale: 1 }}
       transition={{ type: "spring", stiffness: 230, damping: 20 }}
     >
-      <Card className={cx("flex h-full flex-col overflow-hidden bg-white/8", highlight ? "ring-2 ring-amber-300" : "")}> 
+      <Card
+        className={cx(
+          "flex h-full flex-col overflow-hidden bg-white/10 backdrop-blur-3xl",
+          highlight ? "ring-2 ring-amber-300" : "ring-1 ring-inset ring-white/15"
+        )}
+      >
         <div
           role="button"
           tabIndex={0}
           onClick={openProfile}
           onKeyDown={handleProfileKey}
-          className="group relative block aspect-[3/4] w-full overflow-hidden"
+          className="group relative block aspect-square w-full overflow-hidden"
         >
           <ImageSafe
             src={char.cover || char.gallery?.[0]}
             alt={char.name}
             fallbackLabel={char.name}
-            className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+            className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105"
           />
-          <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/30 to-transparent transition duration-500 group-hover:from-black/70" />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent transition-opacity duration-500 group-hover:from-black/60" />
           <motion.button
             type="button"
-            whileTap={{ scale: 0.92 }}
+            whileTap={{ scale: 0.9 }}
             onClick={(event) => {
               event.stopPropagation();
               triggerSim();
@@ -904,61 +1002,43 @@ function CharacterCard({ char, onOpen, onFacet, onUseInSim, highlight }) {
             <Swords size={14} />
             <span className="hidden sm:inline">Sim</span>
           </motion.button>
-          <div className="absolute inset-x-4 bottom-4 flex flex-col gap-1">
-            <div className="flex items-center justify-between gap-2">
-              <span className="text-lg font-black text-white sm:text-xl">{char.name}</span>
+          <div className="absolute inset-x-4 bottom-4 flex flex-col gap-2">
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-xl font-black text-white sm:text-2xl">{char.name}</span>
               {char.status && (
-                <span className="rounded-full bg-white/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.3em] text-white/80">
+                <span className="rounded-full bg-white/20 px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.3em] text-white/85">
                   {char.status}
                 </span>
               )}
             </div>
-            <p className="text-[11px] font-semibold text-white/80 line-clamp-2 sm:text-sm">
-              {char.shortDesc || char.longDesc || "No description yet."}
-            </p>
+            <p className="text-sm font-medium text-white/85 line-clamp-2">{description}</p>
           </div>
         </div>
-        <div className="flex flex-1 flex-col gap-3 p-4">
-          {!!quickFacts.length && (
-            <div className="flex flex-wrap gap-1.5">
-              {quickFacts.map((fact) => (
-                <span
-                  key={fact}
-                  className="rounded-full border border-white/20 bg-white/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.3em] text-white/70"
-                >
+        <div className="flex flex-1 flex-col gap-4 px-4 py-4">
+          {!!highlightFacts.length && (
+            <div className="flex flex-wrap gap-2 text-[10px] font-bold uppercase tracking-[0.3em] text-white/65">
+              {highlightFacts.map((fact) => (
+                <span key={fact} className="rounded-full border border-white/20 bg-white/10 px-2.5 py-0.5">
                   {fact}
                 </span>
               ))}
             </div>
           )}
-          {!!quickFilters.length && (
-            <div className="flex flex-wrap gap-1.5">
-              {quickFilters.map((item) => (
+          {!!minimalFilters.length && (
+            <div className="flex flex-wrap gap-2 text-[11px] font-semibold text-white/85">
+              {minimalFilters.map((item) => (
                 <button
                   key={`${item.key}-${item.value}`}
                   type="button"
                   onClick={() => onFacet(item)}
-                  className="rounded-full border border-white/20 bg-white/5 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-white/75 transition hover:bg-white/15"
+                  className="rounded-full bg-white/10 px-3 py-1 text-white/90 transition hover:bg-white/20"
                 >
-                  {item.value}
+                  #{item.value}
                 </button>
               ))}
             </div>
           )}
-          {!!signaturePowers.length && (
-            <div className="space-y-1 text-[11px] font-semibold text-white/85">
-              {signaturePowers.map((power, index) => (
-                <div key={power.name} className="space-y-1">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="truncate pr-2">{power.name}</span>
-                    <span className="text-white/60">{power.level}/10</span>
-                  </div>
-                  {index === 0 && <PowerMeter level={power.level} />}
-                </div>
-              ))}
-            </div>
-          )}
-          <div className="mt-auto flex items-center justify-between text-[10px] font-bold uppercase tracking-[0.3em] text-white/60">
+          <div className="mt-auto flex items-center justify-between text-[10px] font-bold uppercase tracking-[0.3em] text-white/70">
             <button
               type="button"
               onClick={openProfile}
@@ -1235,7 +1315,7 @@ function CharacterModal({ open, onClose, char, onFacet, onUseInSim }) {
 }
 
 const PAGE_SIZE = 24;
-function CharacterGrid({ data, onOpen, onFacet, onUseInSim, highlightId, mobileColumns = 2 }) {
+function CharacterGrid({ data, onOpen, onFacet, onUseInSim, highlightId }) {
   const [page, setPage] = useState(1);
   useEffect(() => setPage(1), [data]);
   useEffect(() => {
@@ -1249,9 +1329,8 @@ function CharacterGrid({ data, onOpen, onFacet, onUseInSim, highlightId, mobileC
     return () => window.removeEventListener("scroll", handler);
   }, [data.length]);
   const slice = data.slice(0, page * PAGE_SIZE);
-  const mobileClass = mobileColumns >= 3 ? "grid-cols-3" : "grid-cols-2";
   return (
-    <div className="grid grid-cols-[repeat(auto-fit,minmax(150px,1fr))] gap-3 pb-24 sm:gap-5 lg:grid-cols-[repeat(auto-fit,minmax(200px,1fr))]">
+    <div className="grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-4 pb-24 sm:gap-6 lg:grid-cols-[repeat(auto-fit,minmax(260px,1fr))]">
       {slice.map((c) => (
         <CharacterCard
           key={c.id}
@@ -2064,23 +2143,24 @@ function ToolsBar({
   onArenaShortcut,
   onSync,
   showArena,
+  totalCount,
+  filteredCount,
+  hasActiveFilters,
 }) {
-  const barRef = useRef(null);
-  const sentinelRef = useRef(null);
-  const [affixed, setAffixed] = useState(false);
-  const [barHeight, setBarHeight] = useState(0);
   const [headerOffset, setHeaderOffset] = useState(0);
+  const [barHeight, setBarHeight] = useState(0);
+  const [lastKnownHeight, setLastKnownHeight] = useState(0);
+  const [mode, setMode] = useState("static");
+  const [floatingTop, setFloatingTop] = useState(null);
+  const [collapsed, setCollapsed] = useState(false);
+  const [contentEl, setContentEl] = useState(null);
 
-  useLayoutEffect(() => {
+  useEffect(() => {
+    if (typeof window === "undefined") return undefined;
     const measure = () => {
-      if (barRef.current) {
-        setBarHeight(barRef.current.getBoundingClientRect().height);
-      }
-      if (typeof window !== "undefined") {
-        const header = document.getElementById("lore-header");
-        if (header) {
-          setHeaderOffset(header.getBoundingClientRect().height);
-        }
+      const header = document.getElementById("lore-header");
+      if (header) {
+        setHeaderOffset(header.getBoundingClientRect().height);
       }
     };
     measure();
@@ -2092,111 +2172,206 @@ function ToolsBar({
     if (typeof window === "undefined" || typeof ResizeObserver === "undefined") return undefined;
     const header = document.getElementById("lore-header");
     if (!header) return undefined;
-    const observer = new ResizeObserver(() => {
-      setHeaderOffset(header.getBoundingClientRect().height);
+    const observer = new ResizeObserver((entries) => {
+      const entry = entries[0];
+      if (entry) {
+        setHeaderOffset(entry.contentRect.height);
+      }
     });
     observer.observe(header);
     return () => observer.disconnect();
   }, []);
 
   useEffect(() => {
-    if (!sentinelRef.current) return undefined;
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        setAffixed(!entry.isIntersecting);
-      },
-      { threshold: 0, rootMargin: "-1px 0px 0px 0px" }
-    );
-    observer.observe(sentinelRef.current);
+    if (!contentEl || typeof ResizeObserver === "undefined") return undefined;
+    const observer = new ResizeObserver((entries) => {
+      const entry = entries[0];
+      if (entry) {
+        setBarHeight(entry.contentRect.height);
+      }
+    });
+    observer.observe(contentEl);
+    setBarHeight(contentEl.getBoundingClientRect().height);
     return () => observer.disconnect();
-  }, []);
+  }, [contentEl]);
+
+  useEffect(() => {
+    if (barHeight > 0) {
+      setLastKnownHeight(barHeight);
+    }
+  }, [barHeight]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return undefined;
+    const hero = document.getElementById("hero-showcase");
+    if (!hero) return undefined;
+
+    const update = () => {
+      const rect = hero.getBoundingClientRect();
+      const offset = headerOffset + 12;
+      const effectiveHeight = barHeight || lastKnownHeight || 0;
+      if (rect.top <= headerOffset + 8 && rect.bottom > headerOffset + 8) {
+        setMode("dock");
+        const nextTop = Math.max(offset, rect.bottom - effectiveHeight - 12);
+        setFloatingTop(nextTop);
+      } else if (rect.bottom <= headerOffset + 8) {
+        setMode("fixed");
+        setFloatingTop(offset);
+      } else {
+        setMode("static");
+        setFloatingTop(null);
+      }
+    };
+
+    update();
+    const opts = { passive: true };
+    window.addEventListener("scroll", update, opts);
+    window.addEventListener("resize", update);
+    return () => {
+      window.removeEventListener("scroll", update);
+      window.removeEventListener("resize", update);
+    };
+  }, [headerOffset, barHeight, lastKnownHeight]);
+
+  const isFloating = mode !== "static";
+  const safeTop = floatingTop ?? headerOffset + 12;
+  const placeholderHeight = isFloating ? (lastKnownHeight ? lastKnownHeight + 24 : 0) : 0;
+  const countLabel = hasActiveFilters ? `${filteredCount} / ${totalCount} in view` : `${totalCount} catalogued`;
 
   return (
     <div className="relative">
-      <div ref={sentinelRef} aria-hidden="true" className="h-0" />
-      {affixed && <div style={{ height: barHeight }} aria-hidden="true" />}
+      {isFloating && <div style={{ height: placeholderHeight }} aria-hidden="true" />}
       <div
         className={cx(
           "transition-all duration-200",
-          affixed
-            ? "fixed inset-x-0 z-40 border-b border-white/10 bg-[#050813]/95 backdrop-blur-xl shadow-[0_12px_40px_rgba(4,8,20,0.45)]"
-            : ""
+          isFloating ? "fixed inset-x-0 z-50" : ""
         )}
-        style={affixed ? { top: headerOffset } : undefined}
+        style={isFloating ? { top: safeTop } : undefined}
       >
-        <div ref={barRef} className="mx-auto max-w-7xl px-3 py-3 sm:px-4">
-          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-            <label className="relative flex-1 min-w-[220px] sm:min-w-[260px]" htmlFor="universe-search">
-              <span className="sr-only">Search the universe</span>
-              <Input
-                id="universe-search"
-                value={query}
-                onChange={(event) => onQueryChange(event.target.value)}
-                placeholder="Search characters, powers, locations, tags…"
-                className="w-full bg-white/15 pl-10 pr-3 text-sm text-white placeholder:text-white/60"
-              />
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/70" aria-hidden="true" />
-            </label>
-            <div className="relative w-full min-w-[160px] sm:w-48">
-              <span className="sr-only" id="sort-menu-label">
-                Sort heroes
-              </span>
-              <select
-                aria-labelledby="sort-menu-label"
-                value={sortMode}
-                onChange={(event) => onSortModeChange(event.target.value)}
-                className="w-full appearance-none rounded-xl border border-white/25 bg-black/70 px-3 py-2 pr-9 text-[11px] font-bold uppercase tracking-wide text-white/85 shadow-inner focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300 sm:text-xs"
+        <div className="mx-auto max-w-7xl px-3 sm:px-4">
+          <AnimatePresence initial={false} mode="wait">
+            {collapsed ? (
+              <motion.div
+                key="toolbar-collapsed"
+                initial={{ opacity: 0, y: 12 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -12 }}
+                transition={{ duration: 0.25, ease: "easeOut" }}
+                className="rounded-3xl border border-white/12 bg-[#070b1c]/90 px-4 py-3 text-[10px] font-semibold uppercase tracking-[0.35em] text-white/70 shadow-[0_18px_48px_rgba(8,8,20,0.45)] backdrop-blur-xl"
               >
-                {SORT_OPTIONS.map((item) => (
-                  <option key={item.value} value={item.value} className="bg-black text-white">
-                    {item.label}
-                  </option>
-                ))}
-              </select>
-              <ArrowDown className="pointer-events-none absolute right-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-white/70" aria-hidden="true" />
-            </div>
-            <Button
-              variant="gradient"
-              size="sm"
-              onClick={onOpenFilters}
-              className="flex-none shadow-[0_15px_40px_rgba(250,204,21,0.3)]"
-              aria-label="Open filters"
-            >
-              <Filter className="h-4 w-4" aria-hidden="true" />
-              <span className="hidden sm:inline">Filters</span>
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={onClearFilters}
-              className="flex-none"
-              aria-label="Clear filters"
-            >
-              <X size={14} aria-hidden="true" />
-              <span className="hidden sm:inline">Clear</span>
-            </Button>
-            <Button
-              variant="subtle"
-              size="sm"
-              onClick={onArenaShortcut}
-              className={cx("flex-none", showArena ? "ring-2 ring-amber-300/70" : "")}
-              aria-pressed={showArena}
-              aria-label={showArena ? "Scroll to arena" : "Open arena"}
-            >
-              <Swords size={14} aria-hidden="true" />
-              <span className="hidden sm:inline">Arena</span>
-            </Button>
-            <Button
-              variant="dark"
-              size="sm"
-              onClick={onSync}
-              className="flex-none"
-              aria-label="Sync universe"
-            >
-              <RefreshCcw size={14} aria-hidden="true" />
-              <span className="hidden sm:inline">Sync</span>
-            </Button>
-          </div>
+                <div className="flex items-center justify-between gap-3">
+                  <span>Lore controls hidden</span>
+                  <Button
+                    variant="subtle"
+                    size="sm"
+                    onClick={() => setCollapsed(false)}
+                    className="flex-none"
+                    aria-label="Expand universe controls"
+                  >
+                    <ChevronUp className="h-4 w-4" aria-hidden="true" />
+                    <span className="hidden sm:inline">Show</span>
+                  </Button>
+                </div>
+              </motion.div>
+            ) : (
+              <motion.div
+                key="toolbar-expanded"
+                ref={setContentEl}
+                layout
+                initial={{ opacity: 0, y: 12 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -12 }}
+                transition={{ duration: 0.25, ease: "easeOut" }}
+                className="rounded-3xl border border-white/12 bg-[#070b1c]/90 px-4 py-3 shadow-[0_18px_48px_rgba(8,8,20,0.45)] backdrop-blur-xl"
+              >
+                <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+                  <label className="relative flex-1 min-w-[220px] sm:min-w-[260px]" htmlFor="universe-search">
+                    <span className="sr-only">Search the universe</span>
+                    <Input
+                      id="universe-search"
+                      value={query}
+                      onChange={(event) => onQueryChange(event.target.value)}
+                      placeholder="Search characters, powers, locations, tags…"
+                      className="w-full bg-white/15 pl-10 pr-3 text-sm text-white placeholder:text-white/60"
+                    />
+                    <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/70" aria-hidden="true" />
+                  </label>
+                  <div className="relative w-full min-w-[160px] sm:w-48">
+                    <span className="sr-only" id="sort-menu-label">
+                      Sort heroes
+                    </span>
+                    <select
+                      aria-labelledby="sort-menu-label"
+                      value={sortMode}
+                      onChange={(event) => onSortModeChange(event.target.value)}
+                      className="w-full appearance-none rounded-xl border border-white/25 bg-black/70 px-3 py-2 pr-9 text-[11px] font-bold uppercase tracking-wide text-white/85 shadow-inner focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300 sm:text-xs"
+                    >
+                      {SORT_OPTIONS.map((item) => (
+                        <option key={item.value} value={item.value} className="bg-black text-white">
+                          {item.label}
+                        </option>
+                      ))}
+                    </select>
+                    <ArrowDown className="pointer-events-none absolute right-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-white/70" aria-hidden="true" />
+                  </div>
+                  <Button
+                    variant="gradient"
+                    size="sm"
+                    onClick={onOpenFilters}
+                    className="flex-none shadow-[0_15px_40px_rgba(250,204,21,0.3)]"
+                    aria-label="Open filters"
+                  >
+                    <Filter className="h-4 w-4" aria-hidden="true" />
+                    <span className="hidden sm:inline">Filters</span>
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={onClearFilters}
+                    className="flex-none"
+                    aria-label="Clear filters"
+                  >
+                    <X size={14} aria-hidden="true" />
+                    <span className="hidden sm:inline">Clear</span>
+                  </Button>
+                  <div className="flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1.5 text-[9px] font-black uppercase tracking-[0.35em] text-white/75">
+                    <Users className="h-3.5 w-3.5 text-amber-200" aria-hidden="true" />
+                    <span>{countLabel}</span>
+                  </div>
+                  <Button
+                    variant="subtle"
+                    size="sm"
+                    onClick={onArenaShortcut}
+                    className={cx("flex-none", showArena ? "ring-2 ring-amber-300/70" : "")}
+                    aria-pressed={showArena}
+                    aria-label={showArena ? "Scroll to arena" : "Open arena"}
+                  >
+                    <Swords size={14} aria-hidden="true" />
+                    <span className="hidden sm:inline">Arena</span>
+                  </Button>
+                  <Button
+                    variant="dark"
+                    size="sm"
+                    onClick={onSync}
+                    className="flex-none"
+                    aria-label="Sync universe"
+                  >
+                    <RefreshCcw size={14} aria-hidden="true" />
+                    <span className="hidden sm:inline">Sync</span>
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setCollapsed(true)}
+                    className="flex-none"
+                    aria-label="Collapse universe controls"
+                  >
+                    <ChevronDown className="h-4 w-4" aria-hidden="true" />
+                  </Button>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
       </div>
     </div>
@@ -2308,6 +2483,10 @@ function FilterSection({ title, values, keyName, single, activeValues, onToggle 
 
 function HeroSection({ featured, onOpenFilters, onScrollToCharacters, onOpenCharacter, onFacet }) {
   const isCompact = useMediaQuery("(max-width: 640px)");
+  const heroRef = useRef(null);
+  const [pointer, setPointer] = useState({ x: 50, y: 50 });
+  const [ripples, setRipples] = useState([]);
+  const rippleTimers = useRef(new Map());
   const slides = useMemo(() => {
     const base = [
       { key: "intro", label: "Menelek Makonnen Presents", data: { title: "The Loremaker Universe", blurb: "Author Menelek Makonnen opens the living universe — an ever-growing nexus of characters, factions, and cosmic forces awaiting your exploration." } },
@@ -2321,6 +2500,52 @@ function HeroSection({ featured, onOpenFilters, onScrollToCharacters, onOpenChar
   const [index, setIndex] = useState(0);
   const [direction, setDirection] = useState(1);
   const autoPlayed = useRef(false);
+
+  useEffect(() => () => {
+    rippleTimers.current.forEach((timeout) => clearTimeout(timeout));
+    rippleTimers.current.clear();
+  }, []);
+
+  const updatePointerFromEvent = useCallback((event) => {
+    const rect = heroRef.current?.getBoundingClientRect();
+    if (!rect) return null;
+    const x = clamp(((event.clientX - rect.left) / rect.width) * 100, 5, 95);
+    const y = clamp(((event.clientY - rect.top) / rect.height) * 100, 5, 95);
+    return { x, y };
+  }, []);
+
+  const registerRipple = useCallback((coords) => {
+    const id = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    setRipples((prev) => [...prev, { id, ...coords }]);
+    const timeout = setTimeout(() => {
+      rippleTimers.current.delete(id);
+      setRipples((prev) => prev.filter((item) => item.id !== id));
+    }, 900);
+    rippleTimers.current.set(id, timeout);
+  }, []);
+
+  const handlePointerMove = useCallback(
+    (event) => {
+      const coords = updatePointerFromEvent(event);
+      if (coords) setPointer(coords);
+    },
+    [updatePointerFromEvent]
+  );
+
+  const handlePointerLeave = useCallback(() => {
+    setPointer({ x: 50, y: 50 });
+  }, []);
+
+  const handlePointerDown = useCallback(
+    (event) => {
+      const coords = updatePointerFromEvent(event);
+      if (coords) {
+        setPointer(coords);
+        registerRipple(coords);
+      }
+    },
+    [registerRipple, updatePointerFromEvent]
+  );
 
   useEffect(() => {
     setIndex(0);
@@ -2609,7 +2834,15 @@ function HeroSection({ featured, onOpenFilters, onScrollToCharacters, onOpenChar
   };
 
   return (
-    <section className="relative overflow-hidden rounded-[36px] border border-white/15 bg-gradient-to-br from-indigo-900/60 via-fuchsia-700/40 to-amber-500/25 shadow-[0_40px_120px_rgba(12,9,32,0.55)]">
+    <section
+      id="hero-showcase"
+      ref={heroRef}
+      onPointerMove={handlePointerMove}
+      onPointerLeave={handlePointerLeave}
+      onPointerDown={handlePointerDown}
+      className="relative overflow-hidden rounded-[36px] border border-white/15 bg-[#0b0f24]/85 shadow-[0_40px_120px_rgba(12,9,32,0.55)]"
+    >
+      <HeroDynamicBackground pointer={pointer} ripples={ripples} />
       <HeroHalo />
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.18),transparent_55%)]" />
       <div className="absolute inset-x-0 top-0 h-32 bg-gradient-to-b from-black/50 to-transparent" />
@@ -2706,8 +2939,7 @@ export default function LoremakerApp({ initialCharacters = [], initialError = nu
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [transferNotices, setTransferNotices] = useState([]);
   const [headerCollapsed, setHeaderCollapsed] = useState(false);
-  const statRingId = useMemo(() => Math.random().toString(36).slice(2), []);
-  const mobileColumns = 2;
+  const currentYear = useMemo(() => new Date().getFullYear(), []);
 
   const selectedIds = useMemo(
     () => [arenaSlots.left, arenaSlots.right].filter(Boolean),
@@ -2815,6 +3047,15 @@ export default function LoremakerApp({ initialCharacters = [], initialError = nu
     [data, filters, combineAND, query]
   );
 
+  const hasActiveFilters = useMemo(() => {
+    if (query.trim()) return true;
+    if (combineAND) return true;
+    return Object.values(filters || {}).some((value) => {
+      if (Array.isArray(value)) return value.length > 0;
+      return Boolean(value);
+    });
+  }, [filters, query, combineAND]);
+
   const sorted = useMemo(() => {
     const arr = [...filtered];
     switch (sortMode) {
@@ -2872,15 +3113,28 @@ export default function LoremakerApp({ initialCharacters = [], initialError = nu
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-3">
               <LoreShield onClick={() => window.location.reload()} />
-              <div className="flex flex-col text-[10px] font-semibold uppercase tracking-[0.32em] text-white/70">
+              <div className="flex flex-col gap-2 text-[10px] font-semibold uppercase tracking-[0.32em] text-white/70">
                 <span className="hidden sm:inline">Pulse of the Loremaker</span>
-                <button
-                  type="button"
-                  onClick={() => window.location.reload()}
-                  className="rounded-full border border-white/30 px-3 py-1 text-white transition hover:bg-white/10"
-                >
-                  Loremaker
-                </button>
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => window.location.reload()}
+                    className="rounded-full border border-white/30 px-3 py-1 text-white transition hover:bg-white/10"
+                  >
+                    Loremaker
+                  </button>
+                  <Button
+                    as="a"
+                    href="https://menelekmakonnen.com"
+                    target="_blank"
+                    rel="noreferrer"
+                    variant="subtle"
+                    size="sm"
+                    className="px-3 py-1 text-[10px] font-bold uppercase tracking-[0.35em] text-white/85"
+                  >
+                    Creator Profile
+                  </Button>
+                </div>
               </div>
             </div>
             <div className="flex items-center gap-2 sm:hidden">
@@ -2913,44 +3167,9 @@ export default function LoremakerApp({ initialCharacters = [], initialError = nu
               </Button>
             </div>
             <div className="hidden items-center gap-3 sm:flex">
-              <div className="flex items-center gap-3 rounded-3xl border border-white/20 bg-white/10 px-3 py-2 text-xs font-semibold text-white/80">
-                <div className="relative h-10 w-10">
-                  <motion.svg
-                    viewBox="0 0 48 48"
-                    className="h-10 w-10"
-                    animate={{ rotate: 360 }}
-                    transition={{ repeat: Infinity, duration: 24, ease: "linear" }}
-                  >
-                    <defs>
-                      <linearGradient id={`${statRingId}-arc`} x1="0" x2="1" y1="0" y2="1">
-                        <stop offset="0%" stopColor="rgba(252,211,77,0.9)" />
-                        <stop offset="50%" stopColor="rgba(236,72,153,0.85)" />
-                        <stop offset="100%" stopColor="rgba(129,140,248,0.9)" />
-                      </linearGradient>
-                    </defs>
-                    <circle cx="24" cy="24" r="18" stroke="rgba(255,255,255,0.12)" strokeWidth="6" fill="none" />
-                    <motion.circle
-                      cx="24"
-                      cy="24"
-                      r="18"
-                      stroke={`url(#${statRingId}-arc)`}
-                      strokeWidth="6"
-                      strokeDasharray="113"
-                      strokeDashoffset="20"
-                      strokeLinecap="round"
-                      fill="none"
-                      animate={{ strokeDashoffset: [20, 140, 20] }}
-                      transition={{ duration: 14, repeat: Infinity, ease: "easeInOut" }}
-                    />
-                  </motion.svg>
-                  <span className="pointer-events-none absolute inset-0 flex items-center justify-center text-[9px] font-black uppercase tracking-[0.35em] text-white/80">
-                    Lore
-                  </span>
-                </div>
-                <div className="flex flex-col gap-0.5 text-right">
-                  <span className="text-[10px] font-bold uppercase tracking-[0.35em] text-white/60">Living Codex</span>
-                  <span className="text-base font-black text-white sm:text-lg">{data.length} Legends catalogued</span>
-                </div>
+              <div className="flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-4 py-1.5 text-[10px] font-bold uppercase tracking-[0.35em] text-white/75">
+                <Library className="h-3.5 w-3.5 text-amber-200" aria-hidden="true" />
+                <span>Universe Awake</span>
               </div>
               {showArena && (
                 <Button
@@ -2975,43 +3194,9 @@ export default function LoremakerApp({ initialCharacters = [], initialError = nu
             </div>
           </div>
           <div className="mt-3 flex items-center justify-between gap-3 sm:hidden">
-            <div className="flex flex-1 items-center gap-3 rounded-3xl border border-white/20 bg-white/10 px-3 py-2 text-[11px] font-semibold text-white/80">
-              <div className="relative h-9 w-9">
-                <motion.svg
-                  viewBox="0 0 48 48"
-                  className="h-9 w-9"
-                  animate={{ rotate: 360 }}
-                  transition={{ repeat: Infinity, duration: 26, ease: "linear" }}
-                >
-                  <defs>
-                    <linearGradient id={`${statRingId}-mobile-arc`} x1="0" x2="1" y1="0" y2="1">
-                      <stop offset="0%" stopColor="rgba(236,72,153,0.85)" />
-                      <stop offset="100%" stopColor="rgba(129,140,248,0.9)" />
-                    </linearGradient>
-                  </defs>
-                  <circle cx="24" cy="24" r="18" stroke="rgba(255,255,255,0.12)" strokeWidth="6" fill="none" />
-                  <motion.circle
-                    cx="24"
-                    cy="24"
-                    r="18"
-                    stroke={`url(#${statRingId}-mobile-arc)`}
-                    strokeWidth="6"
-                    strokeDasharray="113"
-                    strokeDashoffset="30"
-                    strokeLinecap="round"
-                    fill="none"
-                    animate={{ strokeDashoffset: [30, 150, 30] }}
-                    transition={{ duration: 16, repeat: Infinity, ease: "easeInOut" }}
-                  />
-                </motion.svg>
-                <span className="pointer-events-none absolute inset-0 flex items-center justify-center text-[8px] font-black uppercase tracking-[0.35em] text-white/80">
-                  Lore
-                </span>
-              </div>
-              <div className="flex flex-col">
-                <span className="text-[9px] font-bold uppercase tracking-[0.3em] text-white/60">Living Codex</span>
-                <span className="text-sm font-black text-white">{data.length} Legends</span>
-              </div>
+            <div className="flex flex-1 items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.32em] text-white/75">
+              <Library className="h-3.5 w-3.5 text-amber-200" aria-hidden="true" />
+              <span>Universe Awake</span>
             </div>
             <Button
               variant="ghost"
@@ -3071,6 +3256,9 @@ export default function LoremakerApp({ initialCharacters = [], initialError = nu
           onArenaShortcut={arenaShortcut}
           onSync={refetch}
           showArena={showArena}
+          totalCount={data.length}
+          filteredCount={filtered.length}
+          hasActiveFilters={hasActiveFilters}
         />
         {showArena && (
           <div id="arena-anchor" className="mt-10">
@@ -3094,18 +3282,21 @@ export default function LoremakerApp({ initialCharacters = [], initialError = nu
           <CharacterGrid
             data={sorted.filter((c) => !selectedIds.includes(c.id))}
             onOpen={openCharacter}
-            onFacet={handleFacet}
-            onUseInSim={onUseInSim}
-            highlightId={highlightedId}
-            mobileColumns={mobileColumns}
-          />
+          onFacet={handleFacet}
+          onUseInSim={onUseInSim}
+          highlightId={highlightedId}
+        />
         </div>
       </main>
 
-        <CharacterModal
-          open={openModal}
-          onClose={closeCharacter}
-          char={currentCharacter}
+      <footer className="mx-auto max-w-7xl px-3 pb-10 text-[10px] font-semibold uppercase tracking-[0.35em] text-white/55 sm:px-4">
+        © {currentYear} Menelek Makonnen. All characters, stories, lore, and artwork from the LoreMaker Universe are protected by copyright.
+      </footer>
+
+      <CharacterModal
+        open={openModal}
+        onClose={closeCharacter}
+        char={currentCharacter}
           onFacet={handleFacet}
           onUseInSim={useInSim}
         />
