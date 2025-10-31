@@ -2709,11 +2709,13 @@ function HeroSection({ featured, onOpenFilters, onScrollToCharacters, onOpenChar
             <h2 className="text-3xl font-black leading-tight tracking-tight text-balance sm:text-5xl lg:text-6xl">{title}</h2>
             <p className="max-w-xl text-sm font-semibold text-white/80 sm:text-base lg:text-lg">{blurb}</p>
             <div className="flex flex-wrap gap-3">
-              <Button variant="gradient" size="lg" onClick={onScrollToCharacters} className="shadow-[0_18px_48px_rgba(253,230,138,0.35)]">
+              <Button
+                variant="gradient"
+                size="lg"
+                onClick={onScrollToCharacters}
+                className="shadow-[0_18px_48px_rgba(253,230,138,0.35)]"
+              >
                 Discover the Universe
-              </Button>
-              <Button variant="outline" size="lg" onClick={onOpenFilters} className="border-white/60 text-white/90 hover:bg-white/10">
-                Shape Your Lore Feed
               </Button>
             </div>
             <div className="flex flex-wrap gap-2 text-[11px] font-semibold uppercase tracking-[0.35em] text-white/70 sm:text-xs">
@@ -2765,25 +2767,6 @@ function HeroSection({ featured, onOpenFilters, onScrollToCharacters, onOpenChar
               </motion.span>
             </div>
           </div>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-4">
-          <Button
-            variant="gradient"
-            size="lg"
-            onClick={onOpenFilters}
-            className="shadow-[0_18px_48px_rgba(253,230,138,0.35)]"
-          >
-            Launch Filters
-          </Button>
-          <Button
-            variant="outline"
-            size="lg"
-            onClick={onScrollToCharacters}
-            className="border-white/60 text-white/90 hover:bg-white/10"
-          >
-            Explore Universe
-          </Button>
         </div>
       </div>
     );
