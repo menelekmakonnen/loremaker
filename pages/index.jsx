@@ -27,6 +27,7 @@ import {
   Library,
   Crown,
   Swords,
+  Sparkles,
 } from "lucide-react";
 import {
   computeFeatured,
@@ -2140,7 +2141,7 @@ function ToolsBar({
   onSortModeChange,
   onOpenFilters,
   onClearFilters,
-  onArenaShortcut,
+  onArenaToggle,
   onSync,
   showArena,
   totalCount,
@@ -2154,6 +2155,8 @@ function ToolsBar({
   const [floatingTop, setFloatingTop] = useState(null);
   const [collapsed, setCollapsed] = useState(false);
   const [contentEl, setContentEl] = useState(null);
+  const HEADER_GAP = 0;
+  const DOCK_SPACING = 16;
 
   useEffect(() => {
     if (typeof window === "undefined") return undefined;
@@ -2208,15 +2211,16 @@ function ToolsBar({
 
     const update = () => {
       const rect = hero.getBoundingClientRect();
-      const offset = headerOffset + 12;
+      const fixedTop = headerOffset + HEADER_GAP;
+      const dockTop = headerOffset + DOCK_SPACING;
       const effectiveHeight = barHeight || lastKnownHeight || 0;
-      if (rect.top <= headerOffset + 8 && rect.bottom > headerOffset + 8) {
-        setMode("dock");
-        const nextTop = Math.max(offset, rect.bottom - effectiveHeight - 12);
-        setFloatingTop(nextTop);
-      } else if (rect.bottom <= headerOffset + 8) {
+      if (rect.bottom <= fixedTop) {
         setMode("fixed");
-        setFloatingTop(offset);
+        setFloatingTop(fixedTop);
+      } else if (rect.top <= dockTop && rect.bottom > fixedTop) {
+        setMode("dock");
+        const nextTop = Math.max(dockTop, rect.bottom - effectiveHeight - DOCK_SPACING);
+        setFloatingTop(nextTop);
       } else {
         setMode("static");
         setFloatingTop(null);
@@ -2234,8 +2238,10 @@ function ToolsBar({
   }, [headerOffset, barHeight, lastKnownHeight]);
 
   const isFloating = mode !== "static";
-  const safeTop = floatingTop ?? headerOffset + 12;
-  const placeholderHeight = isFloating ? (lastKnownHeight ? lastKnownHeight + 24 : 0) : 0;
+  const safeTop = floatingTop ?? headerOffset + DOCK_SPACING;
+  const placeholderHeight = isFloating
+    ? lastKnownHeight + (mode === "dock" ? DOCK_SPACING : HEADER_GAP)
+    : 0;
   const countLabel = hasActiveFilters ? `${filteredCount} / ${totalCount} in view` : `${totalCount} catalogued`;
 
   return (
@@ -2341,13 +2347,13 @@ function ToolsBar({
                   <Button
                     variant="subtle"
                     size="sm"
-                    onClick={onArenaShortcut}
+                    onClick={onArenaToggle}
                     className={cx("flex-none", showArena ? "ring-2 ring-amber-300/70" : "")}
                     aria-pressed={showArena}
-                    aria-label={showArena ? "Scroll to arena" : "Open arena"}
+                    aria-label={showArena ? "Hide arena" : "Open arena"}
                   >
                     <Swords size={14} aria-hidden="true" />
-                    <span className="hidden sm:inline">Arena</span>
+                    <span className="hidden sm:inline">{showArena ? "Hide Arena" : "Arena"}</span>
                   </Button>
                   <Button
                     variant="dark"
@@ -2921,7 +2927,6 @@ export default function LoremakerApp({ initialCharacters = [], initialError = nu
   const [currentCharacter, setCurrentCharacter] = useState(null);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [transferNotices, setTransferNotices] = useState([]);
-  const [headerCollapsed, setHeaderCollapsed] = useState(false);
   const currentYear = useMemo(() => new Date().getFullYear(), []);
 
   const selectedIds = useMemo(
@@ -3002,11 +3007,6 @@ export default function LoremakerApp({ initialCharacters = [], initialError = nu
     [closeCharacter, onUseInSim]
   );
 
-  const openArena = useCallback(() => {
-    setShowArena(true);
-    setTimeout(focusArena, 80);
-  }, [focusArena]);
-
   const toggleArena = useCallback(() => {
     setShowArena((prev) => {
       const next = !prev;
@@ -3016,14 +3016,6 @@ export default function LoremakerApp({ initialCharacters = [], initialError = nu
       return next;
     });
   }, [focusArena]);
-
-  const arenaShortcut = useCallback(() => {
-    if (showArena) {
-      focusArena();
-    } else {
-      openArena();
-    }
-  }, [focusArena, openArena, showArena]);
 
   const filtered = useMemo(
     () => data.filter((c) => matchesFilters(c, filters, combineAND, query)),
@@ -3060,6 +3052,16 @@ export default function LoremakerApp({ initialCharacters = [], initialError = nu
   }, [filtered, sortMode]);
 
   const featured = useMemo(() => computeFeatured(data), [data]);
+
+  const handleRandomCharacter = useCallback(() => {
+    if (!sorted.length) return;
+    const random = sorted[Math.floor(Math.random() * sorted.length)];
+    if (!random) return;
+    setHighlightedId(random.id);
+    setTimeout(() => setHighlightedId(null), 1200);
+    document.getElementById("characters-grid")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    openCharacter(random);
+  }, [sorted, openCharacter]);
 
   const scrollToCharacters = useCallback(() => {
     document.getElementById("characters-grid")?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -3149,64 +3151,42 @@ export default function LoremakerApp({ initialCharacters = [], initialError = nu
                 <RefreshCcw className="h-4 w-4" />
               </Button>
             </div>
-            <div className="hidden items-center gap-3 sm:flex">
-              <div className="flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-4 py-1.5 text-[10px] font-bold uppercase tracking-[0.35em] text-white/75">
-                <Library className="h-3.5 w-3.5 text-amber-200" aria-hidden="true" />
-                <span>Universe Awake</span>
-              </div>
-              {showArena && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setShowArena(false)}
-                  className="h-10 w-10 p-0"
-                  aria-label="Hide arena"
-                >
-                  <X className="h-4 w-4" />
-                </Button>
-              )}
+            <div className="hidden items-center gap-2 sm:flex">
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => setHeaderCollapsed((prev) => !prev)}
-                className="h-10 w-10 p-0"
-                aria-label={headerCollapsed ? "Expand header controls" : "Collapse header controls"}
+                className="inline-flex items-center gap-2 px-4"
+                onClick={() => setFiltersOpen(true)}
+                aria-label="Open filters"
               >
-                {headerCollapsed ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
+                <Filter className="h-4 w-4" aria-hidden="true" />
+                <span className="text-xs font-bold uppercase tracking-[0.3em]">Filters</span>
+              </Button>
+              <Button
+                variant={showArena ? "subtle" : "ghost"}
+                size="sm"
+                className={cx("inline-flex items-center gap-2 px-4", showArena ? "border border-amber-200/60 bg-amber-200/20" : "")}
+                onClick={toggleArena}
+                aria-label={showArena ? "Hide arena" : "Open arena"}
+                aria-pressed={showArena}
+              >
+                <Swords className="h-4 w-4" aria-hidden="true" />
+                <span className="text-xs font-bold uppercase tracking-[0.3em]">
+                  {showArena ? "Hide Arena" : "Battle Arena"}
+                </span>
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="inline-flex items-center gap-2 px-4"
+                onClick={() => refetch()}
+                aria-label="Sync universe"
+              >
+                <RefreshCcw className="h-4 w-4" aria-hidden="true" />
+                <span className="text-xs font-bold uppercase tracking-[0.3em]">Sync</span>
               </Button>
             </div>
           </div>
-          <div className="mt-3 flex items-center justify-between gap-3 sm:hidden">
-            <div className="flex flex-1 items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.32em] text-white/75">
-              <Library className="h-3.5 w-3.5 text-amber-200" aria-hidden="true" />
-              <span>Universe Awake</span>
-            </div>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setHeaderCollapsed((prev) => !prev)}
-              className="h-10 w-10 p-0"
-              aria-label={headerCollapsed ? "Expand header controls" : "Collapse header controls"}
-            >
-              {headerCollapsed ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
-            </Button>
-          </div>
-          <AnimatePresence initial={false}>
-            {!headerCollapsed && (
-              <motion.div
-                key="header-note"
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: "auto" }}
-                exit={{ opacity: 0, height: 0 }}
-                transition={{ duration: 0.3, ease: "easeInOut" }}
-                className="overflow-hidden"
-              >
-                <p className="mt-4 text-xs font-semibold uppercase tracking-[0.35em] text-white/80">
-                  Shape the daily lore feed using the controls below the hero showcase.
-                </p>
-              </motion.div>
-            )}
-          </AnimatePresence>
         </div>
       </header>
 
@@ -3236,7 +3216,7 @@ export default function LoremakerApp({ initialCharacters = [], initialError = nu
           onSortModeChange={setSortMode}
           onOpenFilters={() => setFiltersOpen(true)}
           onClearFilters={clearFilters}
-          onArenaShortcut={arenaShortcut}
+          onArenaToggle={toggleArena}
           onSync={refetch}
           showArena={showArena}
           totalCount={data.length}
@@ -3244,7 +3224,7 @@ export default function LoremakerApp({ initialCharacters = [], initialError = nu
           hasActiveFilters={hasActiveFilters}
         />
         {showArena && (
-          <div id="arena-anchor" className="mt-10">
+          <div id="arena-anchor" className="mt-10 scroll-mt-40">
             <BattleArena
               characters={sorted}
               slots={arenaSlots}
@@ -3261,19 +3241,93 @@ export default function LoremakerApp({ initialCharacters = [], initialError = nu
           </div>
         </section>
 
-        <div id="characters-grid" className="mt-6">
+        <div id="characters-grid" className="mt-6 scroll-mt-40">
           <CharacterGrid
             data={sorted.filter((c) => !selectedIds.includes(c.id))}
             onOpen={openCharacter}
-          onFacet={handleFacet}
-          onUseInSim={onUseInSim}
-          highlightId={highlightedId}
-        />
+            onFacet={handleFacet}
+            onUseInSim={onUseInSim}
+            highlightId={highlightedId}
+          />
         </div>
       </main>
 
-      <footer className="mx-auto max-w-7xl px-3 pb-10 text-[10px] font-semibold uppercase tracking-[0.35em] text-white/55 sm:px-4">
-        © {currentYear} Menelek Makonnen. All characters, stories, lore, and artwork from the LoreMaker Universe are protected by copyright.
+      <footer className="border-t border-white/10 bg-black/50 backdrop-blur-2xl">
+        <div className="mx-auto max-w-7xl px-3 py-10 sm:px-4">
+          <div className="grid gap-8 md:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)]">
+            <div className="space-y-4">
+              <p className="text-xs font-black uppercase tracking-[0.35em] text-white/70">LoreMaker Universe</p>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.3em] text-white/60">
+                © {currentYear} Menelek Makonnen.
+              </p>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.3em] text-white/60">
+                All characters, stories, lore, and artwork from the LoreMaker Universe are protected by copyright.
+              </p>
+            </div>
+            <div className="space-y-4">
+              <p className="text-xs font-black uppercase tracking-[0.35em] text-white/70">Explore</p>
+              <div className="flex flex-col gap-2">
+                <Button
+                  as="a"
+                  href="#arena-anchor"
+                  variant="subtle"
+                  size="sm"
+                  className="justify-start gap-2 px-4 text-[10px] uppercase tracking-[0.3em]"
+                >
+                  <Swords className="h-4 w-4" aria-hidden="true" />
+                  Battle Arena
+                </Button>
+                <Button
+                  type="button"
+                  onClick={handleRandomCharacter}
+                  variant="subtle"
+                  size="sm"
+                  className="justify-start gap-2 px-4 text-[10px] uppercase tracking-[0.3em]"
+                >
+                  <Sparkles className="h-4 w-4" aria-hidden="true" />
+                  Random Character
+                </Button>
+                <Button
+                  as="a"
+                  href="#characters-grid"
+                  variant="subtle"
+                  size="sm"
+                  className="justify-start gap-2 px-4 text-[10px] uppercase tracking-[0.3em]"
+                >
+                  <Users className="h-4 w-4" aria-hidden="true" />
+                  Character Archive
+                </Button>
+              </div>
+            </div>
+            <div className="space-y-4">
+              <p className="text-xs font-black uppercase tracking-[0.35em] text-white/70">Connect</p>
+              <div className="flex flex-col gap-2">
+                <Button
+                  as="a"
+                  href="https://menelekmakonnen.com"
+                  target="_blank"
+                  rel="noreferrer"
+                  variant="subtle"
+                  size="sm"
+                  className="justify-start gap-2 px-4 text-[10px] uppercase tracking-[0.3em]"
+                >
+                  <ArrowRight className="h-4 w-4" aria-hidden="true" />
+                  Creator Profile
+                </Button>
+                <Button
+                  type="button"
+                  onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+                  variant="ghost"
+                  size="sm"
+                  className="justify-start gap-2 px-4 text-[10px] uppercase tracking-[0.3em] text-white/70 hover:text-white"
+                >
+                  <ArrowUp className="h-4 w-4" aria-hidden="true" />
+                  Back to Top
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
       </footer>
 
       <CharacterModal
