@@ -8,6 +8,7 @@ import React, {
   useLayoutEffect,
 } from "react";
 import Head from "next/head";
+import { createPortal } from "react-dom";
 import { AnimatePresence, motion, useMotionValue, useSpring, useTransform } from "framer-motion";
 import {
   Search,
@@ -60,6 +61,78 @@ function clamp(value, min, max) {
 }
 
 const useIsomorphicLayoutEffect = typeof window !== "undefined" ? useLayoutEffect : useEffect;
+
+function unique(values) {
+  return Array.from(new Set(values.filter(Boolean)));
+}
+
+function parseDriveSource(url) {
+  if (!url) return null;
+  try {
+    const parsed = new URL(url);
+    const host = parsed.hostname;
+    const searchId = parsed.searchParams.get("id");
+    const resourceKey = parsed.searchParams.get("resourcekey") || undefined;
+    let id = null;
+
+    if (/drive\.google\.(com|co)/.test(host)) {
+      const match = parsed.pathname.match(/\/d\/([^/]+)/);
+      if (match?.[1]) {
+        id = match[1];
+      } else if (parsed.pathname.startsWith("/thumbnail")) {
+        id = searchId;
+      } else if (parsed.pathname.startsWith("/uc") || parsed.pathname.startsWith("/open")) {
+        id = searchId;
+      } else if (searchId) {
+        id = searchId;
+      }
+    } else if (/googleusercontent\.com$/.test(host) || /googleusercontent\.com$/.test(host.replace(/^lh\d+\./, ""))) {
+      const match = parsed.pathname.match(/\/d\/([^/=]+)/);
+      if (match?.[1]) {
+        id = match[1];
+      } else if (searchId) {
+        id = searchId;
+      } else {
+        const segment = parsed.pathname.split("/").pop() || "";
+        const clean = segment.split("=")[0];
+        if (clean && clean.length > 10) id = clean;
+      }
+    }
+
+    if (!id) return null;
+    return { id, resourceKey };
+  } catch {
+    return null;
+  }
+}
+
+function driveImageCandidates(url) {
+  const source = parseDriveSource(url);
+  if (!source) return [];
+  const { id, resourceKey } = source;
+  const resourceQuery = resourceKey ? `&resourcekey=${encodeURIComponent(resourceKey)}` : "";
+  const resourceSuffix = resourceKey ? `?resourcekey=${encodeURIComponent(resourceKey)}` : "";
+
+  return unique([
+    `https://lh3.googleusercontent.com/d/${id}=w2000-h2000-no`,
+    resourceKey ? `https://lh3.googleusercontent.com/d/${id}=w2000-h2000-no${resourceSuffix}` : null,
+    `https://lh3.googleusercontent.com/d/${id}=s2048`,
+    resourceKey ? `https://lh3.googleusercontent.com/d/${id}=s2048${resourceSuffix}` : null,
+    `https://drive.googleusercontent.com/uc?export=view&id=${id}${resourceQuery}`,
+    `https://drive.google.com/uc?export=view&id=${id}${resourceQuery}`,
+    `https://drive.google.com/thumbnail?id=${id}&sz=w2000${resourceQuery}`,
+    url,
+  ]);
+}
+
+function imageCandidates(src) {
+  if (!src) return [];
+  const trimmed = typeof src === "string" ? src.trim() : src;
+  if (!trimmed) return [];
+  const drive = driveImageCandidates(trimmed);
+  if (drive.length) return drive;
+  return unique([trimmed]);
+}
 
 const STATUS_PRESETS = [
   { test: /active|alive/i, label: "Active", dot: "bg-emerald-400", ring: "ring-emerald-400/60", icon: ShieldCheck },
@@ -861,23 +934,39 @@ function Insignia({ label, size = 48, variant = "character" }) {
 }
 
 function ImageSafe({ src, alt, className = "", fallbackLabel }) {
-  const [error, setError] = useState(false);
+  const sources = useMemo(() => imageCandidates(src), [src]);
+  const [index, setIndex] = useState(0);
+  const [failed, setFailed] = useState(false);
+
   useEffect(() => {
-    setError(false);
-  }, [src]);
-  if (!src || error) {
+    setIndex(0);
+    setFailed(false);
+  }, [sources]);
+
+  const current = sources[index];
+
+  const handleError = () => {
+    if (index < sources.length - 1) {
+      setIndex((value) => value + 1);
+    } else {
+      setFailed(true);
+    }
+  };
+
+  if (!current || failed) {
     return (
       <div className={cx("flex items-center justify-center rounded-2xl border border-white/15 bg-white/10", className)}>
         <Insignia label={fallbackLabel} size={64} />
       </div>
     );
   }
+
   return (
     <img
-      src={src}
+      src={current}
       alt={alt}
-      onError={() => setError(true)}
-      onLoad={() => setError(false)}
+      onError={handleError}
+      onLoad={() => setFailed(false)}
       className={className}
       loading="lazy"
       referrerPolicy="no-referrer"
@@ -1211,7 +1300,7 @@ function CharacterModal({ open, onClose, char, onFacet, onUseInSim }) {
         ref={dialogRef}
         className="relative z-10 w-full max-w-6xl overflow-hidden rounded-3xl border border-white/15 bg-black/65 backdrop-blur-2xl"
       >
-        <div className="flex items-center justify-between border-b border-white/15 px-6 py-4 text-white">
+        <div className="grid items-center gap-4 border-b border-white/15 px-6 py-4 text-white md:grid-cols-[auto_minmax(0,1fr)_auto]">
           <div className="flex items-center gap-4">
             <Insignia label={char.name} size={48} />
             <div>
@@ -1221,16 +1310,19 @@ function CharacterModal({ open, onClose, char, onFacet, onUseInSim }) {
               {char.era && <div className="text-[11px] font-extrabold tracking-[0.3em] text-white/70">{char.era}</div>}
             </div>
           </div>
-          <div className="ml-auto flex items-center gap-3 sm:gap-2">
+          <div className="flex justify-center">
             <Button
               variant="gradient"
               size="sm"
               onClick={() => onUseInSim(char)}
               aria-label="Send to arena"
-              className="flex h-12 w-12 items-center justify-center rounded-full px-0 py-0 sm:h-11 sm:w-11"
+              className="flex items-center gap-2 px-5 py-2 text-xs font-semibold shadow-[0_18px_48px_rgba(253,230,138,0.35)] sm:text-sm"
             >
-              <Swords size={18} />
+              <Swords size={16} />
+              <span>Battle Arena</span>
             </Button>
+          </div>
+          <div className="flex justify-end gap-2 sm:gap-3">
             <Button variant="ghost" size="sm" onClick={onClose} aria-label="Close profile">
               <X />
             </Button>
@@ -2204,12 +2296,23 @@ function ToolsBar({
 }) {
   const [barHeight, setBarHeight] = useState(0);
   const [lastKnownHeight, setLastKnownHeight] = useState(0);
-  const [mode, setMode] = useState("static");
-  const [floatingTop, setFloatingTop] = useState(0);
+  const [mode, setMode] = useState("attached");
   const [collapsed, setCollapsed] = useState(false);
   const [contentEl, setContentEl] = useState(null);
-  const [ready, setReady] = useState(false);
+  const [heroEl, setHeroEl] = useState(null);
+  const [mountEl, setMountEl] = useState(null);
   const isMobile = useMediaQuery("(max-width: 640px)");
+
+  const handleContentRef = useCallback((node) => {
+    setContentEl(node);
+  }, []);
+
+  useIsomorphicLayoutEffect(() => {
+    if (typeof document === "undefined") return undefined;
+    setHeroEl(document.getElementById("hero-showcase"));
+    setMountEl(document.getElementById("hero-toolbar-mount"));
+    return undefined;
+  }, []);
 
   useIsomorphicLayoutEffect(() => {
     if (!contentEl || typeof ResizeObserver === "undefined") return undefined;
@@ -2231,37 +2334,29 @@ function ToolsBar({
   }, [barHeight]);
 
   useIsomorphicLayoutEffect(() => {
-    if (typeof window === "undefined") return undefined;
-    const hero = document.getElementById("hero-showcase");
-    if (!hero) return undefined;
+    if (!heroEl) return undefined;
+    const height = barHeight || lastKnownHeight || 0;
+    heroEl.style.setProperty("--toolbar-offset", `${Math.ceil(height + 48)}px`);
+    return () => {
+      heroEl.style.removeProperty("--toolbar-offset");
+    };
+  }, [heroEl, barHeight, lastKnownHeight]);
 
+  useIsomorphicLayoutEffect(() => {
+    if (typeof window === "undefined" || !heroEl) return undefined;
     const update = () => {
-      const rect = hero.getBoundingClientRect();
+      const rect = heroEl.getBoundingClientRect();
       const height = barHeight || lastKnownHeight || 0;
       if (!height) {
-        setMode("static");
-        setFloatingTop(0);
-        setReady(false);
+        setMode("attached");
         return;
       }
-
-      const heroBottom = rect.bottom;
-      const threshold = height + 4;
-      hero.style.setProperty("--toolbar-offset", `${Math.ceil(height + 32)}px`);
-
-      if (heroBottom <= threshold) {
+      const threshold = height + 24;
+      if (rect.bottom <= threshold) {
         setMode("fixed");
-        setFloatingTop(0);
-        setReady(true);
-        return;
+      } else {
+        setMode("attached");
       }
-
-      const attachedTop = heroBottom - height;
-      const safe = Math.max(attachedTop, 0);
-      setMode("attached");
-      setFloatingTop(safe);
-      hero.style.setProperty("--toolbar-offset", `${Math.ceil(height + 32)}px`);
-      setReady(true);
     };
 
     update();
@@ -2271,33 +2366,73 @@ function ToolsBar({
     return () => {
       window.removeEventListener("scroll", update);
       window.removeEventListener("resize", update);
-      hero.style.removeProperty("--toolbar-offset");
     };
-  }, [barHeight, lastKnownHeight]);
+  }, [heroEl, barHeight, lastKnownHeight]);
 
   const effectiveHeight = barHeight || lastKnownHeight || 0;
-  const isFloating = ready && mode !== "static";
-  const safeTop = mode === "fixed" ? 0 : floatingTop;
-  const placeholderHeight = isFloating ? effectiveHeight : 0;
+  const placeholderHeight = mode === "fixed" ? effectiveHeight + 16 : 0;
   const countLabel = hasActiveFilters ? `${filteredCount} / ${totalCount} in view` : `${totalCount} catalogued`;
 
-  return (
-    <div className="relative">
-      {isFloating && <div style={{ height: placeholderHeight }} aria-hidden="true" />}
-      <div
-        className={cx(isFloating ? "fixed inset-x-0 z-50" : "")}
-        style={isFloating ? { top: safeTop } : undefined}
-      >
-        <div className="mx-auto max-w-7xl px-3 sm:px-4">
-          <AnimatePresence initial={false} mode="wait">
-            {collapsed ? (
-              <motion.div
-                key="toolbar-collapsed"
-                initial={{ opacity: 0, y: 12 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -12 }}
-                transition={{ duration: 0.25, ease: "easeOut" }}
-                className="rounded-3xl border border-white/12 bg-[#070b1c]/90 px-4 py-3 text-[10px] font-semibold tracking-[0.35em] text-white/70 shadow-[0_18px_48px_rgba(8,8,20,0.45)] backdrop-blur-xl"
+  const renderToolbar = () => (
+    <AnimatePresence initial={false} mode="wait">
+      {collapsed ? (
+        <motion.div
+          key="toolbar-collapsed"
+          ref={handleContentRef}
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -12 }}
+          transition={{ duration: 0.25, ease: "easeOut" }}
+          className="rounded-3xl border border-white/12 bg-[#070b1c]/90 px-4 py-3 text-[10px] font-semibold tracking-[0.2em] text-white/70 shadow-[0_18px_48px_rgba(8,8,20,0.45)] backdrop-blur-xl"
+        >
+          <div className="flex items-center justify-between gap-3">
+            <span>Lore controls hidden</span>
+            <Button
+              variant="subtle"
+              size="sm"
+              onClick={() => setCollapsed(false)}
+              className="flex-none"
+              aria-label="Expand universe controls"
+            >
+              <ChevronUp className="h-4 w-4" aria-hidden="true" />
+              <span className="text-xs font-semibold">Show</span>
+            </Button>
+          </div>
+        </motion.div>
+      ) : (
+        <motion.div
+          key="toolbar-full"
+          ref={handleContentRef}
+          initial={{ opacity: 0, y: 24 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -24 }}
+          transition={{ duration: 0.28, ease: "easeOut" }}
+          className="rounded-3xl border border-white/12 bg-[#070b1c]/90 p-4 shadow-[0_20px_60px_rgba(8,8,20,0.45)] backdrop-blur-xl"
+        >
+          <div className="flex flex-wrap items-center gap-3 sm:gap-4">
+            <label className="relative flex-1 min-w-[220px]">
+              <span className="sr-only" id="universe-search-label">
+                Search heroes, powers, locations and tags
+              </span>
+              <Input
+                aria-labelledby="universe-search-label"
+                id="universe-search"
+                value={query}
+                onChange={(event) => onQueryChange(event.target.value)}
+                placeholder="Search characters, powers, locations, tags…"
+                className="w-full bg-white/15 pl-10 pr-3 text-sm text-white placeholder:text-white/60"
+              />
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/70" aria-hidden="true" />
+            </label>
+            <div className="relative w-full min-w-[160px] sm:w-48">
+              <span className="sr-only" id="sort-menu-label">
+                Sort heroes
+              </span>
+              <select
+                aria-labelledby="sort-menu-label"
+                value={sortMode}
+                onChange={(event) => onSortModeChange(event.target.value)}
+                className="w-full appearance-none rounded-xl border border-white/25 bg-black/70 px-3 py-2 pr-9 text-sm font-semibold text-white shadow-inner focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300"
               >
                 <div className="flex items-center justify-between gap-3">
                   <span>Lore controls hidden</span>
@@ -2423,6 +2558,189 @@ function ToolsBar({
         </div>
       </div>
     </div>
+  );
+}
+
+
+function QuickFilterRail({ data, onFacet, onSortModeChange, sortMode, onOpenFilters }) {
+  const [open, setOpen] = useState(false);
+  const quickSorts = [
+    { value: "default", label: "Featured" },
+    { value: "az", label: "A-Z" },
+    { value: "faction", label: "By Faction" },
+    { value: "most", label: "Most Powerful" },
+  ];
+
+  const topCollections = useMemo(() => {
+    const tally = (getter) => {
+      const counts = new Map();
+      data.forEach((item) => {
+        getter(item).forEach((value) => {
+          if (!value) return;
+          const entry = counts.get(value) || { count: 0 };
+          entry.count += 1;
+          counts.set(value, entry);
+        });
+      });
+      return Array.from(counts.entries())
+        .map(([value, meta]) => ({ value, count: meta.count }))
+        .sort((a, b) => b.count - a.count);
+    };
+
+    const locations = tally((item) => item.locations || []).slice(0, 6);
+    const factions = tally((item) => item.faction || []).slice(0, 6);
+
+    const powerMap = new Map();
+    data.forEach((item) => {
+      (item.powers || []).forEach((power) => {
+        if (!power?.name) return;
+        const entry = powerMap.get(power.name) || { count: 0, total: 0 };
+        entry.count += 1;
+        entry.total += Number(power.level) || 0;
+        powerMap.set(power.name, entry);
+      });
+    });
+    const powers = Array.from(powerMap.entries())
+      .map(([name, meta]) => ({
+        value: name,
+        count: meta.count,
+        avg: meta.count ? meta.total / meta.count : 0,
+      }))
+      .sort((a, b) => {
+        if (b.avg === a.avg) return b.count - a.count;
+        return b.avg - a.avg;
+      })
+      .slice(0, 8);
+
+    return { locations, factions, powers };
+  }, [data]);
+
+  const renderChip = (item, key) => (
+    <button
+      key={`${key}-${item.value}`}
+      type="button"
+      onClick={() => onFacet({ key, value: item.value })}
+      className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/8 px-3 py-1.5 text-xs font-semibold text-white transition hover:border-amber-200/70 hover:bg-amber-200/15"
+    >
+      <span>{item.value}</span>
+      <span className="text-[11px] text-white/60">{item.count}</span>
+    </button>
+  );
+
+  if (!open) {
+    return (
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="group flex w-full items-center justify-between rounded-full border border-white/15 bg-white/5 px-4 py-3 text-xs font-semibold uppercase tracking-[0.3em] text-white/70 transition hover:border-white/40 hover:bg-white/10"
+        aria-expanded="false"
+      >
+        <span className="flex items-center gap-2 text-white/80">
+          <Sparkles className="h-4 w-4 text-amber-200" aria-hidden="true" /> Discover quickly
+        </span>
+        <ChevronDown className="h-4 w-4 text-white/60 transition group-hover:text-white" aria-hidden="true" />
+      </button>
+    );
+  }
+
+  return (
+    <Card className="border border-white/15 bg-white/5 backdrop-blur-2xl">
+      <CardContent className="space-y-6">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2 text-sm font-semibold text-white/80">
+            <Sparkles className="h-4 w-4 text-amber-200" aria-hidden="true" /> Discover quickly
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onOpenFilters}
+              className="px-3 text-xs font-semibold text-white/70 hover:text-white"
+            >
+              <Filter className="h-4 w-4" aria-hidden="true" />
+              <span className="text-xs font-semibold sm:text-sm">Filters</span>
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onClearFilters}
+              className="flex-none"
+              aria-label="Clear filters"
+            >
+              <X size={14} aria-hidden="true" />
+              <span className="text-xs font-semibold sm:text-sm">Clear</span>
+            </Button>
+            <div className="flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1.5 text-xs font-semibold text-white/85">
+              <Users className="h-3.5 w-3.5 text-amber-200" aria-hidden="true" />
+              <span>{countLabel}</span>
+            </div>
+            <Button
+              variant="subtle"
+              size="sm"
+              onClick={onArenaToggle}
+              className={cx("flex-none", showArena ? "ring-2 ring-amber-300/70" : "")}
+              aria-pressed={showArena}
+              aria-label={showArena ? "Hide arena" : "Open arena"}
+            >
+              <Swords size={14} aria-hidden="true" />
+              <span className="text-xs font-semibold sm:text-sm">{showArena ? "Hide Arena" : "Arena"}</span>
+            </Button>
+            <Button
+              variant="dark"
+              size="sm"
+              onClick={onSync}
+              className="flex-none"
+              aria-label="Sync universe"
+            >
+              <RefreshCcw size={14} aria-hidden="true" />
+              <span className="text-xs font-semibold sm:text-sm">Sync</span>
+            </Button>
+            <Button
+              variant={isMobile ? "gradient" : "ghost"}
+              size={isMobile ? "md" : "sm"}
+              onClick={() => setCollapsed(true)}
+              className={cx("flex-none", isMobile ? "ml-auto px-4" : "px-4 sm:px-3")}
+              aria-label="Collapse universe controls"
+            >
+              <ChevronDown className="h-4 w-4" aria-hidden="true" />
+              <span
+                className={cx(
+                  "text-xs font-semibold",
+                  isMobile ? "ml-2" : "ml-1 sm:hidden"
+                )}
+              >
+                {isMobile ? "Hide controls" : "Hide"}
+              </span>
+            </Button>
+          </div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+
+  let renderedToolbar;
+  if (mode === "fixed") {
+    renderedToolbar = (
+      <div className="fixed inset-x-0 top-0 z-50">
+        <div className="mx-auto max-w-7xl px-3 sm:px-4">{renderToolbar()}</div>
+      </div>
+    );
+  } else if (mountEl) {
+    renderedToolbar = createPortal(
+      <div className="pointer-events-none px-5 pb-10 sm:px-10 lg:px-20">
+        <div className="pointer-events-auto">{renderToolbar()}</div>
+      </div>,
+      mountEl
+    );
+  } else {
+    renderedToolbar = <div className="mx-auto max-w-7xl px-3 pt-6 sm:px-4">{renderToolbar()}</div>;
+  }
+
+  return (
+    <>
+      {renderedToolbar}
+      <div style={{ height: placeholderHeight }} aria-hidden="true" />
+    </>
   );
 }
 
@@ -3226,6 +3544,10 @@ function HeroSection({
           </div>
         </div>
       </div>
+      <div
+        id="hero-toolbar-mount"
+        className="pointer-events-none absolute inset-x-0 bottom-0 z-30 px-5 pb-8 sm:px-10 lg:px-20"
+      />
     </section>
   );
 }
@@ -3518,16 +3840,6 @@ export default function LoremakerApp({ initialCharacters = [], initialError = nu
     openCharacter(random);
   }, [sorted, openCharacter]);
 
-  const handleRandomCharacter = useCallback(() => {
-    if (!sorted.length) return;
-    const random = sorted[Math.floor(Math.random() * sorted.length)];
-    if (!random) return;
-    setHighlightedId(random.id);
-    setTimeout(() => setHighlightedId(null), 1200);
-    document.getElementById("characters-grid")?.scrollIntoView({ behavior: "smooth", block: "start" });
-    openCharacter(random);
-  }, [sorted, openCharacter]);
-
   const scrollToCharacters = useCallback(() => {
     document.getElementById("characters-grid")?.scrollIntoView({ behavior: "smooth", block: "start" });
   }, []);
@@ -3651,6 +3963,84 @@ export default function LoremakerApp({ initialCharacters = [], initialError = nu
               onUseInSim={onUseInSim}
               highlightId={highlightedId}
             />
+          </div>
+        </div>
+      </footer>
+
+      <footer className="border-t border-white/10 bg-black/50 backdrop-blur-2xl">
+        <div className="mx-auto max-w-7xl px-3 py-10 sm:px-4">
+          <div className="grid gap-8 md:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)]">
+            <div className="space-y-4">
+              <p className="text-xs font-black tracking-[0.35em] text-white/70">LoreMaker Universe</p>
+              <p className="text-[11px] font-semibold tracking-[0.3em] text-white/60">
+                © {currentYear} Menelek Makonnen.
+              </p>
+              <p className="text-[11px] font-semibold tracking-[0.3em] text-white/60">
+                All characters, stories, lore, and artwork from the LoreMaker Universe are protected by copyright.
+              </p>
+            </div>
+            <div className="space-y-4">
+              <p className="text-xs font-black tracking-[0.35em] text-white/70">Explore</p>
+              <div className="flex flex-col gap-2">
+                <Button
+                  as="a"
+                  href="#arena-anchor"
+                  variant="subtle"
+                  size="sm"
+                  className="justify-start gap-2 px-4 text-[10px] tracking-[0.3em]"
+                >
+                  <Swords className="h-4 w-4" aria-hidden="true" />
+                  Battle Arena
+                </Button>
+                <Button
+                  type="button"
+                  onClick={handleRandomCharacter}
+                  variant="subtle"
+                  size="sm"
+                  className="justify-start gap-2 px-4 text-[10px] tracking-[0.3em]"
+                >
+                  <Sparkles className="h-4 w-4" aria-hidden="true" />
+                  Random Character
+                </Button>
+                <Button
+                  as="a"
+                  href="#characters-grid"
+                  variant="subtle"
+                  size="sm"
+                  className="justify-start gap-2 px-4 text-[10px] tracking-[0.3em]"
+                >
+                  <Users className="h-4 w-4" aria-hidden="true" />
+                  Character Archive
+                </Button>
+              </div>
+            </div>
+            <div className="space-y-4">
+              <p className="text-xs font-black tracking-[0.35em] text-white/70">Connect</p>
+              <div className="flex flex-col gap-2">
+                <Button
+                  as="a"
+                  href="https://menelekmakonnen.com"
+                  target="_blank"
+                  rel="noreferrer"
+                  variant="subtle"
+                  size="sm"
+              className="justify-start gap-2 px-4 text-[10px] tracking-[0.3em]"
+            >
+              <ArrowRight className="h-4 w-4" aria-hidden="true" />
+              Menelek Makonnen
+            </Button>
+                <Button
+                  type="button"
+                  onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+                  variant="ghost"
+                  size="sm"
+                  className="justify-start gap-2 px-4 text-[10px] tracking-[0.3em] text-white/70 hover:text-white"
+                >
+                  <ArrowUp className="h-4 w-4" aria-hidden="true" />
+                  Back to Top
+                </Button>
+              </div>
+            </div>
           </div>
         </div>
       </footer>
