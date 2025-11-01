@@ -43,6 +43,7 @@ import {
   fetchCharactersFromSheets,
   todayKey,
   publicCharactersError,
+  seededRandom,
 } from "../lib/characters";
 
 /**
@@ -1074,7 +1075,13 @@ function CharacterCard({ char, onOpen, onFacet, onUseInSim, highlight }) {
   const highlightFacts = quickFacts.slice(0, 2);
   const minimalFilters = quickFilters.slice(0, 3);
   const description = char.shortDesc || char.longDesc || "No description yet.";
-  const heroImage = char.cover || char.gallery?.[0];
+  const heroImage = useMemo(() => {
+    const pool = [char.cover, ...(char.gallery || [])].filter(Boolean);
+    if (!pool.length) return null;
+    const rng = seededRandom(`${char.id || char.name || "card"}|grid`);
+    const index = Math.floor(rng() * pool.length);
+    return pool[index] || pool[0];
+  }, [char.cover, char.gallery, char.id, char.name]);
   const accentLabel = (char.locations || [])[0] || char.era || char.status || "LoreMaker dossier";
   const shortCaption =
     description.length > 150 ? `${description.slice(0, 147).trimEnd()}…` : description;
@@ -1772,7 +1779,7 @@ function computeBattleTimeline(charA, charB) {
   };
 }
 
-function ArenaCard({ char, position, onRelease, onOpen, health, isWinner, showX, onAutoFill }) {
+function ArenaCard({ char, position, onRelease, onOpen, health, isWinner, showX, onAutoFill, onRandomize }) {
   if (!char) {
     return (
       <button
@@ -1859,6 +1866,16 @@ function ArenaCard({ char, position, onRelease, onOpen, health, isWinner, showX,
       <div className="flex flex-wrap items-center justify-between gap-2 text-[9px] sm:text-xs">
         <Badge className="bg-slate-800/80 px-3 py-1 text-[9px] tracking-[0.3em] text-slate-200">Combatant {position}</Badge>
         <div className="flex items-center gap-2">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-9 px-3 text-[9px] sm:h-auto sm:text-[11px]"
+            onClick={() => onRandomize?.()}
+            aria-label="Randomise combatant"
+          >
+            <RefreshCcw className="mr-0 h-3.5 w-3.5 sm:mr-2" />
+            <span className="hidden sm:inline">Randomise</span>
+          </Button>
           <Button
             variant="ghost"
             size="sm"
@@ -2090,6 +2107,22 @@ function BattleArena({ characters, slots, setSlots, onOpenCharacter, pulseKey, o
   const autoFillLeft = useCallback(() => fillSlot("left"), [fillSlot]);
   const autoFillRight = useCallback(() => fillSlot("right"), [fillSlot]);
 
+  const reshuffleSlot = useCallback(
+    (side) => {
+      if (!characters.length) return;
+      setSlots((prev) => {
+        const otherSide = side === "left" ? prev.right : prev.left;
+        const current = prev[side];
+        const pool = characters.filter((char) => char?.id && char.id !== otherSide && char.id !== current);
+        if (!pool.length) return prev;
+        const random = pool[Math.floor(Math.random() * pool.length)];
+        if (!random?.id) return prev;
+        return { ...prev, [side]: random.id };
+      });
+    },
+    [characters, setSlots]
+  );
+
   const reset = () => {
     setSlots({ left: null, right: null });
     setTimeline([]);
@@ -2129,6 +2162,7 @@ function BattleArena({ characters, slots, setSlots, onOpenCharacter, pulseKey, o
                 isWinner={result?.winner?.id === left?.id}
                 showX={showX === left?.id}
                 onAutoFill={autoFillLeft}
+                onRandomize={() => reshuffleSlot("left")}
               />
             </div>
             <div className="col-span-1 order-2 min-w-0 lg:order-none lg:col-span-1 lg:col-start-3 lg:row-start-1">
@@ -2141,6 +2175,7 @@ function BattleArena({ characters, slots, setSlots, onOpenCharacter, pulseKey, o
                 isWinner={result?.winner?.id === right?.id}
                 showX={showX === right?.id}
                 onAutoFill={autoFillRight}
+                onRandomize={() => reshuffleSlot("right")}
               />
             </div>
             <div className="order-3 col-span-2 flex flex-col items-center justify-center gap-3 rounded-3xl border border-slate-800/60 bg-[#0f1329]/80 p-4 text-center lg:order-none lg:col-span-1 lg:col-start-2 lg:row-start-1 lg:row-end-2 lg:self-stretch lg:justify-self-center lg:p-5">
@@ -2536,7 +2571,7 @@ function ToolsBar({
   useIsomorphicLayoutEffect(() => {
     if (!heroEl) return undefined;
     const height = barHeight || lastKnownHeight || 0;
-    heroEl.style.setProperty("--toolbar-offset", `${Math.ceil(height + 120)}px`);
+    heroEl.style.setProperty("--toolbar-offset", `${Math.ceil(height + 160)}px`);
     return () => {
       heroEl.style.removeProperty("--toolbar-offset");
     };
@@ -2551,7 +2586,7 @@ function ToolsBar({
         setMode("attached");
         return;
       }
-      const threshold = height + 24;
+      const threshold = height + 8;
       if (rect.bottom <= threshold) {
         setMode("fixed");
       } else {
@@ -2796,59 +2831,59 @@ function ToolsBar({
                   <ArrowUpDown className="h-4 w-4" aria-hidden="true" />
                 </button>
               </div>
-              <div className="grid grid-cols-6 gap-1 text-[10px] font-semibold">
-                <div className="flex items-center justify-center gap-1 rounded-lg border border-white/20 bg-black/60 px-2 py-2 text-white/80">
+              <div className="flex flex-wrap items-center gap-1 text-[10px] font-semibold">
+                <div className="flex basis-[40%] flex-none items-center justify-center gap-1 rounded-lg border border-white/20 bg-black/60 px-3 py-2 text-white/80">
                   <Users className="h-3.5 w-3.5 text-amber-200" aria-hidden="true" />
                   <span>{shortCountLabel}</span>
                 </div>
                 <button
                   type="button"
                   onClick={onOpenFilters}
-                  className="flex items-center justify-center gap-1 rounded-lg border border-white/20 bg-white/10 px-2 py-2 text-white transition hover:bg-white/20"
+                  className="flex basis-[30%] flex-none items-center justify-center rounded-lg border border-white/20 bg-white/10 px-2 py-2 text-white transition hover:bg-white/20"
                   aria-label="Open filters"
                 >
-                  <Filter className="h-3.5 w-3.5" aria-hidden="true" />
-                  <span>Filters</span>
+                  <Filter className="h-4 w-4" aria-hidden="true" />
+                  <span className="sr-only">Filters</span>
                 </button>
                 <button
                   type="button"
                   onClick={onArenaToggle}
                   className={cx(
-                    "flex items-center justify-center gap-1 rounded-lg border px-2 py-2 transition",
+                    "flex basis-[30%] flex-none items-center justify-center rounded-lg border px-2 py-2 transition",
                     showArena ? "border-amber-200/70 bg-amber-200/20 text-white" : "border-white/20 bg-white/10 text-white hover:bg-white/20"
                   )}
                   aria-pressed={showArena}
                   aria-label={showArena ? "Hide arena" : "Open arena"}
                 >
-                  <Swords className="h-3.5 w-3.5" aria-hidden="true" />
-                  <span>Arena</span>
+                  <Swords className="h-4 w-4" aria-hidden="true" />
+                  <span className="sr-only">Arena</span>
                 </button>
                 <button
                   type="button"
                   onClick={onClearFilters}
-                  className="flex items-center justify-center gap-1 rounded-lg border border-white/20 bg-white/10 px-2 py-2 text-white transition hover:bg-white/20"
+                  className="flex basis-[30%] flex-none items-center justify-center rounded-lg border border-white/20 bg-white/10 px-2 py-2 text-white transition hover:bg-white/20"
                   aria-label="Clear filters"
                 >
-                  <X className="h-3.5 w-3.5" aria-hidden="true" />
-                  <span>Clear</span>
+                  <X className="h-4 w-4" aria-hidden="true" />
+                  <span className="sr-only">Clear</span>
                 </button>
                 <button
                   type="button"
                   onClick={onSync}
-                  className="flex items-center justify-center gap-1 rounded-lg border border-white/20 bg-white/10 px-2 py-2 text-white transition hover:bg-white/20"
+                  className="flex basis-[30%] flex-none items-center justify-center rounded-lg border border-white/20 bg-white/10 px-2 py-2 text-white transition hover:bg-white/20"
                   aria-label="Sync universe"
                 >
-                  <RefreshCcw className="h-3.5 w-3.5" aria-hidden="true" />
-                  <span>Sync</span>
+                  <RefreshCcw className="h-4 w-4" aria-hidden="true" />
+                  <span className="sr-only">Sync</span>
                 </button>
                 <button
                   type="button"
                   onClick={cycleDisplayMode}
-                  className="flex items-center justify-center gap-1 rounded-lg border border-white/20 bg-white/10 px-2 py-2 text-white transition hover:bg-white/20"
+                  className="flex basis-[30%] flex-none items-center justify-center rounded-lg border border-white/20 bg-white/10 px-2 py-2 text-white transition hover:bg-white/20"
                   aria-label="Show icon controls"
                 >
-                  <ChevronDown className="h-3.5 w-3.5" aria-hidden="true" />
-                  <span>Icons</span>
+                  <ChevronDown className="h-4 w-4" aria-hidden="true" />
+                  <span className="sr-only">Icon mode</span>
                 </button>
               </div>
             </div>
@@ -2957,7 +2992,7 @@ function ToolsBar({
     );
   } else if (mountEl) {
     renderedToolbar = createPortal(
-      <div className="pointer-events-none px-5 pt-6 pb-10 sm:px-10 lg:px-24 xl:px-28">
+      <div className="pointer-events-none px-4 pt-6 pb-10 sm:px-8 lg:px-16 xl:px-20 2xl:px-24">
         <div className="pointer-events-auto">{renderToolbar()}</div>
       </div>,
       mountEl
@@ -3226,6 +3261,7 @@ function HeroSection({
   const [snippetIndex, setSnippetIndex] = useState(0);
   const [tickerIndex, setTickerIndex] = useState(0);
   const [featureImageIndex, setFeatureImageIndex] = useState(0);
+  const [featureSequence, setFeatureSequence] = useState([]);
 
   const tickerNames = useMemo(() => {
     const names = (characterNames || [])
@@ -3323,19 +3359,25 @@ function HeroSection({
 
   useEffect(() => {
     if (current?.key !== "character") {
+      setFeatureSequence([]);
       setFeatureImageIndex(0);
       return undefined;
     }
     const charData = current?.data;
     const sources = [charData?.cover, ...(charData?.gallery || [])].filter(Boolean);
     if (!sources.length) {
+      setFeatureSequence([]);
       setFeatureImageIndex(0);
       return undefined;
     }
-    setFeatureImageIndex((value) => value % sources.length);
+    const rng = seededRandom(`${charData.id || charData.name || "character"}|feature`);
+    const order = sources.slice().sort(() => rng() - 0.5);
+    const initialIndex = Math.floor(rng() * order.length);
+    setFeatureSequence(order);
+    setFeatureImageIndex(initialIndex);
     const timer = setInterval(() => {
-      setFeatureImageIndex((value) => (value + 1) % sources.length);
-    }, 5200);
+      setFeatureImageIndex((value) => (value + 1) % order.length);
+    }, 30000);
     return () => clearInterval(timer);
   }, [current]);
 
@@ -3362,16 +3404,16 @@ function HeroSection({
       );
     }
     const images = [char.cover, ...(char.gallery || [])].filter(Boolean);
-    const heroImage = images[0];
-    const slideshowSources = images.length ? images : heroImage ? [heroImage] : [];
-    const accentImage =
-      slideshowSources.length > 0
-        ? slideshowSources[featureImageIndex % slideshowSources.length]
+    const backgroundSources = featureSequence.length ? featureSequence : images;
+    const activeBackground =
+      backgroundSources.length > 0
+        ? backgroundSources[featureImageIndex % backgroundSources.length]
         : null;
     const topPowers = [...(char.powers || [])]
       .sort((a, b) => (Number(b.level) || 0) - (Number(a.level) || 0))
       .slice(0, 3);
     const primaryLocation = (char.locations || [])[0];
+    const primaryAlias = Array.isArray(char.alias) ? char.alias[0] : char.alias;
     const snippets = [
       char.shortDesc,
       char.longDesc ? `${char.longDesc.slice(0, 160).trimEnd()}${char.longDesc.length > 160 ? "…" : ""}` : null,
@@ -3387,6 +3429,90 @@ function HeroSection({
     const dossierAria = activeSnippet
       ? `Read more about ${char.name}: ${activeSnippet}`
       : `Read more about ${char.name}`;
+    if (isCompact) {
+      const mobileSnippet =
+        activeSnippet ||
+        snippets[0] ||
+        char.shortDesc ||
+        (char.longDesc ? `${char.longDesc.slice(0, 140).trimEnd()}${char.longDesc.length > 140 ? "…" : ""}` : "");
+      return (
+        <div
+          role="button"
+          tabIndex={0}
+          onClick={openProfile}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" || event.key === " ") {
+              event.preventDefault();
+              openProfile();
+            }
+          }}
+          className="relative flex h-full flex-col justify-end overflow-hidden rounded-[32px] border border-white/15 bg-black/70 p-6 text-white"
+        >
+          {activeBackground && (
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={`${char.id || "character"}-${activeBackground}`}
+                initial={{ opacity: 0.4, scale: 1.08 }}
+                animate={{ opacity: 0.95, scale: 1 }}
+                exit={{ opacity: 0, scale: 1.02 }}
+                transition={{ duration: 1.2, ease: "easeOut" }}
+                className="absolute inset-0"
+              >
+                <ImageSafe
+                  src={activeBackground}
+                  alt={`${char.name} spotlight`}
+                  fallbackLabel={char.name}
+                  className="h-full w-full object-cover object-[72%_center]"
+                />
+              </motion.div>
+            </AnimatePresence>
+          )}
+          <div className="absolute inset-0 bg-gradient-to-b from-black/85 via-[#080d22]/72 to-[#050811]/55" />
+          <div className="relative z-10 space-y-3">
+            <Badge className="bg-white/15 text-[10px] font-semibold uppercase tracking-[0.3em] text-white/80">{slide.label}</Badge>
+            <div className="space-y-1">
+              <h2 className="text-3xl font-black leading-tight">{char.name}</h2>
+              {primaryAlias && <p className="text-sm font-semibold text-white/75">also known as {primaryAlias}</p>}
+            </div>
+            {primaryLocation && (
+              <button
+                type="button"
+                onClick={(event) => handleFacetClick(event, { key: "locations", value: primaryLocation })}
+                className="rounded-full border border-white/25 bg-white/10 px-3 py-1 text-[11px] font-semibold text-white/85"
+              >
+                {primaryLocation}
+              </button>
+            )}
+            {mobileSnippet && <p className="text-sm font-semibold text-white/80">{mobileSnippet}</p>}
+            {topPowers[0] && (
+              <div className="flex items-center gap-2 text-[11px] font-semibold text-white/75">
+                <Atom className="h-4 w-4" aria-hidden="true" /> {topPowers[0].name} • {topPowers[0].level}/10
+              </div>
+            )}
+            <Button
+              type="button"
+              variant="gradient"
+              size="sm"
+              onClick={(event) => {
+                event.stopPropagation();
+                openProfile();
+              }}
+              aria-label={dossierAria}
+              className="mt-2 inline-flex items-center gap-2 rounded-full px-5 py-2 text-sm font-semibold shadow-[0_18px_48px_rgba(253,230,138,0.35)]"
+            >
+              Dive into the dossier
+              <ArrowRight className="h-4 w-4" aria-hidden="true" />
+            </Button>
+          </div>
+          {!activeBackground && (
+            <div className="relative z-10 mt-6 rounded-2xl border border-dashed border-white/30 bg-black/60 px-4 py-4 text-center text-xs font-semibold text-white/70">
+              Classified imagery — open dossier
+            </div>
+          )}
+        </div>
+      );
+    }
+
     return (
       <div
         role="button"
@@ -3398,78 +3524,60 @@ function HeroSection({
             openProfile();
           }
         }}
-        className="relative flex h-full flex-col justify-center overflow-hidden rounded-[32px] border border-white/15 bg-black/60 p-6 text-white sm:p-8 lg:p-12"
+        className="relative flex h-full flex-col justify-center overflow-hidden rounded-[32px] border border-white/15 bg-black/65 p-8 text-white lg:p-12"
       >
-        {(heroImage || accentImage) && (
+        {activeBackground && (
           <AnimatePresence mode="wait">
             <motion.div
-              key={`${char.id || "character"}-${heroImage || accentImage}`}
-              initial={{ opacity: 0.55, scale: 1.05 }}
-              animate={{ opacity: 0.85, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.98 }}
+              key={`${char.id || "character"}-${activeBackground}`}
+              initial={{ opacity: 0.45, scale: 1.06 }}
+              animate={{ opacity: 0.95, scale: 1 }}
+              exit={{ opacity: 0, scale: 1.02 }}
               transition={{ duration: 1.2, ease: "easeOut" }}
               className="absolute inset-0"
             >
               <ImageSafe
-                src={heroImage || accentImage}
+                src={activeBackground}
                 alt={`${char.name} backdrop`}
                 fallbackLabel={char.name}
-                className="h-full w-full object-cover object-[72%_center]"
+                className="h-full w-full object-cover object-[74%_center] lg:object-[68%_center]"
               />
             </motion.div>
           </AnimatePresence>
         )}
-        <div className="absolute inset-0 bg-gradient-to-r from-black/92 via-[#070f29]/78 to-transparent" />
-        {accentImage && (
-          <div className="pointer-events-none absolute inset-y-0 right-0 w-3/4 max-w-2xl">
-            <AnimatePresence mode="wait">
-              <motion.div
-                key={`${char.id || "character"}-accent-${accentImage}`}
-                initial={{ opacity: 0, x: 28 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: 28 }}
-                transition={{ duration: 1.4, ease: "easeOut" }}
-                className="relative h-full"
-              >
-                <ImageSafe
-                  src={accentImage}
-                  alt={`${char.name} highlight`}
-                  fallbackLabel={char.name}
-                  className="h-full w-full object-cover object-[65%_center]"
-                />
-                <div className="absolute inset-y-0 left-0 w-40 bg-gradient-to-r from-[#050917]/95 via-[#050917]/45 to-transparent" />
-                <div className="absolute inset-y-0 right-0 w-12 bg-gradient-to-l from-transparent to-[#050917]/30" />
-              </motion.div>
-            </AnimatePresence>
+        <div className="absolute inset-0 bg-gradient-to-r from-black/85 via-[#080d22]/70 to-[#050811]/45" />
+        <div className="relative z-10 flex max-w-4xl flex-col gap-6">
+          <Badge className="w-max bg-white/15 px-4 py-1 text-[11px] font-semibold uppercase tracking-[0.35em] text-white/80">
+            {slide.label}
+          </Badge>
+          <div className="space-y-3">
+            <h2 className="text-4xl font-black leading-tight tracking-tight sm:text-5xl xl:text-6xl">{char.name}</h2>
+            {primaryAlias && <p className="text-base font-semibold text-white/80">Alias: {primaryAlias}</p>}
           </div>
-        )}
-        <div className="relative z-10 flex flex-col gap-8 lg:flex-row lg:items-end">
-          <div className="max-w-3xl space-y-5">
-            <Badge className="bg-white/15 text-white/85">{slide.label}</Badge>
-            <h2 className="text-3xl font-black leading-tight tracking-tight text-balance sm:text-5xl">{char.name}</h2>
-            <p className="text-sm font-semibold text-white/80 sm:text-base lg:text-lg">
-              {char.shortDesc || char.longDesc?.slice(0, 220) || "A legend awaits their tale to be told."}
-            </p>
-            <div className="flex flex-wrap gap-2 text-[11px] sm:text-xs">
-              {char.gender && (
-                <FacetChip onClick={(event) => handleFacetClick(event, { key: "gender", value: char.gender })}>
-                  Gender: {char.gender}
-                </FacetChip>
-              )}
-              {primaryLocation && (
-                <FacetChip onClick={(event) => handleFacetClick(event, { key: "locations", value: primaryLocation })}>
-                  {primaryLocation}
-                </FacetChip>
-              )}
-              {(char.faction || []).map((faction) => (
-                <FacetChip key={faction} onClick={(event) => handleFacetClick(event, { key: "faction", value: faction })}>
-                  {faction}
-                </FacetChip>
-              ))}
-            </div>
-            <div className="space-y-4">
-              <div className="flex items-center gap-2 text-[11px] font-bold tracking-wide text-white/70 sm:text-xs">
-                <Atom size={14} aria-hidden="true" /> Top powers
+          <p className="max-w-3xl text-base font-semibold text-white/80 lg:text-lg">
+            {activeSnippet || char.shortDesc || char.longDesc?.slice(0, 220) || "A legend awaits their tale to be told."}
+          </p>
+          <div className="flex flex-wrap gap-2 text-[11px] sm:text-xs">
+            {char.gender && (
+              <FacetChip onClick={(event) => handleFacetClick(event, { key: "gender", value: char.gender })}>
+                {char.gender}
+              </FacetChip>
+            )}
+            {primaryLocation && (
+              <FacetChip onClick={(event) => handleFacetClick(event, { key: "locations", value: primaryLocation })}>
+                {primaryLocation}
+              </FacetChip>
+            )}
+            {(char.faction || []).map((faction) => (
+              <FacetChip key={faction} onClick={(event) => handleFacetClick(event, { key: "faction", value: faction })}>
+                {faction}
+              </FacetChip>
+            ))}
+          </div>
+          {!!topPowers.length && (
+            <div className="space-y-3">
+              <div className="flex items-center gap-2 text-xs font-bold tracking-wide text-white/75">
+                <Atom size={16} aria-hidden="true" /> Top powers
               </div>
               <div className="flex flex-wrap gap-2">
                 {topPowers.map((power) => (
@@ -3477,31 +3585,33 @@ function HeroSection({
                     key={power.name}
                     type="button"
                     onClick={(event) => handleFacetClick(event, { key: "powers", value: power.name })}
-                    className="rounded-full bg-white/10 px-3 py-1 text-[11px] font-bold tracking-wide text-white/90 transition hover:bg-white/20"
+                    className="rounded-full bg-white/10 px-4 py-1.5 text-xs font-bold tracking-wide text-white/90 transition hover:bg-white/20"
                   >
                     {power.name} • {power.level}/10
                   </button>
                 ))}
               </div>
-              <Button
-                type="button"
-                variant="gradient"
-                size="sm"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  openProfile();
-                }}
-                aria-label={dossierAria}
-                className="inline-flex items-center gap-2 rounded-full px-5 py-2 text-sm font-semibold shadow-[0_18px_48px_rgba(253,230,138,0.35)]"
-              >
-                Dive into the dossier
-                <ArrowRight className="h-4 w-4" aria-hidden="true" />
-              </Button>
             </div>
+          )}
+          <div>
+            <Button
+              type="button"
+              variant="gradient"
+              size="md"
+              onClick={(event) => {
+                event.stopPropagation();
+                openProfile();
+              }}
+              aria-label={dossierAria}
+              className="inline-flex items-center gap-3 rounded-full px-6 py-3 text-sm font-semibold shadow-[0_18px_48px_rgba(253,230,138,0.35)]"
+            >
+              Dive into the dossier
+              <ArrowRight className="h-4 w-4" aria-hidden="true" />
+            </Button>
           </div>
         </div>
-        {!accentImage && !heroImage && (
-          <div className="relative z-10 mt-6 rounded-2xl border border-dashed border-white/30 bg-black/50 px-4 py-5 text-center text-xs font-semibold text-white/70 sm:text-sm">
+        {!activeBackground && (
+          <div className="relative z-10 mt-6 rounded-2xl border border-dashed border-white/30 bg-black/55 px-4 py-5 text-center text-xs font-semibold text-white/70 sm:text-sm">
             Classified imagery — open dossier
           </div>
         )}
@@ -3676,7 +3786,7 @@ function HeroSection({
       <div className="absolute inset-x-0 top-0 h-32 bg-gradient-to-b from-black/50 to-transparent" />
       <div className="absolute -left-24 bottom-0 h-72 w-72 rounded-full bg-amber-400/15 blur-3xl" />
       <div className="absolute -right-20 -top-10 h-72 w-72 rounded-full bg-fuchsia-500/15 blur-3xl" />
-      <div className="relative z-10 mx-auto flex min-h-screen w-full max-w-none flex-col px-5 pb-[var(--toolbar-offset,7rem)] pt-10 sm:px-10 lg:px-24 xl:px-28">
+      <div className="relative z-10 mx-auto flex min-h-screen w-full max-w-none flex-col px-4 pb-[var(--toolbar-offset,7rem)] pt-10 sm:px-8 lg:px-16 xl:px-20 2xl:px-24">
         <header
           id="lore-header"
           className="flex flex-wrap items-center justify-between gap-4 rounded-[28px] border border-white/30 bg-black/60 px-5 py-2 backdrop-blur-3xl shadow-[0_20px_60px_rgba(8,10,26,0.55)]"
@@ -3845,7 +3955,7 @@ function HeroSection({
       </div>
       <div
         id="hero-toolbar-mount"
-        className="pointer-events-none absolute inset-x-0 bottom-0 z-30 px-5 pb-16 sm:px-10 lg:px-24 xl:px-28"
+        className="pointer-events-none absolute inset-x-0 bottom-0 z-30 px-4 pb-16 sm:px-8 lg:px-16 xl:px-20 2xl:px-24"
       />
     </section>
   );
