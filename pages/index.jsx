@@ -2031,6 +2031,7 @@ function SidebarFilters({ data, filters, setFilters, combineAND, setCombineAND, 
   const statuses = useMemo(() => uniq(data.map((item) => item.status || "")), [data]);
   const stories = useMemo(() => uniq(data.flatMap((item) => item.stories || [])), [data]);
   const powers = useMemo(() => uniq(data.flatMap((item) => (item.powers || []).map((p) => p.name))), [data]);
+  const [searchTerm, setSearchTerm] = useState("");
 
   const toggle = (key, value, single = false) => {
     setFilters((prev) => {
@@ -2075,6 +2076,7 @@ function SidebarFilters({ data, filters, setFilters, combineAND, setCombineAND, 
         single
         activeValues={filters.gender}
         onToggle={(value) => toggle("gender", value, true)}
+        searchTerm={searchTerm}
       />
       <FilterSection
         title="Alignment"
@@ -2082,48 +2084,56 @@ function SidebarFilters({ data, filters, setFilters, combineAND, setCombineAND, 
         single
         activeValues={filters.alignment}
         onToggle={(value) => toggle("alignment", value, true)}
+        searchTerm={searchTerm}
       />
       <FilterSection
         title="Era"
         values={eras}
         activeValues={filters.era || []}
         onToggle={(value) => toggle("era", value)}
+        searchTerm={searchTerm}
       />
       <FilterSection
         title="Locations"
         values={locations}
         activeValues={filters.locations || []}
         onToggle={(value) => toggle("locations", value)}
+        searchTerm={searchTerm}
       />
       <FilterSection
         title="Faction / Team"
         values={factions}
         activeValues={filters.faction || []}
         onToggle={(value) => toggle("faction", value)}
+        searchTerm={searchTerm}
       />
       <FilterSection
         title="Powers"
         values={powers}
         activeValues={filters.powers || []}
         onToggle={(value) => toggle("powers", value)}
+        searchTerm={searchTerm}
       />
       <FilterSection
         title="Tags"
         values={tags}
         activeValues={filters.tags || []}
         onToggle={(value) => toggle("tags", value)}
+        searchTerm={searchTerm}
       />
       <FilterSection
         title="Status"
         values={statuses}
         activeValues={filters.status || []}
         onToggle={(value) => toggle("status", value)}
+        searchTerm={searchTerm}
       />
       <FilterSection
         title="Stories"
         values={stories}
         activeValues={filters.stories || []}
         onToggle={(value) => toggle("stories", value)}
+        searchTerm={searchTerm}
       />
     </div>
   );
@@ -2424,20 +2434,228 @@ function ToolsBar({
                 onChange={(event) => onSortModeChange(event.target.value)}
                 className="w-full appearance-none rounded-xl border border-white/25 bg-black/70 px-3 py-2 pr-9 text-sm font-semibold text-white shadow-inner focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300"
               >
-                {SORT_OPTIONS.map((item) => (
-                  <option key={item.value} value={item.value} className="bg-black text-white">
-                    {item.label}
-                  </option>
-                ))}
-              </select>
-              <ArrowDown className="pointer-events-none absolute right-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-white/70" aria-hidden="true" />
-            </div>
+                <div className="flex items-center justify-between gap-3">
+                  <span>Lore controls hidden</span>
+                  <Button
+                    variant="subtle"
+                    size="sm"
+                    onClick={() => setCollapsed(false)}
+                    className="flex-none"
+                    aria-label="Expand universe controls"
+                  >
+                    <ChevronUp className="h-4 w-4" aria-hidden="true" />
+                    <span className="text-xs font-semibold">Show</span>
+                  </Button>
+                </div>
+              </motion.div>
+            ) : (
+              <motion.div
+                key="toolbar-expanded"
+                ref={setContentEl}
+                layout
+                initial={{ opacity: 0, y: 12 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -12 }}
+                transition={{ duration: 0.25, ease: "easeOut" }}
+                className="rounded-3xl border border-white/12 bg-[#070b1c]/90 px-4 py-3 shadow-[0_18px_48px_rgba(8,8,20,0.45)] backdrop-blur-xl"
+              >
+                <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+                  <label className="relative flex-1 min-w-[220px] sm:min-w-[260px]" htmlFor="universe-search">
+                    <span className="sr-only">Search the universe</span>
+                    <Input
+                      id="universe-search"
+                      value={query}
+                      onChange={(event) => onQueryChange(event.target.value)}
+                      placeholder="Search characters, powers, locations, tags…"
+                      className="w-full bg-white/15 pl-10 pr-3 text-sm text-white placeholder:text-white/60"
+                    />
+                    <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/70" aria-hidden="true" />
+                  </label>
+                  <div className="relative w-full min-w-[160px] sm:w-48">
+                    <span className="sr-only" id="sort-menu-label">
+                      Sort heroes
+                    </span>
+                    <select
+                      aria-labelledby="sort-menu-label"
+                      value={sortMode}
+                      onChange={(event) => onSortModeChange(event.target.value)}
+                      className="w-full appearance-none rounded-xl border border-white/25 bg-black/70 px-3 py-2 pr-9 text-sm font-semibold text-white shadow-inner focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300"
+                    >
+                      {SORT_OPTIONS.map((item) => (
+                        <option key={item.value} value={item.value} className="bg-black text-white">
+                          {item.label}
+                        </option>
+                      ))}
+                    </select>
+                    <ArrowDown className="pointer-events-none absolute right-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-white/70" aria-hidden="true" />
+                  </div>
+                  <Button
+                    variant="gradient"
+                    size="sm"
+                    onClick={onOpenFilters}
+                    className="flex-none shadow-[0_15px_40px_rgba(250,204,21,0.3)]"
+                    aria-label="Open filters"
+                  >
+                    <Filter className="h-4 w-4" aria-hidden="true" />
+                    <span className="text-xs font-semibold sm:text-sm">Filters</span>
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={onClearFilters}
+                    className="flex-none"
+                    aria-label="Clear filters"
+                  >
+                    <X size={14} aria-hidden="true" />
+                    <span className="text-xs font-semibold sm:text-sm">Clear</span>
+                  </Button>
+                  <div className="flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1.5 text-xs font-semibold text-white/85">
+                    <Users className="h-3.5 w-3.5 text-amber-200" aria-hidden="true" />
+                    <span>{countLabel}</span>
+                  </div>
+                  <Button
+                    variant="subtle"
+                    size="sm"
+                    onClick={onArenaToggle}
+                    className={cx("flex-none", showArena ? "ring-2 ring-amber-300/70" : "")}
+                    aria-pressed={showArena}
+                    aria-label={showArena ? "Hide arena" : "Open arena"}
+                  >
+                    <Swords size={14} aria-hidden="true" />
+                    <span className="text-xs font-semibold sm:text-sm">{showArena ? "Hide Arena" : "Arena"}</span>
+                  </Button>
+                  <Button
+                    variant="dark"
+                    size="sm"
+                    onClick={onSync}
+                    className="flex-none"
+                    aria-label="Sync universe"
+                  >
+                    <RefreshCcw size={14} aria-hidden="true" />
+                    <span className="text-xs font-semibold sm:text-sm">Sync</span>
+                  </Button>
+                  <Button
+                    variant={isMobile ? "gradient" : "ghost"}
+                    size={isMobile ? "md" : "sm"}
+                    onClick={() => setCollapsed(true)}
+                    className={cx("flex-none", isMobile ? "ml-auto px-4" : "px-4 sm:px-3")}
+                    aria-label="Collapse universe controls"
+                  >
+                    <ChevronDown className="h-4 w-4" aria-hidden="true" />
+                    <span
+                      className={cx(
+                        "text-xs font-semibold",
+                        isMobile ? "ml-2" : "ml-1 sm:hidden"
+                      )}
+                    >
+                      {isMobile ? "Hide controls" : "Hide"}
+                    </span>
+                  </Button>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
+function QuickFilterRail({ data, onFacet, onSortModeChange, sortMode, onOpenFilters }) {
+  const [open, setOpen] = useState(false);
+  const quickSorts = [
+    { value: "default", label: "Featured" },
+    { value: "az", label: "A-Z" },
+    { value: "faction", label: "By Faction" },
+    { value: "most", label: "Most Powerful" },
+  ];
+
+  const topCollections = useMemo(() => {
+    const tally = (getter) => {
+      const counts = new Map();
+      data.forEach((item) => {
+        getter(item).forEach((value) => {
+          if (!value) return;
+          const entry = counts.get(value) || { count: 0 };
+          entry.count += 1;
+          counts.set(value, entry);
+        });
+      });
+      return Array.from(counts.entries())
+        .map(([value, meta]) => ({ value, count: meta.count }))
+        .sort((a, b) => b.count - a.count);
+    };
+
+    const locations = tally((item) => item.locations || []).slice(0, 6);
+    const factions = tally((item) => item.faction || []).slice(0, 6);
+
+    const powerMap = new Map();
+    data.forEach((item) => {
+      (item.powers || []).forEach((power) => {
+        if (!power?.name) return;
+        const entry = powerMap.get(power.name) || { count: 0, total: 0 };
+        entry.count += 1;
+        entry.total += Number(power.level) || 0;
+        powerMap.set(power.name, entry);
+      });
+    });
+    const powers = Array.from(powerMap.entries())
+      .map(([name, meta]) => ({
+        value: name,
+        count: meta.count,
+        avg: meta.count ? meta.total / meta.count : 0,
+      }))
+      .sort((a, b) => {
+        if (b.avg === a.avg) return b.count - a.count;
+        return b.avg - a.avg;
+      })
+      .slice(0, 8);
+
+    return { locations, factions, powers };
+  }, [data]);
+
+  const renderChip = (item, key) => (
+    <button
+      key={`${key}-${item.value}`}
+      type="button"
+      onClick={() => onFacet({ key, value: item.value })}
+      className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/8 px-3 py-1.5 text-xs font-semibold text-white transition hover:border-amber-200/70 hover:bg-amber-200/15"
+    >
+      <span>{item.value}</span>
+      <span className="text-[11px] text-white/60">{item.count}</span>
+    </button>
+  );
+
+  if (!open) {
+    return (
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="group flex w-full items-center justify-between rounded-full border border-white/15 bg-white/5 px-4 py-3 text-xs font-semibold uppercase tracking-[0.3em] text-white/70 transition hover:border-white/40 hover:bg-white/10"
+        aria-expanded="false"
+      >
+        <span className="flex items-center gap-2 text-white/80">
+          <Sparkles className="h-4 w-4 text-amber-200" aria-hidden="true" /> Discover quickly
+        </span>
+        <ChevronDown className="h-4 w-4 text-white/60 transition group-hover:text-white" aria-hidden="true" />
+      </button>
+    );
+  }
+
+  return (
+    <Card className="border border-white/15 bg-white/5 backdrop-blur-2xl">
+      <CardContent className="space-y-6">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2 text-sm font-semibold text-white/80">
+            <Sparkles className="h-4 w-4 text-amber-200" aria-hidden="true" /> Discover quickly
+          </div>
+          <div className="flex items-center gap-2">
             <Button
-              variant="gradient"
+              variant="ghost"
               size="sm"
               onClick={onOpenFilters}
-              className="flex-none shadow-[0_15px_40px_rgba(250,204,21,0.3)]"
-              aria-label="Open filters"
+              className="px-3 text-xs font-semibold text-white/70 hover:text-white"
             >
               <Filter className="h-4 w-4" aria-hidden="true" />
               <span className="text-xs font-semibold sm:text-sm">Filters</span>
@@ -3747,7 +3965,85 @@ export default function LoremakerApp({ initialCharacters = [], initialError = nu
             />
           </div>
         </div>
-      </main>
+      </footer>
+
+      <footer className="border-t border-white/10 bg-black/50 backdrop-blur-2xl">
+        <div className="mx-auto max-w-7xl px-3 py-10 sm:px-4">
+          <div className="grid gap-8 md:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)]">
+            <div className="space-y-4">
+              <p className="text-xs font-black tracking-[0.35em] text-white/70">LoreMaker Universe</p>
+              <p className="text-[11px] font-semibold tracking-[0.3em] text-white/60">
+                © {currentYear} Menelek Makonnen.
+              </p>
+              <p className="text-[11px] font-semibold tracking-[0.3em] text-white/60">
+                All characters, stories, lore, and artwork from the LoreMaker Universe are protected by copyright.
+              </p>
+            </div>
+            <div className="space-y-4">
+              <p className="text-xs font-black tracking-[0.35em] text-white/70">Explore</p>
+              <div className="flex flex-col gap-2">
+                <Button
+                  as="a"
+                  href="#arena-anchor"
+                  variant="subtle"
+                  size="sm"
+                  className="justify-start gap-2 px-4 text-[10px] tracking-[0.3em]"
+                >
+                  <Swords className="h-4 w-4" aria-hidden="true" />
+                  Battle Arena
+                </Button>
+                <Button
+                  type="button"
+                  onClick={handleRandomCharacter}
+                  variant="subtle"
+                  size="sm"
+                  className="justify-start gap-2 px-4 text-[10px] tracking-[0.3em]"
+                >
+                  <Sparkles className="h-4 w-4" aria-hidden="true" />
+                  Random Character
+                </Button>
+                <Button
+                  as="a"
+                  href="#characters-grid"
+                  variant="subtle"
+                  size="sm"
+                  className="justify-start gap-2 px-4 text-[10px] tracking-[0.3em]"
+                >
+                  <Users className="h-4 w-4" aria-hidden="true" />
+                  Character Archive
+                </Button>
+              </div>
+            </div>
+            <div className="space-y-4">
+              <p className="text-xs font-black tracking-[0.35em] text-white/70">Connect</p>
+              <div className="flex flex-col gap-2">
+                <Button
+                  as="a"
+                  href="https://menelekmakonnen.com"
+                  target="_blank"
+                  rel="noreferrer"
+                  variant="subtle"
+                  size="sm"
+              className="justify-start gap-2 px-4 text-[10px] tracking-[0.3em]"
+            >
+              <ArrowRight className="h-4 w-4" aria-hidden="true" />
+              Menelek Makonnen
+            </Button>
+                <Button
+                  type="button"
+                  onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+                  variant="ghost"
+                  size="sm"
+                  className="justify-start gap-2 px-4 text-[10px] tracking-[0.3em] text-white/70 hover:text-white"
+                >
+                  <ArrowUp className="h-4 w-4" aria-hidden="true" />
+                  Back to Top
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </footer>
 
       <footer className="border-t border-white/10 bg-black/50 backdrop-blur-2xl">
         <div className="mx-auto max-w-7xl px-3 py-10 sm:px-4">
