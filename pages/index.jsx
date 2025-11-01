@@ -7,6 +7,7 @@ import React, {
   useId,
   useLayoutEffect,
 } from "react";
+import Head from "next/head";
 import { AnimatePresence, motion, useMotionValue, useSpring, useTransform } from "framer-motion";
 import {
   Search,
@@ -876,9 +877,11 @@ function ImageSafe({ src, alt, className = "", fallbackLabel }) {
       src={src}
       alt={alt}
       onError={() => setError(true)}
+      onLoad={() => setError(false)}
       className={className}
       loading="lazy"
       referrerPolicy="no-referrer"
+      crossOrigin="anonymous"
       decoding="async"
     />
   );
@@ -2206,6 +2209,7 @@ function ToolsBar({
   const [collapsed, setCollapsed] = useState(false);
   const [contentEl, setContentEl] = useState(null);
   const [ready, setReady] = useState(false);
+  const isMobile = useMediaQuery("(max-width: 640px)");
 
   useIsomorphicLayoutEffect(() => {
     if (!contentEl || typeof ResizeObserver === "undefined") return undefined;
@@ -2234,7 +2238,6 @@ function ToolsBar({
     const update = () => {
       const rect = hero.getBoundingClientRect();
       const height = barHeight || lastKnownHeight || 0;
-      const viewHeight = typeof window !== "undefined" ? window.innerHeight || 0 : 0;
       if (!height) {
         setMode("static");
         setFloatingTop(0);
@@ -2254,8 +2257,7 @@ function ToolsBar({
       }
 
       const attachedTop = heroBottom - height;
-      const maxTop = Math.max(viewHeight - height, 0);
-      const safe = clamp(attachedTop, 0, maxTop);
+      const safe = Math.max(attachedTop, 0);
       setMode("attached");
       setFloatingTop(safe);
       hero.style.setProperty("--toolbar-offset", `${Math.ceil(height + 32)}px`);
@@ -2283,10 +2285,7 @@ function ToolsBar({
     <div className="relative">
       {isFloating && <div style={{ height: placeholderHeight }} aria-hidden="true" />}
       <div
-        className={cx(
-          "transition-all duration-200",
-          isFloating ? "fixed inset-x-0 z-50" : ""
-        )}
+        className={cx(isFloating ? "fixed inset-x-0 z-50" : "")}
         style={isFloating ? { top: safeTop } : undefined}
       >
         <div className="mx-auto max-w-7xl px-3 sm:px-4">
@@ -2310,7 +2309,7 @@ function ToolsBar({
                     aria-label="Expand universe controls"
                   >
                     <ChevronUp className="h-4 w-4" aria-hidden="true" />
-                    <span className="hidden sm:inline">Show</span>
+                    <span className="text-xs font-semibold">Show</span>
                   </Button>
                 </div>
               </motion.div>
@@ -2401,14 +2400,21 @@ function ToolsBar({
                     <span className="text-xs font-semibold sm:text-sm">Sync</span>
                   </Button>
                   <Button
-                    variant="ghost"
-                    size="sm"
+                    variant={isMobile ? "gradient" : "ghost"}
+                    size={isMobile ? "md" : "sm"}
                     onClick={() => setCollapsed(true)}
-                    className="flex-none px-4 sm:px-3"
+                    className={cx("flex-none", isMobile ? "ml-auto px-4" : "px-4 sm:px-3")}
                     aria-label="Collapse universe controls"
                   >
                     <ChevronDown className="h-4 w-4" aria-hidden="true" />
-                    <span className="ml-1 text-xs font-semibold sm:hidden">Hide</span>
+                    <span
+                      className={cx(
+                        "text-xs font-semibold",
+                        isMobile ? "ml-2" : "ml-1 sm:hidden"
+                      )}
+                    >
+                      {isMobile ? "Hide controls" : "Hide"}
+                    </span>
                   </Button>
                 </div>
               </motion.div>
@@ -2422,6 +2428,7 @@ function ToolsBar({
 
 
 function QuickFilterRail({ data, onFacet, onSortModeChange, sortMode, onOpenFilters }) {
+  const [open, setOpen] = useState(false);
   const quickSorts = [
     { value: "default", label: "Featured" },
     { value: "az", label: "A-Z" },
@@ -2485,14 +2492,48 @@ function QuickFilterRail({ data, onFacet, onSortModeChange, sortMode, onOpenFilt
     </button>
   );
 
+  if (!open) {
+    return (
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="group flex w-full items-center justify-between rounded-full border border-white/15 bg-white/5 px-4 py-3 text-xs font-semibold uppercase tracking-[0.3em] text-white/70 transition hover:border-white/40 hover:bg-white/10"
+        aria-expanded="false"
+      >
+        <span className="flex items-center gap-2 text-white/80">
+          <Sparkles className="h-4 w-4 text-amber-200" aria-hidden="true" /> Discover quickly
+        </span>
+        <ChevronDown className="h-4 w-4 text-white/60 transition group-hover:text-white" aria-hidden="true" />
+      </button>
+    );
+  }
+
   return (
     <Card className="border border-white/15 bg-white/5 backdrop-blur-2xl">
       <CardContent className="space-y-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="text-sm font-semibold text-white/80">Discover quickly</div>
-          <Button variant="ghost" size="sm" onClick={onOpenFilters} className="px-3 text-xs font-semibold text-white/70 hover:text-white">
-            Open full filters
-          </Button>
+          <div className="flex items-center gap-2 text-sm font-semibold text-white/80">
+            <Sparkles className="h-4 w-4 text-amber-200" aria-hidden="true" /> Discover quickly
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onOpenFilters}
+              className="px-3 text-xs font-semibold text-white/70 hover:text-white"
+            >
+              Open full filters
+            </Button>
+            <Button
+              variant="subtle"
+              size="sm"
+              onClick={() => setOpen(false)}
+              className="px-3 text-xs font-semibold text-white/80"
+              aria-label="Collapse quick filters"
+            >
+              <ChevronUp className="h-4 w-4" aria-hidden="true" />
+            </Button>
+          </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {quickSorts.map((item) => (
@@ -2530,7 +2571,7 @@ function QuickFilterRail({ data, onFacet, onSortModeChange, sortMode, onOpenFilt
         {!!topCollections.powers.length && (
           <div className="space-y-2">
             <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-white/60">
-              <HeartPulse className="h-4 w-4 text-amber-200" /> Top Powers
+              <Atom className="h-4 w-4 text-amber-200" /> Top powers
             </div>
             <div className="flex flex-wrap gap-2">
               {topCollections.powers.map((item) => renderChip(item, "powers"))}
@@ -2582,6 +2623,7 @@ function HeroSection({
   onToggleArena,
   onSync,
   showArena,
+  characterNames = [],
 }) {
   const isCompact = useMediaQuery("(max-width: 640px)");
   const heroRef = useRef(null);
@@ -2602,52 +2644,14 @@ function HeroSection({
   const [direction, setDirection] = useState(1);
   const autoPlayed = useRef(false);
   const [snippetIndex, setSnippetIndex] = useState(0);
+  const [tickerIndex, setTickerIndex] = useState(0);
 
-  useEffect(() => () => {
-    rippleTimers.current.forEach((timeout) => clearTimeout(timeout));
-    rippleTimers.current.clear();
-  }, []);
-
-  const updatePointerFromEvent = useCallback((event) => {
-    const rect = heroRef.current?.getBoundingClientRect();
-    if (!rect) return null;
-    const x = clamp(((event.clientX - rect.left) / rect.width) * 100, 5, 95);
-    const y = clamp(((event.clientY - rect.top) / rect.height) * 100, 5, 95);
-    return { x, y };
-  }, []);
-
-  const registerRipple = useCallback((coords) => {
-    const id = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-    setRipples((prev) => [...prev, { id, ...coords }]);
-    const timeout = setTimeout(() => {
-      rippleTimers.current.delete(id);
-      setRipples((prev) => prev.filter((item) => item.id !== id));
-    }, 900);
-    rippleTimers.current.set(id, timeout);
-  }, []);
-
-  const handlePointerMove = useCallback(
-    (event) => {
-      const coords = updatePointerFromEvent(event);
-      if (coords) setPointer(coords);
-    },
-    [updatePointerFromEvent]
-  );
-
-  const handlePointerLeave = useCallback(() => {
-    setPointer({ x: 50, y: 50 });
-  }, []);
-
-  const handlePointerDown = useCallback(
-    (event) => {
-      const coords = updatePointerFromEvent(event);
-      if (coords) {
-        setPointer(coords);
-        registerRipple(coords);
-      }
-    },
-    [registerRipple, updatePointerFromEvent]
-  );
+  const tickerNames = useMemo(() => {
+    const names = (characterNames || [])
+      .map((name) => (typeof name === "string" ? name.trim() : ""))
+      .filter(Boolean);
+    return Array.from(new Set(names));
+  }, [characterNames]);
 
   useEffect(() => () => {
     rippleTimers.current.forEach((timeout) => clearTimeout(timeout));
@@ -2701,6 +2705,18 @@ function HeroSection({
   }, [featured?.character?.id, featured?.faction?.name, featured?.location?.name, featured?.power?.name]);
 
   useEffect(() => {
+    setTickerIndex(0);
+  }, [tickerNames.length]);
+
+  useEffect(() => {
+    if (!tickerNames.length) return undefined;
+    const timer = setInterval(() => {
+      setTickerIndex((value) => (value + 1) % tickerNames.length);
+    }, 3600);
+    return () => clearInterval(timer);
+  }, [tickerNames]);
+
+  useEffect(() => {
     if (slides.length <= 1 || autoPlayed.current) return undefined;
     const timer = setTimeout(() => {
       setDirection(1);
@@ -2733,6 +2749,8 @@ function HeroSection({
     setDirection(1);
     setIndex((prev) => (prev + 1) % slides.length);
   };
+
+  const activeTickerName = tickerNames[tickerIndex % Math.max(tickerNames.length, 1)] || "Lore";
 
   const renderCharacter = (slide) => {
     const char = slide.data;
@@ -2888,7 +2906,7 @@ function HeroSection({
       return (
         <div className="relative flex h-full flex-col justify-between rounded-[32px] border border-white/15 bg-black/60 p-6 text-white">
           <div className="space-y-4">
-            <div className="text-[10px] font-bold tracking-[0.35em] text-white/70">{slide.label}</div>
+            <div className="text-sm font-semibold text-white/80">{slide.label}</div>
             <h2 className="text-2xl font-black leading-snug text-balance">{title}</h2>
             <p className="text-sm font-semibold text-white/75">{blurb}</p>
           </div>
@@ -2913,7 +2931,7 @@ function HeroSection({
         />
         <div className="relative z-10 grid flex-1 gap-8 lg:grid-cols-[3fr_2fr] lg:items-center">
           <div className="space-y-6">
-            <div className="text-xs font-bold tracking-[0.35em] text-white/70">{slide.label}</div>
+            <div className="text-sm font-semibold text-white/80">{slide.label}</div>
             <h2 className="text-3xl font-black leading-tight tracking-tight text-balance sm:text-5xl lg:text-6xl">{title}</h2>
             <p className="max-w-xl text-sm font-semibold text-white/80 sm:text-base lg:text-lg">{blurb}</p>
             <div className="flex flex-wrap gap-3">
@@ -2967,11 +2985,11 @@ function HeroSection({
                 </motion.div>
               ))}
               <motion.span
-                className="absolute inset-0 flex items-center justify-center text-xs font-extrabold tracking-[0.45em] text-white/70"
-                animate={{ opacity: [0.6, 1, 0.6], letterSpacing: ["0.45em", "0.5em", "0.45em"] }}
-                transition={{ duration: 14, repeat: Infinity, ease: "easeInOut" }}
+                className="absolute inset-0 flex items-center justify-center text-sm font-black text-white"
+                animate={{ opacity: [0.6, 1, 0.6] }}
+                transition={{ duration: 12, repeat: Infinity, ease: "easeInOut" }}
               >
-                Lore
+                {activeTickerName}
               </motion.span>
             </div>
           </div>
@@ -3065,10 +3083,10 @@ function HeroSection({
                   rel="noreferrer"
                   variant="subtle"
                   size="sm"
-                  className="px-3 py-1 text-xs font-semibold text-white/85"
-                >
-                  Creator Profile
-                </Button>
+              className="px-3 py-1 text-xs font-semibold text-white/85"
+            >
+              Menelek Makonnen
+            </Button>
               </div>
             </div>
           </div>
@@ -3194,7 +3212,7 @@ function HeroSection({
               </AnimatePresence>
             </div>
           </div>
-          <div className="flex flex-wrap items-center gap-4 text-sm font-semibold tracking-[0.15em] text-white/75">
+          <div className="flex flex-wrap items-center gap-4 text-sm font-semibold text-white/75">
             <Users className="h-4 w-4" />
             <span>There's more.</span>
             <Button
@@ -3228,6 +3246,15 @@ export default function LoremakerApp({ initialCharacters = [], initialError = nu
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [transferNotices, setTransferNotices] = useState([]);
   const currentYear = useMemo(() => new Date().getFullYear(), []);
+  const slugify = useCallback(
+    (value) =>
+      (value || "")
+        .toString()
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/(^-|-$)+/g, ""),
+    []
+  );
 
   const selectedIds = useMemo(
     () => [arenaSlots.left, arenaSlots.right].filter(Boolean),
@@ -3352,6 +3379,144 @@ export default function LoremakerApp({ initialCharacters = [], initialError = nu
   }, [filtered, sortMode]);
 
   const featured = useMemo(() => computeFeatured(data), [data]);
+  const universeNames = useMemo(() => data.map((c) => c.name).filter(Boolean), [data]);
+  const siteUrl = useMemo(() => {
+    const envUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://loremaker.app";
+    return envUrl.replace(/\/$/, "");
+  }, []);
+  const previewImage = useMemo(() => {
+    for (const char of data) {
+      if (char?.cover) return char.cover;
+      if (Array.isArray(char?.gallery) && char.gallery.length) return char.gallery[0];
+    }
+    return null;
+  }, [data]);
+  const keywordList = useMemo(() => {
+    const terms = new Set();
+    data.forEach((char) => {
+      if (char.name) terms.add(`${char.name} lore`);
+      if (Array.isArray(char.alias) && char.alias.length) terms.add(`${char.alias[0]} character`);
+      (char.faction || []).forEach((faction) => faction && terms.add(`${faction} faction`));
+      (char.locations || []).forEach((loc) => loc && terms.add(`${loc} heroes`));
+      (char.powers || []).forEach((power) => {
+        if (power?.name) terms.add(`${power.name} powers`);
+      });
+    });
+    return Array.from(terms).slice(0, 40).join(", ");
+  }, [data]);
+  const metaDescription = useMemo(() => {
+    const count = data.length;
+    const heroName = featured?.character?.name;
+    const heroLocale = featured?.character?.locations?.[0];
+    const base = `Explore ${count || "dozens of"} characters, factions, and powers inside Menelek Makonnen's LoreMaker Universe.`;
+    const highlight = heroName ? ` Spotlight on ${heroName}${heroLocale ? ` of ${heroLocale}` : ""}.` : "";
+    return `${base}${highlight}`.trim();
+  }, [data.length, featured?.character?.name, featured?.character?.locations]);
+  const schemaJson = useMemo(() => {
+    const clean = (value) => {
+      if (Array.isArray(value)) {
+        const arr = value.map((item) => clean(item)).filter((item) => {
+          if (item == null) return false;
+          if (Array.isArray(item)) return item.length > 0;
+          if (typeof item === "object") return Object.keys(item).length > 0;
+          return true;
+        });
+        return arr.length ? arr : null;
+      }
+      if (value && typeof value === "object") {
+        const obj = Object.fromEntries(
+          Object.entries(value)
+            .map(([key, val]) => [key, clean(val)])
+            .filter(([, val]) => val != null)
+        );
+        return Object.keys(obj).length ? obj : null;
+      }
+      return value ?? null;
+    };
+
+    const graph = [];
+    if (!data.length) {
+      graph.push(
+        clean({
+          "@type": "Organization",
+          "@id": `${siteUrl}#organization`,
+          name: "LoreMaker Universe",
+          url: siteUrl,
+          founder: { "@type": "Person", name: "Menelek Makonnen", url: "https://menelekmakonnen.com" },
+        })
+      );
+      return JSON.stringify({ "@context": "https://schema.org", "@graph": graph });
+    }
+
+    const limit = Math.min(120, data.length);
+    const characters = data
+      .slice(0, limit)
+      .map((char) => {
+        const slug = char.id || slugify(char.name);
+        const url = `${siteUrl}/characters/${slug}`;
+        const alias = Array.isArray(char.alias) ? char.alias.filter(Boolean) : [];
+        const factions = (char.faction || []).filter(Boolean);
+        const locations = (char.locations || []).filter(Boolean);
+        const powers = (char.powers || []).map((power) => power?.name).filter(Boolean);
+        return clean({
+          "@type": "FictionalCharacter",
+          "@id": url,
+          url,
+          name: char.name,
+          alternateName: alias.length > 1 ? alias : alias[0],
+          description: char.shortDesc || char.longDesc,
+          image: char.cover || char.gallery?.[0],
+          knowsAbout: powers,
+          workLocation: locations.map((loc) => clean({ "@type": "Place", name: loc })),
+          memberOf: factions.map((fac) => clean({ "@type": "Organization", name: fac })),
+        });
+      })
+      .filter(Boolean);
+
+    graph.push(
+      clean({
+        "@type": "Organization",
+        "@id": `${siteUrl}#organization`,
+        name: "LoreMaker Universe",
+        url: siteUrl,
+        founder: { "@type": "Person", name: "Menelek Makonnen", url: "https://menelekmakonnen.com" },
+        member: characters.slice(0, 50).map((char) => clean({ "@id": char["@id"], name: char.name })),
+      })
+    );
+
+    graph.push(
+      clean({
+        "@type": "ItemList",
+        "@id": `${siteUrl}#codex`,
+        name: "LoreMaker Codex",
+        numberOfItems: characters.length,
+        itemListOrder: "http://schema.org/ItemListOrderAscending",
+        itemListElement: characters.map((char, index) =>
+          clean({
+            "@type": "ListItem",
+            position: index + 1,
+            url: char?.url,
+            name: char?.name,
+          })
+        ),
+      })
+    );
+
+    graph.push(...characters);
+
+    const pruned = graph.filter((node) => node && Object.keys(node).length > 0);
+    return JSON.stringify({ "@context": "https://schema.org", "@graph": pruned });
+  }, [data, siteUrl, slugify]);
+
+  const handleRandomCharacter = useCallback(() => {
+    if (!sorted.length) return;
+    const random = sorted[Math.floor(Math.random() * sorted.length)];
+    if (!random) return;
+    setHighlightedId(random.id);
+    setTimeout(() => setHighlightedId(null), 1200);
+    document.getElementById("characters-grid")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    openCharacter(random);
+  }, [sorted, openCharacter]);
 
   const handleRandomCharacter = useCallback(() => {
     if (!sorted.length) return;
@@ -3368,7 +3533,27 @@ export default function LoremakerApp({ initialCharacters = [], initialError = nu
   }, []);
 
   return (
-    <div className="relative min-h-screen w-full overflow-x-hidden bg-[#050813] text-white">
+    <>
+      <Head>
+        <title>LoreMaker Universe Codex | Menelek Makonnen</title>
+        <meta name="description" content={metaDescription} />
+        {keywordList && <meta name="keywords" content={keywordList} />}
+        <meta name="author" content="Menelek Makonnen" />
+        <meta name="robots" content="index,follow" />
+        <link rel="canonical" href={siteUrl} />
+        <meta property="og:type" content="website" />
+        <meta property="og:title" content="LoreMaker Universe Codex | Menelek Makonnen" />
+        <meta property="og:description" content={metaDescription} />
+        <meta property="og:url" content={siteUrl} />
+        {previewImage && <meta property="og:image" content={previewImage} />}
+        <meta property="og:site_name" content="LoreMaker Universe" />
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:title" content="LoreMaker Universe Codex | Menelek Makonnen" />
+        <meta name="twitter:description" content={metaDescription} />
+        {previewImage && <meta name="twitter:image" content={previewImage} />}
+        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: schemaJson }} />
+      </Head>
+      <div className="relative min-h-screen w-full overflow-x-hidden bg-[#050813] text-white">
       <CosmicBackdrop />
       <Aurora className="opacity-70" />
       <AnimatePresence>
@@ -3403,6 +3588,7 @@ export default function LoremakerApp({ initialCharacters = [], initialError = nu
           onToggleArena={toggleArena}
           onSync={refetch}
           showArena={showArena}
+          characterNames={universeNames}
         />
         <ToolsBar
           query={query}
@@ -3441,13 +3627,15 @@ export default function LoremakerApp({ initialCharacters = [], initialError = nu
             </div>
           )}
 
-          <QuickFilterRail
-            data={sorted}
-            onFacet={handleFacet}
-            onSortModeChange={setSortMode}
-            sortMode={sortMode}
-            onOpenFilters={() => setFiltersOpen(true)}
-          />
+          {!showArena && (
+            <QuickFilterRail
+              data={sorted}
+              onFacet={handleFacet}
+              onSortModeChange={setSortMode}
+              sortMode={sortMode}
+              onOpenFilters={() => setFiltersOpen(true)}
+            />
+          )}
 
           <section className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex flex-wrap items-center gap-2 text-xs font-semibold text-white/70">
@@ -3524,11 +3712,11 @@ export default function LoremakerApp({ initialCharacters = [], initialError = nu
                   rel="noreferrer"
                   variant="subtle"
                   size="sm"
-                  className="justify-start gap-2 px-4 text-[10px] tracking-[0.3em]"
-                >
-                  <ArrowRight className="h-4 w-4" aria-hidden="true" />
-                  Creator Profile
-                </Button>
+              className="justify-start gap-2 px-4 text-[10px] tracking-[0.3em]"
+            >
+              <ArrowRight className="h-4 w-4" aria-hidden="true" />
+              Menelek Makonnen
+            </Button>
                 <Button
                   type="button"
                   onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
@@ -3565,7 +3753,8 @@ export default function LoremakerApp({ initialCharacters = [], initialError = nu
         </FilterDrawer>
 
         <ScrollShortcuts />
-    </div>
+      </div>
+    </>
   );
 }
 
