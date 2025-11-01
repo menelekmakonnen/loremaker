@@ -1,12 +1,14 @@
 import React, {
   useCallback,
   useEffect,
-  useLayoutEffect,
   useMemo,
   useRef,
   useState,
   useId,
+  useLayoutEffect,
 } from "react";
+import Head from "next/head";
+import { createPortal } from "react-dom";
 import { AnimatePresence, motion, useMotionValue, useSpring, useTransform } from "framer-motion";
 import {
   Search,
@@ -19,6 +21,7 @@ import {
   ChevronRight,
   ChevronUp,
   ChevronDown,
+  ArrowUpDown,
   Filter,
   Users,
   MapPin,
@@ -28,6 +31,11 @@ import {
   Library,
   Crown,
   Swords,
+  Sparkles,
+  ShieldCheck,
+  HeartPulse,
+  Skull,
+  Circle,
 } from "lucide-react";
 import {
   computeFeatured,
@@ -46,6 +54,98 @@ import {
 
 function cx(...classes) {
   return classes.filter(Boolean).join(" ");
+}
+
+function clamp(value, min, max) {
+  return Math.min(Math.max(value, min), max);
+}
+
+const useIsomorphicLayoutEffect = typeof window !== "undefined" ? useLayoutEffect : useEffect;
+
+function unique(values) {
+  return Array.from(new Set(values.filter(Boolean)));
+}
+
+function parseDriveSource(url) {
+  if (!url) return null;
+  try {
+    const parsed = new URL(url);
+    const host = parsed.hostname;
+    const searchId = parsed.searchParams.get("id");
+    const resourceKey = parsed.searchParams.get("resourcekey") || undefined;
+    let id = null;
+
+    if (/drive\.google\.(com|co)/.test(host)) {
+      const match = parsed.pathname.match(/\/d\/([^/]+)/);
+      if (match?.[1]) {
+        id = match[1];
+      } else if (parsed.pathname.startsWith("/thumbnail")) {
+        id = searchId;
+      } else if (parsed.pathname.startsWith("/uc") || parsed.pathname.startsWith("/open")) {
+        id = searchId;
+      } else if (searchId) {
+        id = searchId;
+      }
+    } else if (/googleusercontent\.com$/.test(host) || /googleusercontent\.com$/.test(host.replace(/^lh\d+\./, ""))) {
+      const match = parsed.pathname.match(/\/d\/([^/=]+)/);
+      if (match?.[1]) {
+        id = match[1];
+      } else if (searchId) {
+        id = searchId;
+      } else {
+        const segment = parsed.pathname.split("/").pop() || "";
+        const clean = segment.split("=")[0];
+        if (clean && clean.length > 10) id = clean;
+      }
+    }
+
+    if (!id) return null;
+    return { id, resourceKey };
+  } catch {
+    return null;
+  }
+}
+
+function driveImageCandidates(url) {
+  const source = parseDriveSource(url);
+  if (!source) return [];
+  const { id, resourceKey } = source;
+  const resourceQuery = resourceKey ? `&resourcekey=${encodeURIComponent(resourceKey)}` : "";
+  const resourceSuffix = resourceKey ? `?resourcekey=${encodeURIComponent(resourceKey)}` : "";
+
+  return unique([
+    `https://lh3.googleusercontent.com/d/${id}=w2000-h2000-no`,
+    resourceKey ? `https://lh3.googleusercontent.com/d/${id}=w2000-h2000-no${resourceSuffix}` : null,
+    `https://lh3.googleusercontent.com/d/${id}=s2048`,
+    resourceKey ? `https://lh3.googleusercontent.com/d/${id}=s2048${resourceSuffix}` : null,
+    `https://drive.googleusercontent.com/uc?export=view&id=${id}${resourceQuery}`,
+    `https://drive.google.com/uc?export=view&id=${id}${resourceQuery}`,
+    `https://drive.google.com/thumbnail?id=${id}&sz=w2000${resourceQuery}`,
+    url,
+  ]);
+}
+
+function imageCandidates(src) {
+  if (!src) return [];
+  const trimmed = typeof src === "string" ? src.trim() : src;
+  if (!trimmed) return [];
+  const drive = driveImageCandidates(trimmed);
+  if (drive.length) return drive;
+  return unique([trimmed]);
+}
+
+const STATUS_PRESETS = [
+  { test: /active|alive/i, label: "Active", dot: "bg-emerald-400", ring: "ring-emerald-400/60", icon: ShieldCheck },
+  { test: /deceased|dead|fallen/i, label: "Fallen", dot: "bg-rose-400", ring: "ring-rose-400/60", icon: Skull },
+  { test: /missing|unknown|undisclosed/i, label: "Unknown", dot: "bg-indigo-300", ring: "ring-indigo-300/60", icon: Circle },
+  { test: /retired|dormant|inactive/i, label: "Dormant", dot: "bg-amber-300", ring: "ring-amber-300/60", icon: HeartPulse },
+];
+
+function statusVisual(status) {
+  if (!status) return null;
+  const preset = STATUS_PRESETS.find((entry) => entry.test.test(status));
+  if (!preset) return null;
+  return preset;
 }
 
 function Button({ variant = "solid", size = "md", className = "", children, as: Tag = "button", ...props }) {
@@ -94,7 +194,7 @@ const Input = React.forwardRef(function Input({ className = "", ...props }, ref)
 });
 
 const Badge = ({ className = "", children }) => (
-  <span className={cx("inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-black uppercase tracking-wide", className)}>{children}</span>
+  <span className={cx("inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold tracking-wide", className)}>{children}</span>
 );
 
 const Switch = ({ checked, onCheckedChange }) => (
@@ -491,12 +591,102 @@ function HeroHalo() {
   );
 }
 
+function HeroDynamicBackground({ pointer, ripples }) {
+  const palettes = useMemo(
+    () => [
+      ["rgba(254,240,199,0.95)", "rgba(249,200,255,0.72)", "rgba(120,166,255,0.6)", "rgba(9,13,34,0.92)"],
+      ["rgba(255,224,189,0.95)", "rgba(255,153,227,0.7)", "rgba(158,206,255,0.6)", "rgba(15,20,46,0.92)"],
+      ["rgba(236,233,255,0.92)", "rgba(198,215,255,0.75)", "rgba(255,182,222,0.55)", "rgba(12,14,36,0.92)"],
+      ["rgba(244,229,255,0.92)", "rgba(255,189,200,0.7)", "rgba(142,196,255,0.58)", "rgba(10,14,33,0.92)"],
+    ],
+    []
+  );
+  const [index, setIndex] = useState(0);
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setIndex((current) => (current + 1) % palettes.length);
+    }, 8000);
+    return () => clearInterval(timer);
+  }, [palettes.length]);
+
+  const stars = useMemo(
+    () =>
+      Array.from({ length: 42 }, (_, starIndex) => ({
+        id: `hero-star-${starIndex}`,
+        size: Math.random() * 1.8 + 0.8,
+        top: Math.random() * 100,
+        left: Math.random() * 100,
+        delay: Math.random() * 6,
+        duration: 3 + Math.random() * 4,
+      })),
+    []
+  );
+
+  const gradient = useMemo(() => {
+    const palette = palettes[index] || palettes[0];
+    return `radial-gradient(circle at ${pointer.x}% ${pointer.y}%, ${palette[0]}, ${palette[1]} 40%, ${palette[2]} 70%, ${palette[3]})`;
+  }, [index, palettes, pointer.x, pointer.y]);
+
+  return (
+    <div className="pointer-events-none absolute inset-0 -z-10 overflow-hidden">
+      <AnimatePresence mode="wait">
+        <motion.div
+          key={`lux-gradient-${index}`}
+          className="absolute inset-0"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 2.4, ease: "easeInOut" }}
+          style={{ background: gradient }}
+        />
+      </AnimatePresence>
+      <motion.div
+        className="absolute inset-0"
+        animate={{ backgroundPosition: ["0% 0%", "100% 100%", "0% 0%"], opacity: [0.7, 1, 0.7] }}
+        transition={{ duration: 16, repeat: Infinity, ease: "easeInOut" }}
+        style={{
+          backgroundImage:
+            "radial-gradient(ellipse at 20% 30%, rgba(255,255,255,0.14), transparent 60%), radial-gradient(ellipse at 80% 10%, rgba(255,255,255,0.1), transparent 55%), radial-gradient(ellipse at 50% 85%, rgba(255,255,255,0.08), transparent 65%)",
+        }}
+      />
+      {stars.map((star) => (
+        <motion.span
+          key={star.id}
+          className="absolute rounded-full bg-white shadow-[0_0_6px_rgba(255,255,255,0.75)]"
+          style={{
+            width: `${star.size}px`,
+            height: `${star.size}px`,
+            top: `${star.top}%`,
+            left: `${star.left}%`,
+          }}
+          animate={{ opacity: [0.2, 0.95, 0.2], scale: [1, 1.35, 1] }}
+          transition={{ duration: star.duration, delay: star.delay, repeat: Infinity, ease: "easeInOut" }}
+        />
+      ))}
+      {ripples.map((ripple) => (
+        <motion.span
+          key={ripple.id}
+          className="absolute rounded-full border border-white/60"
+          style={{
+            left: `${ripple.x}%`,
+            top: `${ripple.y}%`,
+            transform: "translate(-50%, -50%)",
+          }}
+          initial={{ opacity: 0.65, scale: 0 }}
+          animate={{ opacity: 0, scale: 5 }}
+          transition={{ duration: 0.9, ease: "easeOut" }}
+        />
+      ))}
+    </div>
+  );
+}
+
 function RosterSlide({ slide, icon, facetKey, onFacet, onOpenCharacter, limit }) {
   const payload = slide.data;
   if (!payload?.name) {
     return (
       <div className="flex h-full flex-col justify-center gap-3 rounded-[32px] border border-white/10 bg-white/6 p-8 text-white">
-        <div className="text-xs font-bold uppercase tracking-[0.35em] text-white/70">{slide.label}</div>
+        <div className="text-xs font-bold tracking-[0.35em] text-white/70">{slide.label}</div>
         <p className="text-sm font-semibold text-white/70">Daily highlight synchronising…</p>
       </div>
     );
@@ -513,7 +703,7 @@ function RosterSlide({ slide, icon, facetKey, onFacet, onOpenCharacter, limit })
   return (
     <div className="grid h-full gap-8 rounded-[32px] border border-white/15 bg-black/40 p-8 text-white lg:grid-cols-[2fr_3fr]">
       <div className="space-y-4">
-        <div className="flex items-center gap-3 text-xs font-bold uppercase tracking-[0.35em] text-white/70">
+        <div className="flex items-center gap-3 text-xs font-bold tracking-[0.35em] text-white/70">
           {icon}
           {slide.label}
         </div>
@@ -744,23 +934,44 @@ function Insignia({ label, size = 48, variant = "character" }) {
 }
 
 function ImageSafe({ src, alt, className = "", fallbackLabel }) {
-  const [error, setError] = useState(false);
-  if (!src || error) {
+  const sources = useMemo(() => imageCandidates(src), [src]);
+  const [index, setIndex] = useState(0);
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    setIndex(0);
+    setFailed(false);
+  }, [sources]);
+
+  const current = sources[index];
+
+  const handleError = () => {
+    if (index < sources.length - 1) {
+      setIndex((value) => value + 1);
+    } else {
+      setFailed(true);
+    }
+  };
+
+  if (!current || failed) {
     return (
       <div className={cx("flex items-center justify-center rounded-2xl border border-white/15 bg-white/10", className)}>
         <Insignia label={fallbackLabel} size={64} />
       </div>
     );
   }
+
   return (
     <img
-      src={src}
+      src={current}
       alt={alt}
-      onError={() => setError(true)}
+      onError={handleError}
+      onLoad={() => setFailed(false)}
       className={className}
       loading="lazy"
       referrerPolicy="no-referrer"
       crossOrigin="anonymous"
+      decoding="async"
     />
   );
 }
@@ -794,7 +1005,7 @@ function FacetChip({ active, onClick, children }) {
       onClick={onClick}
       aria-pressed={!!active}
       className={cx(
-        "rounded-full border px-3 py-1 text-xs font-bold uppercase tracking-wide transition",
+        "rounded-full border px-3 py-1 text-xs font-semibold tracking-wide transition",
         active ? "border-white bg-white text-black" : "border-white/30 bg-white/10 text-white hover:bg-white/20"
       )}
     >
@@ -858,11 +1069,18 @@ function CharacterCard({ char, onOpen, onFacet, onUseInSim, highlight }) {
   const quickFilters = [
     ...(char.locations || []).slice(0, 2).map((value) => ({ key: "locations", value })),
     ...(char.faction || []).slice(0, 1).map((value) => ({ key: "faction", value })),
-    ...(char.tags || []).slice(0, 1).map((value) => ({ key: "tag", value })),
+    ...(char.tags || []).slice(0, 1).map((value) => ({ key: "tags", value })),
   ];
-  const signaturePowers = [...(char.powers || [])]
-    .sort((a, b) => (Number(b.level) || 0) - (Number(a.level) || 0))
-    .slice(0, 2);
+  const highlightFacts = quickFacts.slice(0, 2);
+  const minimalFilters = quickFilters.slice(0, 3);
+  const description = char.shortDesc || char.longDesc || "No description yet.";
+  const heroImage = char.cover || char.gallery?.[0];
+  const accentLabel = (char.locations || [])[0] || char.era || char.status || "LoreMaker dossier";
+  const shortCaption =
+    description.length > 150 ? `${description.slice(0, 147).trimEnd()}…` : description;
+  const primaryAlias = Array.isArray(char.alias) ? char.alias[0] : char.alias;
+  const statusMeta = statusVisual(char.status);
+  const alignmentLabel = char.alignment || "Unaligned";
   const openProfile = () => onOpen(char);
   const handleProfileKey = (event) => {
     if (event.key === "Enter" || event.key === " ") {
@@ -877,105 +1095,105 @@ function CharacterCard({ char, onOpen, onFacet, onUseInSim, highlight }) {
       animate={pulse ? { rotate: [0, -1.5, 1.5, -0.75, 0.75, 0], scale: [1, 1.02, 0.99, 1.01, 1] } : { rotate: 0, scale: 1 }}
       transition={{ type: "spring", stiffness: 230, damping: 20 }}
     >
-      <Card className={cx("flex h-full flex-col overflow-hidden bg-white/8", highlight ? "ring-2 ring-amber-300" : "")}> 
-        <div
-          role="button"
-          tabIndex={0}
-          onClick={openProfile}
-          onKeyDown={handleProfileKey}
-          className="group relative block aspect-[3/4] w-full overflow-hidden"
-        >
-          <ImageSafe
-            src={char.cover || char.gallery?.[0]}
-            alt={char.name}
-            fallbackLabel={char.name}
-            className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
-          />
-          <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/30 to-transparent transition duration-500 group-hover:from-black/70" />
-          <motion.button
+      <Card
+        className={cx(
+          "flex h-full flex-col overflow-hidden bg-black/45 backdrop-blur-3xl",
+          highlight ? "ring-2 ring-amber-300" : "ring-1 ring-inset ring-white/15"
+        )}
+      >
+        <div className="relative">
+          <div
+            role="button"
+            tabIndex={0}
+            onClick={openProfile}
+            onKeyDown={handleProfileKey}
+            className="group relative block"
+          >
+            <div
+              className={cx(
+                "relative aspect-[4/5] overflow-hidden rounded-[28px] border border-white/15",
+                statusMeta?.ring
+              )}
+            >
+              <ImageSafe
+                src={heroImage}
+                alt={char.name}
+                fallbackLabel={char.name}
+                className="h-full w-full object-cover transition duration-700 ease-out group-hover:scale-105"
+              />
+              <div className="absolute inset-x-0 bottom-0 flex flex-col gap-1 bg-gradient-to-t from-black/90 via-black/35 to-transparent p-4">
+                <div className="text-xs font-semibold text-white/80">{accentLabel}</div>
+                <h3 className="text-lg font-black leading-tight text-white">{char.name}</h3>
+                {primaryAlias && (
+                  <span className="text-[11px] font-semibold text-white/65">{primaryAlias}</span>
+                )}
+              </div>
+              {statusMeta && (
+                <span className="absolute left-3 top-3 inline-flex items-center gap-2 rounded-full border border-white/25 bg-black/60 px-3 py-1 text-[11px] font-semibold text-white shadow-md">
+                  <statusMeta.icon className="h-3.5 w-3.5 text-white/80" aria-hidden="true" />
+                  <span>{statusMeta.label}</span>
+                  <span className={cx("h-2 w-2 rounded-full", statusMeta.dot)} />
+                </span>
+              )}
+            </div>
+          </div>
+          <button
             type="button"
-            whileTap={{ scale: 0.92 }}
             onClick={(event) => {
               event.stopPropagation();
               triggerSim();
             }}
-            className="absolute right-4 top-4 inline-flex items-center gap-1.5 rounded-full bg-gradient-to-r from-amber-300 to-rose-300 px-3 py-1 text-[10px] font-black uppercase tracking-wide text-black shadow-lg"
+            aria-label="Send to arena"
+            className="absolute right-4 top-4 inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/40 bg-black/60 text-white shadow-lg transition hover:bg-black/80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-300"
           >
-            <Swords size={14} />
-            <span className="hidden sm:inline">Sim</span>
-          </motion.button>
-          <div className="absolute inset-x-4 bottom-4 flex flex-col gap-1">
-            <div className="flex items-center justify-between gap-2">
-              <span className="text-lg font-black text-white sm:text-xl">{char.name}</span>
-              {char.status && (
-                <span className="rounded-full bg-white/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.3em] text-white/80">
-                  {char.status}
+            <Swords size={16} />
+          </button>
+        </div>
+        <div className="flex flex-1 flex-col justify-between px-4 pb-4 pt-3 text-white/80">
+          <div className="flex items-center gap-2">
+            <span className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-3 py-1 text-[11px] font-semibold text-white">
+              <span>{alignmentLabel}</span>
+              {statusMeta && (
+                <span className="flex items-center gap-1 text-white/70">
+                  <span className={cx("h-2 w-2 rounded-full", statusMeta.dot)} />
+                  {statusMeta.label}
                 </span>
               )}
-            </div>
-            <p className="text-[11px] font-semibold text-white/80 line-clamp-2 sm:text-sm">
-              {char.shortDesc || char.longDesc || "No description yet."}
-            </p>
+            </span>
           </div>
-        </div>
-        <div className="flex flex-1 flex-col gap-3 p-4">
-          {!!quickFacts.length && (
-            <div className="flex flex-wrap gap-1.5">
-              {quickFacts.map((fact) => (
-                <span
-                  key={fact}
-                  className="rounded-full border border-white/20 bg-white/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.3em] text-white/70"
-                >
-                  {fact}
-                </span>
-              ))}
-            </div>
-          )}
-          {!!quickFilters.length && (
-            <div className="flex flex-wrap gap-1.5">
-              {quickFilters.map((item) => (
-                <button
-                  key={`${item.key}-${item.value}`}
-                  type="button"
-                  onClick={() => onFacet(item)}
-                  className="rounded-full border border-white/20 bg-white/5 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-white/75 transition hover:bg-white/15"
-                >
-                  {item.value}
-                </button>
-              ))}
-            </div>
-          )}
-          {!!signaturePowers.length && (
-            <div className="space-y-1 text-[11px] font-semibold text-white/85">
-              {signaturePowers.map((power, index) => (
-                <div key={power.name} className="space-y-1">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="truncate pr-2">{power.name}</span>
-                    <span className="text-white/60">{power.level}/10</span>
-                  </div>
-                  {index === 0 && <PowerMeter level={power.level} />}
-                </div>
-              ))}
-            </div>
-          )}
-          <div className="mt-auto flex items-center justify-between text-[10px] font-bold uppercase tracking-[0.3em] text-white/60">
-            <button
-              type="button"
-              onClick={openProfile}
-              className="rounded-full border border-white/20 bg-white/10 px-3 py-1 text-white transition hover:bg-white/20"
-            >
-              Open Profile
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                triggerSim();
+          <p className="mt-3 text-sm font-semibold leading-relaxed text-white/75">{shortCaption}</p>
+          <div className="mt-4 flex flex-wrap gap-2">
+            {minimalFilters.map((item) => (
+              <button
+                key={`${char.id}-${item.key}-${item.value}`}
+                type="button"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onFacet?.(item);
+                }}
+                className="rounded-full border border-white/25 bg-white/10 px-3 py-1 text-[11px] font-semibold text-white/80 transition hover:bg-white/20"
+              >
+                {item.value}
+              </button>
+            ))}
+            {!minimalFilters.length && !!highlightFacts.length && (
+              <span className="rounded-full border border-white/15 bg-white/10 px-3 py-1 text-[11px] font-semibold text-white/70">
+                {highlightFacts.join(" • ")}
+              </span>
+            )}
+          </div>
+          <div className="mt-4 flex justify-end">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={(event) => {
+                event.stopPropagation();
+                openProfile();
               }}
-              className="rounded-full border border-white/20 bg-white/5 px-3 py-1 text-white transition hover:bg-white/15"
-              aria-label="Send to arena"
+              className="px-4 text-xs font-semibold text-white/70 transition hover:text-white"
             >
-              <Swords size={14} />
-            </button>
+              View Profile
+            </Button>
           </div>
         </div>
       </Card>
@@ -984,52 +1202,178 @@ function CharacterCard({ char, onOpen, onFacet, onUseInSim, highlight }) {
 }
 function Gallery({ images, cover, name }) {
   const [index, setIndex] = useState(0);
-  const sources = [cover, ...(images || [])].filter(Boolean);
+  const [lightboxOpen, setLightboxOpen] = useState(false);
+  const sources = useMemo(() => [cover, ...(images || [])].filter(Boolean), [cover, images]);
+
+  useEffect(() => {
+    if (!sources.length) {
+      setIndex(0);
+      return;
+    }
+    setIndex((current) => (current >= sources.length ? 0 : current));
+  }, [sources]);
+
+  const goPrevious = useCallback(() => {
+    if (!sources.length) return;
+    setIndex((i) => (i - 1 + sources.length) % sources.length);
+  }, [sources]);
+
+  const goNext = useCallback(() => {
+    if (!sources.length) return;
+    setIndex((i) => (i + 1) % sources.length);
+  }, [sources]);
+
+  const openLightbox = useCallback(() => {
+    if (sources.length) setLightboxOpen(true);
+  }, [sources.length]);
+
+  const closeLightbox = useCallback(() => setLightboxOpen(false), []);
+
   if (!sources.length) {
     return (
-      <div className="flex h-64 items-center justify-center rounded-2xl border border-white/15 bg-white/12">
+      <div className="flex h-72 items-center justify-center rounded-[32px] border border-white/15 bg-white/12">
         <Insignia label={name} size={72} />
       </div>
     );
   }
+
+  const activeSrc = sources[index];
+
   return (
-    <div className="group relative">
-      <ImageSafe
-        src={sources[index]}
-        alt={`${name} gallery ${index + 1}`}
-        fallbackLabel={name}
-        className="h-64 w-full rounded-2xl border border-white/12 object-cover"
-      />
-      {sources.length > 1 && (
-        <>
-          <button
-            className="absolute left-3 top-1/2 -translate-y-1/2 rounded-full bg-black/50 p-2 text-white opacity-0 transition group-hover:opacity-100"
-            onClick={() => setIndex((i) => (i - 1 + sources.length) % sources.length)}
-            aria-label="Previous"
+    <>
+      <div
+        className="group relative overflow-hidden rounded-[32px] border border-white/12 bg-black/40 shadow-[0_24px_80px_rgba(8,10,20,0.45)]"
+        data-gallery-root
+      >
+        <div className="aspect-[3/4] w-full">
+          <ImageSafe
+            src={activeSrc}
+            alt={`${name} gallery ${index + 1}`}
+            fallbackLabel={name}
+            className="h-full w-full object-cover"
+          />
+        </div>
+        <button
+          type="button"
+          onClick={openLightbox}
+          className="absolute inset-0 z-20 flex items-end justify-end bg-gradient-to-t from-black/45 via-black/10 to-transparent p-5 opacity-0 transition focus-visible:outline focus-visible:ring-2 focus-visible:ring-amber-300 group-hover:opacity-100"
+          aria-label="Open full-size gallery"
+        >
+          <span className="rounded-full border border-white/30 bg-black/60 px-3 py-1 text-[11px] font-semibold text-white/80 shadow-lg">
+            Tap to expand
+          </span>
+        </button>
+        {sources.length > 1 && (
+          <>
+            <button
+              type="button"
+              className="absolute left-4 top-1/2 z-30 -translate-y-1/2 rounded-full bg-black/60 p-2 text-white opacity-0 transition focus-visible:outline focus-visible:ring-2 focus-visible:ring-amber-300 group-hover:opacity-100"
+              onClick={goPrevious}
+              aria-label="Previous"
+            >
+              <ChevronLeft size={16} />
+            </button>
+            <button
+              type="button"
+              className="absolute right-4 top-1/2 z-30 -translate-y-1/2 rounded-full bg-black/60 p-2 text-white opacity-0 transition focus-visible:outline focus-visible:ring-2 focus-visible:ring-amber-300 group-hover:opacity-100"
+              onClick={goNext}
+              aria-label="Next"
+            >
+              <ChevronRight size={16} />
+            </button>
+            <div className="pointer-events-none absolute bottom-4 left-1/2 z-30 flex -translate-x-1/2 gap-2">
+              {sources.map((_, idx) => (
+                <span key={idx} className={cx("h-1.5 w-5 rounded-full", idx === index ? "bg-white" : "bg-white/50")} />
+              ))}
+            </div>
+          </>
+        )}
+      </div>
+      <AnimatePresence>
+        {lightboxOpen && (
+          <motion.div
+            key="gallery-lightbox"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.25 }}
+            className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-black/90 p-6"
+            data-gallery-root
+            onClick={closeLightbox}
           >
-            <ChevronLeft size={16} />
-          </button>
-          <button
-            className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full bg-black/50 p-2 text-white opacity-0 transition group-hover:opacity-100"
-            onClick={() => setIndex((i) => (i + 1) % sources.length)}
-            aria-label="Next"
-          >
-            <ChevronRight size={16} />
-          </button>
-          <div className="absolute bottom-3 left-1/2 flex -translate-x-1/2 gap-2">
-            {sources.map((_, idx) => (
-              <span key={idx} className={cx("h-1.5 w-5 rounded-full", idx === index ? "bg-white" : "bg-white/50")} />
-            ))}
-          </div>
-        </>
-      )}
-    </div>
+            <button
+              type="button"
+              onClick={closeLightbox}
+              className="absolute right-6 top-6 inline-flex items-center gap-2 rounded-full border border-white/20 bg-black/60 px-4 py-2 text-sm font-semibold text-white shadow-lg transition hover:bg-black/80 focus-visible:outline focus-visible:ring-2 focus-visible:ring-amber-300"
+            >
+              <X size={16} /> Close
+            </button>
+            <div
+              className="flex max-h-[80vh] w-full max-w-4xl items-center justify-center gap-4"
+              onClick={(event) => event.stopPropagation()}
+            >
+              {sources.length > 1 && (
+                <button
+                  type="button"
+                  onClick={goPrevious}
+                  className="hidden rounded-full border border-white/20 bg-black/60 p-3 text-white shadow-lg transition hover:bg-black/80 focus-visible:outline focus-visible:ring-2 focus-visible:ring-amber-300 sm:inline-flex"
+                  aria-label="Previous image"
+                >
+                  <ChevronLeft size={18} />
+                </button>
+              )}
+              <div className="relative flex-1">
+                <ImageSafe
+                  src={activeSrc}
+                  alt={`${name} full image ${index + 1}`}
+                  fallbackLabel={name}
+                  className="mx-auto max-h-[70vh] w-auto max-w-full rounded-[32px] border border-white/20 object-contain shadow-[0_40px_140px_rgba(0,0,0,0.6)]"
+                />
+                <div className="absolute bottom-4 left-1/2 flex -translate-x-1/2 items-center gap-3 rounded-full bg-black/60 px-4 py-2 text-[11px] font-semibold text-white/80">
+                  <span>
+                    {index + 1} / {sources.length}
+                  </span>
+                  <span className="hidden sm:inline">{name}</span>
+                </div>
+              </div>
+              {sources.length > 1 && (
+                <button
+                  type="button"
+                  onClick={goNext}
+                  className="hidden rounded-full border border-white/20 bg-black/60 p-3 text-white shadow-lg transition hover:bg-black/80 focus-visible:outline focus-visible:ring-2 focus-visible:ring-amber-300 sm:inline-flex"
+                  aria-label="Next image"
+                >
+                  <ChevronRight size={18} />
+                </button>
+              )}
+            </div>
+            {sources.length > 1 && (
+              <div className="mt-6 flex gap-2">
+                {sources.map((src, idx) => (
+                  <button
+                    key={src + idx}
+                    type="button"
+                    onClick={() => setIndex(idx)}
+                    className={cx(
+                      "h-2.5 w-8 rounded-full transition",
+                      idx === index ? "bg-white" : "bg-white/30 hover:bg-white/60"
+                    )}
+                    aria-label={`View image ${idx + 1}`}
+                  />
+                ))}
+              </div>
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </>
   );
 }
 
-function CharacterModal({ open, onClose, char, onFacet, onUseInSim }) {
+function CharacterModal({ open, onClose, char, onFacet, onUseInSim, onNavigate }) {
   const dialogRef = useRef(null);
   const previouslyFocused = useRef(null);
+  const pointerStart = useRef(null);
   const titleId = useId();
   useEffect(() => {
     if (!open) return;
@@ -1056,6 +1400,12 @@ function CharacterModal({ open, onClose, char, onFacet, onUseInSim }) {
         event.preventDefault();
         onClose();
       }
+      if ((event.key === "ArrowRight" || event.key === "ArrowLeft") && typeof onNavigate === "function") {
+        if (!node.contains(event.target)) return;
+        if (event.target?.closest?.("[data-gallery-root]")) return;
+        event.preventDefault();
+        onNavigate(event.key === "ArrowRight" ? 1 : -1);
+      }
       if (event.key === "Tab" && focusable.length) {
         if (event.shiftKey && document.activeElement === first) {
           event.preventDefault();
@@ -1072,7 +1422,39 @@ function CharacterModal({ open, onClose, char, onFacet, onUseInSim }) {
       document.removeEventListener("keydown", handleKeyDown);
       previouslyFocused.current && previouslyFocused.current.focus?.();
     };
-  }, [open, onClose]);
+  }, [open, onClose, onNavigate]);
+
+  const handlePointerDown = useCallback(
+    (event) => {
+      if (typeof onNavigate !== "function") return;
+      if (event.pointerType === "mouse" && event.button !== 0) return;
+      pointerStart.current = {
+        x: event.clientX,
+        y: event.clientY,
+        target: event.target,
+      };
+    },
+    [onNavigate]
+  );
+
+  const handlePointerUp = useCallback(
+    (event) => {
+      if (!pointerStart.current || typeof onNavigate !== "function") return;
+      const start = pointerStart.current;
+      pointerStart.current = null;
+      if (start.target?.closest?.("[data-gallery-root]")) return;
+      const dx = event.clientX - start.x;
+      const dy = event.clientY - start.y;
+      if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 60) {
+        onNavigate(dx < 0 ? 1 : -1);
+      }
+    },
+    [onNavigate]
+  );
+
+  const resetPointer = useCallback(() => {
+    pointerStart.current = null;
+  }, []);
   if (!open || !char) return null;
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby={titleId}>
@@ -1081,27 +1463,34 @@ function CharacterModal({ open, onClose, char, onFacet, onUseInSim }) {
       <div
         ref={dialogRef}
         className="relative z-10 w-full max-w-6xl overflow-hidden rounded-3xl border border-white/15 bg-black/65 backdrop-blur-2xl"
+        onPointerDown={handlePointerDown}
+        onPointerUp={handlePointerUp}
+        onPointerLeave={resetPointer}
+        onPointerCancel={resetPointer}
       >
-        <div className="flex items-center justify-between border-b border-white/15 px-6 py-4 text-white">
+        <div className="grid items-center gap-4 border-b border-white/15 px-6 py-4 text-white md:grid-cols-[auto_minmax(0,1fr)_auto]">
           <div className="flex items-center gap-4">
             <Insignia label={char.name} size={48} />
             <div>
               <div id={titleId} className="text-3xl font-black drop-shadow-[0_2px_8px_rgba(0,0,0,0.6)]">
                 {char.name}
               </div>
-              {char.era && <div className="text-[11px] font-extrabold uppercase tracking-[0.3em] text-white/70">{char.era}</div>}
+              {char.era && <div className="text-[11px] font-extrabold tracking-[0.3em] text-white/70">{char.era}</div>}
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex justify-center">
             <Button
               variant="gradient"
               size="sm"
               onClick={() => onUseInSim(char)}
               aria-label="Send to arena"
-              className="p-2"
+              className="flex items-center gap-2 px-5 py-2 text-xs font-semibold shadow-[0_18px_48px_rgba(253,230,138,0.35)] sm:text-sm"
             >
-              <Swords size={18} />
+              <Swords size={16} />
+              <span>Battle Arena</span>
             </Button>
+          </div>
+          <div className="flex justify-end gap-2 sm:gap-3">
             <Button variant="ghost" size="sm" onClick={onClose} aria-label="Close profile">
               <X />
             </Button>
@@ -1112,11 +1501,11 @@ function CharacterModal({ open, onClose, char, onFacet, onUseInSim }) {
             <Gallery images={char.gallery} cover={char.cover} name={char.name} />
             <div className="space-y-3 text-sm font-semibold text-white/80">
               <div>
-                <div className="text-xs font-extrabold uppercase tracking-wide text-white">Short Description</div>
+                <div className="text-xs font-extrabold tracking-wide text-white">Short Description</div>
                 <div className="mt-1 text-white/80">{char.shortDesc || "—"}</div>
               </div>
               <div>
-                <div className="text-xs font-extrabold uppercase tracking-wide text-white">Bio</div>
+                <div className="text-xs font-extrabold tracking-wide text-white">Bio</div>
                 <div className="mt-1 whitespace-pre-wrap text-white/80">{char.longDesc || "—"}</div>
               </div>
             </div>
@@ -1132,32 +1521,32 @@ function CharacterModal({ open, onClose, char, onFacet, onUseInSim }) {
             <div className="grid grid-cols-2 gap-3 text-sm">
               {char.gender && (
                 <div className="rounded-2xl border border-white/15 bg-white/8 p-4">
-                  <div className="text-xs font-bold uppercase tracking-wide text-white/70">Gender</div>
+                  <div className="text-xs font-bold tracking-wide text-white/70">Gender</div>
                   <div className="text-base font-extrabold">{char.gender}</div>
                 </div>
               )}
               {char.alignment && (
                 <div className="rounded-2xl border border-white/15 bg-white/8 p-4">
-                  <div className="text-xs font-bold uppercase tracking-wide text-white/70">Alignment</div>
+                  <div className="text-xs font-bold tracking-wide text-white/70">Alignment</div>
                   <div className="text-base font-extrabold">{char.alignment}</div>
                 </div>
               )}
               {char.status && (
                 <div className="rounded-2xl border border-white/15 bg-white/8 p-4">
-                  <div className="text-xs font-bold uppercase tracking-wide text-white/70">Status</div>
+                  <div className="text-xs font-bold tracking-wide text-white/70">Status</div>
                   <div className="text-base font-extrabold">{char.status}</div>
                 </div>
               )}
               {char.firstAppearance && (
                 <div className="rounded-2xl border border-white/15 bg-white/8 p-4">
-                  <div className="text-xs font-bold uppercase tracking-wide text-white/70">First Appearance</div>
+                  <div className="text-xs font-bold tracking-wide text-white/70">First Appearance</div>
                   <div className="text-base font-extrabold">{char.firstAppearance}</div>
                 </div>
               )}
             </div>
             {!!(char.locations || []).length && (
               <div>
-                <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wide text-white/70">
+                <div className="flex items-center gap-2 text-xs font-bold tracking-wide text-white/70">
                   <MapPin size={14} /> Locations
                 </div>
                 <div className="mt-2 flex flex-wrap gap-2">
@@ -1171,7 +1560,7 @@ function CharacterModal({ open, onClose, char, onFacet, onUseInSim }) {
             )}
             {!!(char.faction || []).length && (
               <div>
-                <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wide text-white/70">
+                <div className="flex items-center gap-2 text-xs font-bold tracking-wide text-white/70">
                   <Crown size={14} /> Factions / Teams
                 </div>
                 <div className="mt-2 flex flex-wrap gap-2">
@@ -1198,7 +1587,7 @@ function CharacterModal({ open, onClose, char, onFacet, onUseInSim }) {
               </div>
             )}
             <div>
-              <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wide text-white/70">
+              <div className="flex items-center gap-2 text-xs font-bold tracking-wide text-white/70">
                 <Atom size={14} /> Powers
               </div>
               <div className="mt-3 space-y-2">
@@ -1215,7 +1604,7 @@ function CharacterModal({ open, onClose, char, onFacet, onUseInSim }) {
             </div>
             {!!(char.stories || []).length && (
               <div>
-                <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wide text-white/70">
+                <div className="flex items-center gap-2 text-xs font-bold tracking-wide text-white/70">
                   <Library size={14} /> Stories
                 </div>
                 <div className="mt-2 flex flex-wrap gap-2">
@@ -1235,7 +1624,7 @@ function CharacterModal({ open, onClose, char, onFacet, onUseInSim }) {
 }
 
 const PAGE_SIZE = 24;
-function CharacterGrid({ data, onOpen, onFacet, onUseInSim, highlightId, mobileColumns = 2 }) {
+function CharacterGrid({ data, onOpen, onFacet, onUseInSim, highlightId }) {
   const [page, setPage] = useState(1);
   useEffect(() => setPage(1), [data]);
   useEffect(() => {
@@ -1249,9 +1638,8 @@ function CharacterGrid({ data, onOpen, onFacet, onUseInSim, highlightId, mobileC
     return () => window.removeEventListener("scroll", handler);
   }, [data.length]);
   const slice = data.slice(0, page * PAGE_SIZE);
-  const mobileClass = mobileColumns >= 3 ? "grid-cols-3" : "grid-cols-2";
   return (
-    <div className="grid grid-cols-[repeat(auto-fit,minmax(150px,1fr))] gap-3 pb-24 sm:gap-5 lg:grid-cols-[repeat(auto-fit,minmax(200px,1fr))]">
+    <div className="grid grid-cols-2 gap-4 pb-24 sm:grid-cols-3 sm:gap-5 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6">
       {slice.map((c) => (
         <CharacterCard
           key={c.id}
@@ -1384,12 +1772,22 @@ function computeBattleTimeline(charA, charB) {
   };
 }
 
-function ArenaCard({ char, position, onRelease, onOpen, health, isWinner, showX }) {
+function ArenaCard({ char, position, onRelease, onOpen, health, isWinner, showX, onAutoFill }) {
   if (!char) {
     return (
-      <div className="flex min-h-[280px] items-center justify-center rounded-3xl border-2 border-dashed border-slate-500/60 bg-slate-900/40 p-6 text-center text-sm font-bold text-slate-400">
-        Choose combatant {position}
-      </div>
+      <button
+        type="button"
+        onClick={() => onAutoFill?.()}
+        className="group flex min-h-[280px] w-full flex-col items-center justify-center gap-3 rounded-3xl border-2 border-dashed border-slate-500/60 bg-slate-900/40 p-6 text-center text-sm font-bold text-slate-300 transition hover:border-amber-300/60 hover:bg-slate-900/70 hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300"
+        aria-label={`Summon a random combatant for slot ${position}`}
+      >
+        <span className="text-base font-black tracking-[0.3em] text-slate-400 group-hover:text-amber-200">
+          Combatant {position}
+        </span>
+        <span className="max-w-[16rem] text-xs font-semibold text-slate-400 group-hover:text-slate-100">
+          Tap to deploy a random warrior from the codex
+        </span>
+      </button>
     );
   }
   const [expanded, setExpanded] = useState(false);
@@ -1459,7 +1857,7 @@ function ArenaCard({ char, position, onRelease, onOpen, health, isWinner, showX 
         </motion.div>
       )}
       <div className="flex flex-wrap items-center justify-between gap-2 text-[9px] sm:text-xs">
-        <Badge className="bg-slate-800/80 px-3 py-1 text-[9px] uppercase tracking-[0.3em] text-slate-200">Combatant {position}</Badge>
+        <Badge className="bg-slate-800/80 px-3 py-1 text-[9px] tracking-[0.3em] text-slate-200">Combatant {position}</Badge>
         <div className="flex items-center gap-2">
           <Button
             variant="ghost"
@@ -1488,7 +1886,7 @@ function ArenaCard({ char, position, onRelease, onOpen, health, isWinner, showX 
         <div className="text-base font-black text-white">{char.name}</div>
       </div>
       <button onClick={() => onOpen(char)} className="mt-3 block w-full text-left">
-        <div className="text-[9px] font-bold uppercase tracking-wide text-slate-400 sm:text-xs">Health</div>
+        <div className="text-[9px] font-bold tracking-wide text-slate-400 sm:text-xs">Health</div>
         <div className="mt-1 h-3 w-full overflow-hidden rounded-full bg-slate-800">
           <motion.div
             key={health}
@@ -1511,35 +1909,35 @@ function ArenaCard({ char, position, onRelease, onOpen, health, isWinner, showX 
           <div className="grid grid-cols-2 gap-2">
             {char.gender && (
               <div>
-                <div className="text-[9px] font-bold uppercase tracking-wide text-slate-400 sm:text-[10px]">Gender</div>
+                <div className="text-[9px] font-bold tracking-wide text-slate-400 sm:text-[10px]">Gender</div>
                 <div className="text-xs font-extrabold text-white sm:text-sm">{char.gender}</div>
               </div>
             )}
             {char.alignment && (
-              <div>
-                <div className="text-[9px] font-bold uppercase tracking-wide text-slate-400 sm:text-[10px]">Alignment</div>
+              <div className="hidden sm:block">
+                <div className="text-[9px] font-bold tracking-wide text-slate-400 sm:text-[10px]">Alignment</div>
                 <div className="text-xs font-extrabold text-white sm:text-sm">{char.alignment}</div>
               </div>
             )}
             {char.status && (
-              <div>
-                <div className="text-[9px] font-bold uppercase tracking-wide text-slate-400 sm:text-[10px]">Status</div>
+              <div className="hidden sm:block">
+                <div className="text-[9px] font-bold tracking-wide text-slate-400 sm:text-[10px]">Status</div>
                 <div className="text-xs font-extrabold text-white sm:text-sm">{char.status}</div>
               </div>
             )}
             {char.era && (
               <div>
-                <div className="text-[9px] font-bold uppercase tracking-wide text-slate-400 sm:text-[10px]">Era</div>
+                <div className="text-[9px] font-bold tracking-wide text-slate-400 sm:text-[10px]">Era</div>
                 <div className="text-xs font-extrabold text-white sm:text-sm">{char.era}</div>
               </div>
             )}
           </div>
           {!!topLocations.length && (
-            <div>
-              <div className="text-[9px] font-bold uppercase tracking-wide text-slate-400 sm:text-[10px]">Locations</div>
+            <div className="hidden sm:block">
+              <div className="text-[9px] font-bold tracking-wide text-slate-400 sm:text-[10px]">Locations</div>
               <div className="flex flex-wrap gap-1">
                 {topLocations.map((loc) => (
-                  <span key={loc} className="rounded-full bg-slate-800/80 px-2 py-1 text-[9px] font-bold uppercase tracking-wide text-white sm:text-[10px]">
+                  <span key={loc} className="rounded-full bg-slate-800/80 px-2 py-1 text-[9px] font-bold tracking-wide text-white sm:text-[10px]">
                     {loc}
                   </span>
                 ))}
@@ -1548,10 +1946,10 @@ function ArenaCard({ char, position, onRelease, onOpen, health, isWinner, showX 
           )}
           {!!topFactions.length && (
             <div>
-              <div className="text-[9px] font-bold uppercase tracking-wide text-slate-400 sm:text-[10px]">Factions</div>
+              <div className="text-[9px] font-bold tracking-wide text-slate-400 sm:text-[10px]">Factions</div>
               <div className="flex flex-wrap gap-1">
                 {topFactions.map((faction) => (
-                  <span key={faction} className="rounded-full bg-slate-800/80 px-2 py-1 text-[9px] font-bold uppercase tracking-wide text-white sm:text-[10px]">
+                  <span key={faction} className="rounded-full bg-slate-800/80 px-2 py-1 text-[9px] font-bold tracking-wide text-white sm:text-[10px]">
                     {faction}
                   </span>
                 ))}
@@ -1559,11 +1957,11 @@ function ArenaCard({ char, position, onRelease, onOpen, health, isWinner, showX 
             </div>
           )}
           {!!topTags.length && (
-            <div>
-              <div className="text-[9px] font-bold uppercase tracking-wide text-slate-400 sm:text-[10px]">Tags</div>
+            <div className="hidden sm:block">
+              <div className="text-[9px] font-bold tracking-wide text-slate-400 sm:text-[10px]">Tags</div>
               <div className="flex flex-wrap gap-1">
                 {topTags.map((tag) => (
-                  <span key={tag} className="rounded-full bg-slate-800/80 px-2 py-1 text-[9px] font-bold uppercase tracking-wide text-white sm:text-[10px]">
+                  <span key={tag} className="rounded-full bg-slate-800/80 px-2 py-1 text-[9px] font-bold tracking-wide text-white sm:text-[10px]">
                     {tag}
                   </span>
                 ))}
@@ -1586,7 +1984,7 @@ function ArenaCard({ char, position, onRelease, onOpen, health, isWinner, showX 
           <button
             type="button"
             onClick={() => setExpanded((state) => !state)}
-            className="w-full rounded-full border border-slate-700/70 bg-slate-900/80 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wide text-slate-200 transition hover:bg-slate-800"
+            className="w-full rounded-full border border-slate-700/70 bg-slate-900/80 px-3 py-1.5 text-[10px] font-bold tracking-wide text-slate-200 transition hover:bg-slate-800"
           >
             {expanded ? "Hide extended powers" : `Reveal all ${powers.length} powers`}
           </button>
@@ -1594,7 +1992,7 @@ function ArenaCard({ char, position, onRelease, onOpen, health, isWinner, showX 
       </div>
       {!!(char.stories || []).length && (
         <div className="mt-4">
-          <div className="text-[9px] font-bold uppercase tracking-wide text-slate-400 sm:text-[10px]">Stories</div>
+          <div className="text-[9px] font-bold tracking-wide text-slate-400 sm:text-[10px]">Stories</div>
           <div className="mt-1 flex flex-wrap gap-1.5 text-[10px] font-semibold text-slate-300 sm:text-[11px]">
             {(char.stories || []).map((story) => (
               <span key={story} className="rounded-full bg-slate-800/60 px-2 py-1">
@@ -1615,7 +2013,7 @@ const swordVariants = {
   explode: { rotate: [0, -15, 15, 0], scale: [1, 1.2, 0.9, 1], filter: "drop-shadow(0 0 45px rgba(255,196,12,1))" },
 };
 
-function BattleArena({ characters, slots, setSlots, onOpenCharacter, pulseKey }) {
+function BattleArena({ characters, slots, setSlots, onOpenCharacter, pulseKey, onClose }) {
   const left = characters.find((item) => item.id === slots.left) || null;
   const right = characters.find((item) => item.id === slots.right) || null;
   const [battleState, setBattleState] = useState("idle");
@@ -1673,14 +2071,24 @@ function BattleArena({ characters, slots, setSlots, onOpenCharacter, pulseKey })
     setTimeout(() => setShowX(null), 2200);
   };
 
-  const runRandom = () => {
-    if (characters.length < 2) return;
-    const rng = seededRandom(`arena|${Date.now()}`);
-    const shuffled = [...characters].sort(() => rng() - 0.5);
-    const first = shuffled[0];
-    const second = shuffled.find((char) => char.id !== first.id) || shuffled[1];
-    setSlots({ left: first?.id || null, right: second?.id || null });
-  };
+  const fillSlot = useCallback(
+    (side) => {
+      if (!characters.length) return;
+      setSlots((prev) => {
+        if (prev[side]) return prev;
+        const otherSide = side === "left" ? prev.right : prev.left;
+        const pool = characters.filter((char) => char?.id && char.id !== otherSide);
+        if (!pool.length) return prev;
+        const random = pool[Math.floor(Math.random() * pool.length)];
+        if (!random?.id) return prev;
+        return { ...prev, [side]: random.id };
+      });
+    },
+    [characters, setSlots]
+  );
+
+  const autoFillLeft = useCallback(() => fillSlot("left"), [fillSlot]);
+  const autoFillRight = useCallback(() => fillSlot("right"), [fillSlot]);
 
   const reset = () => {
     setSlots({ left: null, right: null });
@@ -1720,6 +2128,7 @@ function BattleArena({ characters, slots, setSlots, onOpenCharacter, pulseKey })
                 health={health.left}
                 isWinner={result?.winner?.id === left?.id}
                 showX={showX === left?.id}
+                onAutoFill={autoFillLeft}
               />
             </div>
             <div className="col-span-1 order-2 min-w-0 lg:order-none lg:col-span-1 lg:col-start-3 lg:row-start-1">
@@ -1731,6 +2140,7 @@ function BattleArena({ characters, slots, setSlots, onOpenCharacter, pulseKey })
                 health={health.right}
                 isWinner={result?.winner?.id === right?.id}
                 showX={showX === right?.id}
+                onAutoFill={autoFillRight}
               />
             </div>
             <div className="order-3 col-span-2 flex flex-col items-center justify-center gap-3 rounded-3xl border border-slate-800/60 bg-[#0f1329]/80 p-4 text-center lg:order-none lg:col-span-1 lg:col-start-2 lg:row-start-1 lg:row-end-2 lg:self-stretch lg:justify-self-center lg:p-5">
@@ -1751,25 +2161,43 @@ function BattleArena({ characters, slots, setSlots, onOpenCharacter, pulseKey })
                 <Button variant="gradient" size="sm" onClick={runBattle} className="text-[10px] sm:text-[11px]">
                   Fight
                 </Button>
-                <Button variant="outline" size="sm" onClick={runRandom} className="text-[10px] sm:text-[11px]">
-                  Random Duel
-                </Button>
                 <Button variant="destructive" size="sm" onClick={reset} className="text-[10px] sm:text-[11px]">
                   Reset Arena
                 </Button>
-                <span className="text-[10px] font-semibold uppercase tracking-[0.3em] text-slate-400">
+                {onClose && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={onClose}
+                    className="text-[10px] sm:text-[11px]"
+                  >
+                    Close Arena
+                  </Button>
+                )}
+                <span className="text-[10px] font-semibold tracking-[0.3em] text-slate-400">
                   Tap combatants to view dossiers
                 </span>
               </div>
             </div>
           </div>
+          {result && (
+            <div className="rounded-2xl border border-white/10 bg-[#0d1126] px-4 py-5 text-center">
+              <div className="text-xs font-bold tracking-wide text-slate-500">Winner</div>
+              <div className="mt-2 rounded-xl bg-slate-900 px-4 py-3 text-lg font-black text-slate-100">
+                {result.winner.name}
+              </div>
+              <div className="mt-2 text-xs text-slate-400">
+                Final totals — {left?.name}: {result.finalScoreA} • {right?.name}: {result.finalScoreB}
+              </div>
+            </div>
+          )}
           {timeline.length > 0 && (
             <div className="rounded-2xl border border-white/10 bg-[#0f1329]/80 p-4 text-xs backdrop-blur">
-              <div className="mb-2 text-sm font-black uppercase tracking-wide text-slate-200">Battle Flow</div>
+              <div className="mb-2 text-sm font-black tracking-wide text-slate-200">Battle Flow</div>
               <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3">
                 {timeline.map((phase) => (
                   <div key={phase.round} className="rounded-xl border border-white/10 bg-[#141a38]/80 p-3 text-slate-200">
-                    <div className="text-[11px] font-bold uppercase tracking-wide text-slate-400">Round {phase.round}</div>
+                    <div className="text-[11px] font-bold tracking-wide text-slate-400">Round {phase.round}</div>
                     <div className="mt-2 space-y-1">
                       <div>A Strike: {phase.strikeA}</div>
                       <div>A Luck: {phase.luckA}</div>
@@ -1780,17 +2208,6 @@ function BattleArena({ characters, slots, setSlots, onOpenCharacter, pulseKey })
                     </div>
                   </div>
                 ))}
-              </div>
-            </div>
-          )}
-          {result && (
-            <div className="rounded-2xl border border-white/10 bg-[#0d1126] px-4 py-5 text-center">
-              <div className="text-xs font-bold uppercase tracking-wide text-slate-500">Winner</div>
-              <div className="mt-2 rounded-xl bg-slate-900 px-4 py-3 text-lg font-black text-slate-100">
-                {result.winner.name}
-              </div>
-              <div className="mt-2 text-xs text-slate-400">
-                Final totals — {left?.name}: {result.finalScoreA} • {right?.name}: {result.finalScoreB}
               </div>
             </div>
           )}
@@ -1830,15 +2247,19 @@ function SidebarFilters({ data, filters, setFilters, combineAND, setCombineAND, 
   return (
     <div className="space-y-6 p-5 text-white">
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2 text-sm font-extrabold uppercase tracking-wide">
+        <div className="flex items-center gap-2 text-sm font-extrabold tracking-wide">
           <Filter className="text-amber-300" /> Filters
         </div>
         <div className="flex items-center gap-2 text-xs">
-          <span className="font-bold uppercase tracking-wide">Mode</span>
+          <span className="font-bold tracking-wide">Mode</span>
           <Badge className="bg-white/10 text-white/80">{combineAND ? "AND" : "Blend"}</Badge>
           <Switch checked={combineAND} onCheckedChange={setCombineAND} aria-describedby={blendTooltipId} />
         </div>
       </div>
+      <p className="text-[11px] font-semibold leading-relaxed text-white/65">
+        Use the global search above the codex for anything specific. These filters stay open so you can tap through factions,
+        locations, powers, and more without losing your place.
+      </p>
       <p id={blendTooltipId} className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-[11px] font-semibold leading-relaxed text-white/70">
         Blend finds legends that match any of your selections. Switch to AND for precise dossiers that match every chosen filter.
       </p>
@@ -1848,7 +2269,6 @@ function SidebarFilters({ data, filters, setFilters, combineAND, setCombineAND, 
       <FilterSection
         title="Gender / Sex"
         values={genders}
-        keyName="gender"
         single
         activeValues={filters.gender}
         onToggle={(value) => toggle("gender", value, true)}
@@ -1856,7 +2276,6 @@ function SidebarFilters({ data, filters, setFilters, combineAND, setCombineAND, 
       <FilterSection
         title="Alignment"
         values={alignments}
-        keyName="alignment"
         single
         activeValues={filters.alignment}
         onToggle={(value) => toggle("alignment", value, true)}
@@ -1864,49 +2283,42 @@ function SidebarFilters({ data, filters, setFilters, combineAND, setCombineAND, 
       <FilterSection
         title="Era"
         values={eras}
-        keyName="era"
         activeValues={filters.era || []}
         onToggle={(value) => toggle("era", value)}
       />
       <FilterSection
         title="Locations"
         values={locations}
-        keyName="locations"
         activeValues={filters.locations || []}
         onToggle={(value) => toggle("locations", value)}
       />
       <FilterSection
         title="Faction / Team"
         values={factions}
-        keyName="faction"
         activeValues={filters.faction || []}
         onToggle={(value) => toggle("faction", value)}
       />
       <FilterSection
         title="Powers"
         values={powers}
-        keyName="powers"
         activeValues={filters.powers || []}
         onToggle={(value) => toggle("powers", value)}
       />
       <FilterSection
         title="Tags"
         values={tags}
-        keyName="tags"
         activeValues={filters.tags || []}
         onToggle={(value) => toggle("tags", value)}
       />
       <FilterSection
         title="Status"
         values={statuses}
-        keyName="status"
         activeValues={filters.status || []}
         onToggle={(value) => toggle("status", value)}
       />
       <FilterSection
         title="Stories"
         values={stories}
-        keyName="stories"
         activeValues={filters.stories || []}
         onToggle={(value) => toggle("stories", value)}
       />
@@ -2034,14 +2446,15 @@ function FilterDrawer({ open, onClose, children }) {
             animate={{ x: 0 }}
             exit={{ x: "100%" }}
             transition={{ type: "spring", stiffness: 200, damping: 26 }}
-            className="fixed inset-y-0 right-0 z-50 w-full max-w-md overflow-y-auto border-l border-white/10 bg-[#070a19] shadow-[0_40px_120px_rgba(7,10,25,0.6)]"
+            className="fixed inset-y-0 right-0 z-50 w-full max-w-full overflow-y-auto border-l border-white/10 bg-[#070a19] shadow-[0_40px_120px_rgba(7,10,25,0.6)] sm:max-w-md"
+            style={{ width: "min(28rem, calc(100vw * 0.66))" }}
             role="dialog"
             aria-modal="true"
             aria-label="Filters"
           >
             <div className="flex items-center justify-between border-b border-white/10 px-5 py-4">
-              <div className="text-xs font-bold uppercase tracking-[0.35em] text-white/70">Filters</div>
-              <Button variant="ghost" onClick={onClose} className="text-xs font-bold uppercase tracking-wide text-white/80">
+              <div className="text-xs font-bold tracking-[0.35em] text-white/70">Filters</div>
+              <Button variant="ghost" onClick={onClose} className="text-xs font-bold tracking-wide text-white/80">
                 <X size={14} /> Close
               </Button>
             </div>
@@ -2061,243 +2474,718 @@ function ToolsBar({
   onSortModeChange,
   onOpenFilters,
   onClearFilters,
-  onArenaShortcut,
+  onArenaToggle,
   onSync,
   showArena,
+  totalCount,
+  filteredCount,
+  hasActiveFilters,
 }) {
-  const barRef = useRef(null);
-  const sentinelRef = useRef(null);
-  const [affixed, setAffixed] = useState(false);
   const [barHeight, setBarHeight] = useState(0);
-  const [headerOffset, setHeaderOffset] = useState(0);
+  const [lastKnownHeight, setLastKnownHeight] = useState(0);
+  const [mode, setMode] = useState("attached");
+  const [contentEl, setContentEl] = useState(null);
+  const [heroEl, setHeroEl] = useState(null);
+  const [mountEl, setMountEl] = useState(null);
+  const [displayMode, setDisplayMode] = useState("full");
+  const isMobile = useMediaQuery("(max-width: 640px)");
 
-  useLayoutEffect(() => {
-    const measure = () => {
-      if (barRef.current) {
-        setBarHeight(barRef.current.getBoundingClientRect().height);
+  const handleContentRef = useCallback((node) => {
+    setContentEl(node);
+  }, []);
+
+  useIsomorphicLayoutEffect(() => {
+    if (typeof document === "undefined") return undefined;
+    setHeroEl(document.getElementById("hero-showcase"));
+    setMountEl(document.getElementById("hero-toolbar-mount"));
+    return undefined;
+  }, []);
+
+  useIsomorphicLayoutEffect(() => {
+    if (!contentEl || typeof ResizeObserver === "undefined") return undefined;
+    const observer = new ResizeObserver((entries) => {
+      const entry = entries[0];
+      if (entry) {
+        setBarHeight(entry.contentRect.height);
       }
-      if (typeof window !== "undefined") {
-        const header = document.getElementById("lore-header");
-        if (header) {
-          setHeaderOffset(header.getBoundingClientRect().height);
-        }
+    });
+    observer.observe(contentEl);
+    setBarHeight(contentEl.getBoundingClientRect().height);
+    return () => observer.disconnect();
+  }, [contentEl]);
+
+  useEffect(() => {
+    if (barHeight > 0) {
+      setLastKnownHeight(barHeight);
+    }
+  }, [barHeight]);
+
+  useEffect(() => {
+    if (!isMobile && displayMode === "compact") {
+      setDisplayMode("full");
+    }
+  }, [isMobile, displayMode]);
+
+  useEffect(() => {
+    if (!isMobile) return;
+    if (showArena) {
+      setDisplayMode("hidden");
+    }
+  }, [isMobile, showArena]);
+
+  useIsomorphicLayoutEffect(() => {
+    if (!heroEl) return undefined;
+    const height = barHeight || lastKnownHeight || 0;
+    heroEl.style.setProperty("--toolbar-offset", `${Math.ceil(height + 120)}px`);
+    return () => {
+      heroEl.style.removeProperty("--toolbar-offset");
+    };
+  }, [heroEl, barHeight, lastKnownHeight]);
+
+  useIsomorphicLayoutEffect(() => {
+    if (typeof window === "undefined" || !heroEl) return undefined;
+    const update = () => {
+      const rect = heroEl.getBoundingClientRect();
+      const height = barHeight || lastKnownHeight || 0;
+      if (!height) {
+        setMode("attached");
+        return;
+      }
+      const threshold = height + 24;
+      if (rect.bottom <= threshold) {
+        setMode("fixed");
+      } else {
+        setMode("attached");
       }
     };
-    measure();
-    window.addEventListener("resize", measure);
-    return () => window.removeEventListener("resize", measure);
+
+    update();
+    const opts = { passive: true };
+    window.addEventListener("scroll", update, opts);
+    window.addEventListener("resize", update);
+    return () => {
+      window.removeEventListener("scroll", update);
+      window.removeEventListener("resize", update);
+    };
+  }, [heroEl, barHeight, lastKnownHeight]);
+
+  const cycleDisplayMode = useCallback(() => {
+    if (isMobile) {
+      setDisplayMode((state) => {
+        if (state === "full") return "compact";
+        if (state === "compact") return "hidden";
+        return "full";
+      });
+    } else {
+      setDisplayMode((state) => (state === "full" ? "hidden" : "full"));
+    }
+  }, [isMobile]);
+
+  const showFullControls = useCallback(() => {
+    setDisplayMode("full");
   }, []);
 
-  useEffect(() => {
-    if (typeof window === "undefined" || typeof ResizeObserver === "undefined") return undefined;
-    const header = document.getElementById("lore-header");
-    if (!header) return undefined;
-    const observer = new ResizeObserver(() => {
-      setHeaderOffset(header.getBoundingClientRect().height);
-    });
-    observer.observe(header);
-    return () => observer.disconnect();
-  }, []);
+  const effectiveHeight = barHeight || lastKnownHeight || 0;
+  const placeholderHeight = mode === "fixed" && displayMode !== "hidden" ? effectiveHeight + 16 : 0;
+  const countLabel = hasActiveFilters ? `${filteredCount} / ${totalCount} in view` : `${totalCount} catalogued`;
+  const shortCountLabel = hasActiveFilters ? `${filteredCount}/${totalCount}` : `${totalCount}`;
 
-  useEffect(() => {
-    if (!sentinelRef.current) return undefined;
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        setAffixed(!entry.isIntersecting);
-      },
-      { threshold: 0, rootMargin: "-1px 0px 0px 0px" }
+  const renderToolbar = () => (
+    <AnimatePresence initial={false} mode="wait">
+      {displayMode === "hidden" ? null : displayMode === "compact" ? (
+        <motion.div
+          key="toolbar-compact"
+          ref={handleContentRef}
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -16 }}
+          transition={{ duration: 0.24, ease: "easeOut" }}
+          className={cx(
+            "border border-white/12 bg-[#070b1c]/90 shadow-[0_14px_40px_rgba(8,8,20,0.45)] backdrop-blur-xl",
+            isMobile ? "rounded-none border-x-0 border-t border-white/10 border-b border-white/15 px-3 py-2" : "rounded-2xl px-4 py-2.5"
+          )}
+        >
+          {isMobile ? (
+            <div className="flex items-center gap-1 overflow-x-auto pb-1">
+              <button
+                type="button"
+                onClick={showFullControls}
+                className="inline-flex h-9 w-9 flex-none items-center justify-center rounded-lg border border-white/20 bg-white/10 text-white transition hover:bg-white/20"
+                aria-label="Expand controls"
+              >
+                <Search className="h-4 w-4" aria-hidden="true" />
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const currentIndex = SORT_OPTIONS.findIndex((item) => item.value === sortMode);
+                  const next = SORT_OPTIONS[(currentIndex + 1) % SORT_OPTIONS.length];
+                  onSortModeChange(next.value);
+                }}
+                className="inline-flex h-9 w-9 flex-none items-center justify-center rounded-lg border border-white/20 bg-white/10 text-white transition hover:bg-white/20"
+                aria-label="Cycle sort order"
+              >
+                <ArrowUpDown className="h-4 w-4" aria-hidden="true" />
+              </button>
+              <button
+                type="button"
+                onClick={onOpenFilters}
+                className="inline-flex h-9 w-9 flex-none items-center justify-center rounded-lg border border-white/20 bg-white/10 text-white transition hover:bg-white/20"
+                aria-label="Open filters"
+              >
+                <Filter className="h-4 w-4" aria-hidden="true" />
+              </button>
+              <button
+                type="button"
+                onClick={onClearFilters}
+                className="inline-flex h-9 w-9 flex-none items-center justify-center rounded-lg border border-white/20 bg-white/10 text-white transition hover:bg-white/20"
+                aria-label="Clear filters"
+              >
+                <X className="h-4 w-4" aria-hidden="true" />
+              </button>
+              <button
+                type="button"
+                onClick={onArenaToggle}
+                className={cx(
+                  "inline-flex h-9 w-9 flex-none items-center justify-center rounded-lg border transition",
+                  showArena ? "border-amber-200/70 bg-amber-200/20 text-white" : "border-white/20 bg-white/10 text-white hover:bg-white/20"
+                )}
+                aria-label={showArena ? "Hide arena" : "Open arena"}
+                aria-pressed={showArena}
+              >
+                <Swords className="h-4 w-4" aria-hidden="true" />
+              </button>
+              <button
+                type="button"
+                onClick={onSync}
+                className="inline-flex h-9 w-9 flex-none items-center justify-center rounded-lg border border-white/20 bg-white/10 text-white transition hover:bg-white/20"
+                aria-label="Sync universe"
+              >
+                <RefreshCcw className="h-4 w-4" aria-hidden="true" />
+              </button>
+              <div className="ml-1 flex flex-none items-center gap-1 rounded-lg border border-white/15 bg-white/10 px-2 py-1 text-[10px] font-semibold text-white/80">
+                <Users className="h-3.5 w-3.5 text-amber-200" aria-hidden="true" />
+                <span>{shortCountLabel}</span>
+              </div>
+              <button
+                type="button"
+                onClick={cycleDisplayMode}
+                className="ml-1 inline-flex h-9 w-9 flex-none items-center justify-center rounded-lg border border-white/20 bg-white/10 text-white transition hover:bg-white/20"
+                aria-label="Hide universe controls"
+              >
+                <ChevronDown className="h-4 w-4" aria-hidden="true" />
+              </button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2">
+              <label className="relative flex-1">
+                <span className="sr-only" id="universe-search-compact">
+                  Search heroes, powers, locations and tags
+                </span>
+                <Input
+                  aria-labelledby="universe-search-compact"
+                  value={query}
+                  onChange={(event) => onQueryChange(event.target.value)}
+                  placeholder="Search"
+                  className="h-10 w-full rounded-lg border border-white/15 bg-white/10 pl-9 pr-3 text-xs text-white placeholder:text-white/50"
+                />
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/70" aria-hidden="true" />
+              </label>
+              <button
+                type="button"
+                onClick={() => {
+                  const currentIndex = SORT_OPTIONS.findIndex((item) => item.value === sortMode);
+                  const next = SORT_OPTIONS[(currentIndex + 1) % SORT_OPTIONS.length];
+                  onSortModeChange(next.value);
+                }}
+                className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-white/15 bg-white/10 text-white transition hover:bg-white/20"
+                aria-label="Cycle sort order"
+              >
+                <ArrowUpDown className="h-4 w-4" aria-hidden="true" />
+              </button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={onOpenFilters}
+                className="inline-flex h-10 w-10 flex-none items-center justify-center rounded-lg border border-white/15 bg-white/10 p-0 text-white hover:bg-white/20"
+                aria-label="Open filters"
+              >
+                <Filter className="h-4 w-4" aria-hidden="true" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={onClearFilters}
+                className="inline-flex h-10 w-10 flex-none items-center justify-center rounded-lg border border-white/15 bg-white/10 p-0 text-white hover:bg-white/20"
+                aria-label="Clear filters"
+              >
+                <X className="h-4 w-4" aria-hidden="true" />
+              </Button>
+              <button
+                type="button"
+                onClick={onArenaToggle}
+                className={cx(
+                  "inline-flex h-10 w-10 items-center justify-center rounded-lg border text-white transition",
+                  showArena ? "border-amber-200/70 bg-amber-200/20" : "border-white/15 bg-white/10 hover:bg-white/20"
+                )}
+                aria-label={showArena ? "Hide arena" : "Open arena"}
+                aria-pressed={showArena}
+              >
+                <Swords className="h-4 w-4" aria-hidden="true" />
+              </button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={onSync}
+                className="inline-flex h-10 w-10 flex-none items-center justify-center rounded-lg border border-white/15 bg-white/10 p-0 text-white hover:bg-white/20"
+                aria-label="Sync universe"
+              >
+                <RefreshCcw className="h-4 w-4" aria-hidden="true" />
+              </Button>
+              <button
+                type="button"
+                onClick={cycleDisplayMode}
+                className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-white/15 bg-white/10 text-white transition hover:bg-white/20"
+                aria-label="Hide universe controls"
+              >
+                <ChevronDown className="h-4 w-4" aria-hidden="true" />
+              </button>
+            </div>
+          )}
+        </motion.div>
+      ) : (
+        <motion.div
+          key="toolbar-full"
+          ref={handleContentRef}
+          initial={{ opacity: 0, y: 24 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -24 }}
+          transition={{ duration: 0.28, ease: "easeOut" }}
+          className={cx(
+            "border border-white/12 bg-[#070b1c]/90 shadow-[0_20px_60px_rgba(8,8,20,0.45)] backdrop-blur-xl",
+            isMobile ? "rounded-none border-x-0 border-t border-white/10 border-b border-white/15 px-3 py-3" : "rounded-3xl p-4"
+          )}
+        >
+          {isMobile ? (
+            <div className="space-y-2">
+              <div className="flex items-center gap-1">
+                <label className="relative flex-1">
+                  <span className="sr-only" id="universe-search-label">
+                    Search heroes, powers, locations and tags
+                  </span>
+                  <Input
+                    aria-labelledby="universe-search-label"
+                    id="universe-search"
+                    value={query}
+                    onChange={(event) => onQueryChange(event.target.value)}
+                    placeholder="Search the universe"
+                    className="h-10 w-full rounded-xl border border-white/15 bg-white/15 pl-9 pr-3 text-xs font-semibold text-white placeholder:text-white/55"
+                  />
+                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/70" aria-hidden="true" />
+                </label>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const currentIndex = SORT_OPTIONS.findIndex((item) => item.value === sortMode);
+                    const next = SORT_OPTIONS[(currentIndex + 1) % SORT_OPTIONS.length];
+                    onSortModeChange(next.value);
+                  }}
+                  className="inline-flex h-10 w-10 flex-none items-center justify-center rounded-xl border border-white/20 bg-white/10 text-white transition hover:bg-white/20"
+                  aria-label="Cycle sort order"
+                >
+                  <ArrowUpDown className="h-4 w-4" aria-hidden="true" />
+                </button>
+              </div>
+              <div className="grid grid-cols-6 gap-1 text-[10px] font-semibold">
+                <div className="flex items-center justify-center gap-1 rounded-lg border border-white/20 bg-black/60 px-2 py-2 text-white/80">
+                  <Users className="h-3.5 w-3.5 text-amber-200" aria-hidden="true" />
+                  <span>{shortCountLabel}</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={onOpenFilters}
+                  className="flex items-center justify-center gap-1 rounded-lg border border-white/20 bg-white/10 px-2 py-2 text-white transition hover:bg-white/20"
+                  aria-label="Open filters"
+                >
+                  <Filter className="h-3.5 w-3.5" aria-hidden="true" />
+                  <span>Filters</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={onArenaToggle}
+                  className={cx(
+                    "flex items-center justify-center gap-1 rounded-lg border px-2 py-2 transition",
+                    showArena ? "border-amber-200/70 bg-amber-200/20 text-white" : "border-white/20 bg-white/10 text-white hover:bg-white/20"
+                  )}
+                  aria-pressed={showArena}
+                  aria-label={showArena ? "Hide arena" : "Open arena"}
+                >
+                  <Swords className="h-3.5 w-3.5" aria-hidden="true" />
+                  <span>Arena</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={onClearFilters}
+                  className="flex items-center justify-center gap-1 rounded-lg border border-white/20 bg-white/10 px-2 py-2 text-white transition hover:bg-white/20"
+                  aria-label="Clear filters"
+                >
+                  <X className="h-3.5 w-3.5" aria-hidden="true" />
+                  <span>Clear</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={onSync}
+                  className="flex items-center justify-center gap-1 rounded-lg border border-white/20 bg-white/10 px-2 py-2 text-white transition hover:bg-white/20"
+                  aria-label="Sync universe"
+                >
+                  <RefreshCcw className="h-3.5 w-3.5" aria-hidden="true" />
+                  <span>Sync</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={cycleDisplayMode}
+                  className="flex items-center justify-center gap-1 rounded-lg border border-white/20 bg-white/10 px-2 py-2 text-white transition hover:bg-white/20"
+                  aria-label="Show icon controls"
+                >
+                  <ChevronDown className="h-3.5 w-3.5" aria-hidden="true" />
+                  <span>Icons</span>
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="flex flex-wrap items-center gap-3 sm:gap-4">
+              <label className="relative flex-1 min-w-[220px]">
+                <span className="sr-only" id="universe-search-label">
+                  Search heroes, powers, locations and tags
+                </span>
+                <Input
+                  aria-labelledby="universe-search-label"
+                  id="universe-search"
+                  value={query}
+                  onChange={(event) => onQueryChange(event.target.value)}
+                  placeholder="Search characters, powers, locations, tags…"
+                  className="w-full rounded-2xl bg-white/15 pl-10 pr-3 text-sm text-white placeholder:text-white/60"
+                />
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/70" aria-hidden="true" />
+              </label>
+              <div className="relative w-full min-w-[160px] sm:w-48">
+                <span className="sr-only" id="sort-menu-label">
+                  Sort heroes
+                </span>
+                <select
+                  aria-labelledby="sort-menu-label"
+                  value={sortMode}
+                  onChange={(event) => onSortModeChange(event.target.value)}
+                  className="w-full appearance-none rounded-2xl border border-white/25 bg-black/70 px-3 py-2 pr-9 text-sm font-semibold text-white shadow-inner focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300"
+                >
+                  {SORT_OPTIONS.map((item) => (
+                    <option key={item.value} value={item.value} className="bg-black text-white">
+                      {item.label}
+                    </option>
+                  ))}
+                </select>
+                <ArrowDown className="pointer-events-none absolute right-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-white/70" aria-hidden="true" />
+              </div>
+              <Button
+                variant="gradient"
+                size="sm"
+                onClick={onOpenFilters}
+                className="flex-none shadow-[0_15px_40px_rgba(250,204,21,0.3)]"
+                aria-label="Open filters"
+              >
+                <Filter className="h-4 w-4" aria-hidden="true" />
+                <span className="text-xs font-semibold sm:text-sm">Filters</span>
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={onClearFilters}
+                className="flex-none"
+                aria-label="Clear filters"
+              >
+                <X size={14} aria-hidden="true" />
+                <span className="text-xs font-semibold sm:text-sm">Clear</span>
+              </Button>
+              <div className="flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1.5 text-xs font-semibold text-white/85">
+                <Users className="h-3.5 w-3.5 text-amber-200" aria-hidden="true" />
+                <span>{countLabel}</span>
+              </div>
+              <Button
+                variant="subtle"
+                size="sm"
+                onClick={onArenaToggle}
+                className={cx("flex-none", showArena ? "ring-2 ring-amber-300/70" : "")}
+                aria-pressed={showArena}
+                aria-label={showArena ? "Hide arena" : "Open arena"}
+              >
+                <Swords size={14} aria-hidden="true" />
+                <span className="text-xs font-semibold sm:text-sm">{showArena ? "Hide Arena" : "Arena"}</span>
+              </Button>
+              <Button
+                variant="dark"
+                size="sm"
+                onClick={onSync}
+                className="flex-none"
+                aria-label="Sync universe"
+              >
+                <RefreshCcw size={14} aria-hidden="true" />
+                <span className="text-xs font-semibold sm:text-sm">Sync</span>
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={cycleDisplayMode}
+                className="flex-none px-4 sm:px-3"
+                aria-label="Hide universe controls"
+              >
+                <ChevronDown className="h-4 w-4" aria-hidden="true" />
+                <span className="text-xs font-semibold">Hide</span>
+              </Button>
+            </div>
+          )}
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+
+  let renderedToolbar;
+  if (mode === "fixed") {
+    renderedToolbar = (
+      <div className="fixed inset-x-0 top-0 z-50">
+        <div className="mx-auto max-w-7xl px-3 sm:px-4">{renderToolbar()}</div>
+      </div>
     );
-    observer.observe(sentinelRef.current);
-    return () => observer.disconnect();
-  }, []);
+  } else if (mountEl) {
+    renderedToolbar = createPortal(
+      <div className="pointer-events-none px-5 pt-6 pb-10 sm:px-10 lg:px-24 xl:px-28">
+        <div className="pointer-events-auto">{renderToolbar()}</div>
+      </div>,
+      mountEl
+    );
+  } else {
+    renderedToolbar = <div className="mx-auto max-w-7xl px-3 pt-6 sm:px-4">{renderToolbar()}</div>;
+  }
+
+  const hiddenActivator = displayMode === "hidden" ? (
+    <Button
+      type="button"
+      onClick={showFullControls}
+      variant="gradient"
+      size="sm"
+      className="fixed top-4 right-4 z-[60] flex items-center gap-2 rounded-2xl px-4 py-2 text-xs font-semibold shadow-[0_18px_48px_rgba(253,230,138,0.35)]"
+      aria-label="Show universe controls"
+    >
+      <ChevronUp className="h-4 w-4" aria-hidden="true" />
+      <span>Controls</span>
+    </Button>
+  ) : null;
 
   return (
-    <div className="relative">
-      <div ref={sentinelRef} aria-hidden="true" className="h-0" />
-      {affixed && <div style={{ height: barHeight }} aria-hidden="true" />}
-      <div
-        className={cx(
-          "transition-all duration-200",
-          affixed
-            ? "fixed inset-x-0 z-40 border-b border-white/10 bg-[#050813]/95 backdrop-blur-xl shadow-[0_12px_40px_rgba(4,8,20,0.45)]"
-            : ""
-        )}
-        style={affixed ? { top: headerOffset } : undefined}
-      >
-        <div ref={barRef} className="mx-auto max-w-7xl px-3 py-3 sm:px-4">
-          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-            <label className="relative flex-1 min-w-[220px] sm:min-w-[260px]" htmlFor="universe-search">
-              <span className="sr-only">Search the universe</span>
-              <Input
-                id="universe-search"
-                value={query}
-                onChange={(event) => onQueryChange(event.target.value)}
-                placeholder="Search characters, powers, locations, tags…"
-                className="w-full bg-white/15 pl-10 pr-3 text-sm text-white placeholder:text-white/60"
-              />
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/70" aria-hidden="true" />
-            </label>
-            <div className="relative w-full min-w-[160px] sm:w-48">
-              <span className="sr-only" id="sort-menu-label">
-                Sort heroes
-              </span>
-              <select
-                aria-labelledby="sort-menu-label"
-                value={sortMode}
-                onChange={(event) => onSortModeChange(event.target.value)}
-                className="w-full appearance-none rounded-xl border border-white/25 bg-black/70 px-3 py-2 pr-9 text-[11px] font-bold uppercase tracking-wide text-white/85 shadow-inner focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300 sm:text-xs"
-              >
-                {SORT_OPTIONS.map((item) => (
-                  <option key={item.value} value={item.value} className="bg-black text-white">
-                    {item.label}
-                  </option>
-                ))}
-              </select>
-              <ArrowDown className="pointer-events-none absolute right-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-white/70" aria-hidden="true" />
-            </div>
-            <Button
-              variant="gradient"
-              size="sm"
-              onClick={onOpenFilters}
-              className="flex-none shadow-[0_15px_40px_rgba(250,204,21,0.3)]"
-              aria-label="Open filters"
-            >
-              <Filter className="h-4 w-4" aria-hidden="true" />
-              <span className="hidden sm:inline">Filters</span>
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={onClearFilters}
-              className="flex-none"
-              aria-label="Clear filters"
-            >
-              <X size={14} aria-hidden="true" />
-              <span className="hidden sm:inline">Clear</span>
-            </Button>
-            <Button
-              variant="subtle"
-              size="sm"
-              onClick={onArenaShortcut}
-              className={cx("flex-none", showArena ? "ring-2 ring-amber-300/70" : "")}
-              aria-pressed={showArena}
-              aria-label={showArena ? "Scroll to arena" : "Open arena"}
-            >
-              <Swords size={14} aria-hidden="true" />
-              <span className="hidden sm:inline">Arena</span>
-            </Button>
-            <Button
-              variant="dark"
-              size="sm"
-              onClick={onSync}
-              className="flex-none"
-              aria-label="Sync universe"
-            >
-              <RefreshCcw size={14} aria-hidden="true" />
-              <span className="hidden sm:inline">Sync</span>
-            </Button>
-          </div>
-        </div>
-      </div>
-    </div>
+    <>
+      {renderedToolbar}
+      {hiddenActivator}
+      <div style={{ height: placeholderHeight }} aria-hidden="true" />
+    </>
   );
 }
 
 
-function groupByInitial(values) {
-  return values.reduce((acc, value) => {
-    const initial = value?.[0]?.toUpperCase() || "#";
-    if (!acc[initial]) acc[initial] = [];
-    acc[initial].push(value);
-    return acc;
-  }, {});
+function QuickFilterRail({ data, onFacet, onSortModeChange, sortMode, onOpenFilters }) {
+  const [open, setOpen] = useState(false);
+  const quickSorts = [
+    { value: "default", label: "Featured" },
+    { value: "az", label: "A-Z" },
+    { value: "faction", label: "By Faction" },
+    { value: "most", label: "Most Powerful" },
+  ];
+
+  const topCollections = useMemo(() => {
+    const tally = (getter) => {
+      const counts = new Map();
+      data.forEach((item) => {
+        getter(item).forEach((value) => {
+          if (!value) return;
+          const entry = counts.get(value) || { count: 0 };
+          entry.count += 1;
+          counts.set(value, entry);
+        });
+      });
+      return Array.from(counts.entries())
+        .map(([value, meta]) => ({ value, count: meta.count }))
+        .sort((a, b) => b.count - a.count);
+    };
+
+    const locations = tally((item) => item.locations || []).slice(0, 6);
+    const factions = tally((item) => item.faction || []).slice(0, 6);
+
+    const powerMap = new Map();
+    data.forEach((item) => {
+      (item.powers || []).forEach((power) => {
+        if (!power?.name) return;
+        const entry = powerMap.get(power.name) || { count: 0, total: 0 };
+        entry.count += 1;
+        entry.total += Number(power.level) || 0;
+        powerMap.set(power.name, entry);
+      });
+    });
+    const powers = Array.from(powerMap.entries())
+      .map(([name, meta]) => ({
+        value: name,
+        count: meta.count,
+        avg: meta.count ? meta.total / meta.count : 0,
+      }))
+      .sort((a, b) => {
+        if (b.avg === a.avg) return b.count - a.count;
+        return b.avg - a.avg;
+      })
+      .slice(0, 8);
+
+    return { locations, factions, powers };
+  }, [data]);
+
+  const renderChip = (item, key) => (
+    <button
+      key={`${key}-${item.value}`}
+      type="button"
+      onClick={() => onFacet({ key, value: item.value })}
+      className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/8 px-3 py-1.5 text-xs font-semibold text-white transition hover:border-amber-200/70 hover:bg-amber-200/15"
+    >
+      <span>{item.value}</span>
+      <span className="text-[11px] text-white/60">{item.count}</span>
+    </button>
+  );
+
+  if (!open) {
+    return (
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="group flex w-full items-center justify-between rounded-full border border-white/15 bg-white/5 px-4 py-1.5 text-[10px] font-semibold uppercase tracking-[0.45em] text-white/70 transition hover:border-white/40 hover:bg-white/10"
+        aria-expanded="false"
+      >
+        <span className="flex items-center gap-2 text-white/80">
+          <Sparkles className="h-4 w-4 text-amber-200" aria-hidden="true" /> Discover quickly
+        </span>
+        <ChevronDown className="h-4 w-4 text-white/60 transition group-hover:text-white" aria-hidden="true" />
+      </button>
+    );
+  }
+
+  return (
+    <Card className="border border-white/15 bg-white/5 backdrop-blur-2xl">
+      <CardContent className="space-y-6">
+        <div
+          className="flex flex-wrap cursor-pointer select-none items-center justify-between gap-3"
+          role="button"
+          tabIndex={0}
+          onClick={() => setOpen(false)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" || event.key === " ") {
+              event.preventDefault();
+              setOpen(false);
+            }
+          }}
+        >
+          <div className="flex items-center gap-2 text-sm font-semibold text-white/80">
+            <Sparkles className="h-4 w-4 text-amber-200" aria-hidden="true" /> Discover quickly
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={(event) => {
+                event.stopPropagation();
+                onOpenFilters();
+              }}
+              className="px-3 text-xs font-semibold text-white/70 hover:text-white"
+            >
+              Open full filters
+            </Button>
+            <Button
+              variant="subtle"
+              size="sm"
+              onClick={(event) => {
+                event.stopPropagation();
+                setOpen(false);
+              }}
+              className="px-3 text-xs font-semibold text-white/80"
+              aria-label="Collapse quick filters"
+            >
+              <ChevronUp className="h-4 w-4" aria-hidden="true" />
+            </Button>
+          </div>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          {quickSorts.map((item) => (
+            <button
+              key={item.value}
+              type="button"
+              onClick={() => onSortModeChange(item.value)}
+              className={cx(
+                "rounded-full border px-4 py-1.5 text-xs font-semibold transition",
+                sortMode === item.value
+                  ? "border-amber-200/80 bg-amber-200/20 text-white"
+                  : "border-white/20 bg-white/5 text-white/75 hover:border-white/40 hover:bg-white/10"
+              )}
+            >
+              {item.label}
+            </button>
+          ))}
+        </div>
+        {!!topCollections.factions.length && (
+          <div className="space-y-2">
+            <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-white/60">
+              <ShieldCheck className="h-4 w-4 text-amber-200" /> Factions
+            </div>
+            <div className="flex flex-wrap gap-2">{topCollections.factions.map((item) => renderChip(item, "faction"))}</div>
+          </div>
+        )}
+        {!!topCollections.locations.length && (
+          <div className="space-y-2">
+            <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-white/60">
+              <MapPin className="h-4 w-4 text-amber-200" /> Locations
+            </div>
+            <div className="flex flex-wrap gap-2">{topCollections.locations.map((item) => renderChip(item, "locations"))}</div>
+          </div>
+        )}
+        {!!topCollections.powers.length && (
+          <div className="space-y-2">
+            <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-white/60">
+              <Atom className="h-4 w-4 text-amber-200" /> Top powers
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {topCollections.powers.map((item) => renderChip(item, "powers"))}
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
 }
 
-function FilterSection({ title, values, keyName, single, activeValues, onToggle }) {
-  const [term, setTerm] = useState("");
-  const [openGroups, setOpenGroups] = useState(new Set());
 
-  const filteredGroups = useMemo(() => {
-    const filtered = term
-      ? values.filter((value) => value.toLowerCase().includes(term.toLowerCase()))
-      : values;
-    const grouped = Object.entries(groupByInitial(filtered));
-    return grouped.sort((a, b) => a[0].localeCompare(b[0]));
-  }, [term, values]);
-
-  useEffect(() => {
-    const defaults = new Set(filteredGroups.slice(0, 3).map(([letter]) => letter));
-    setOpenGroups(defaults);
-  }, [filteredGroups]);
-
-  const handleToggle = useCallback((letter, open) => {
-    setOpenGroups((prev) => {
-      const next = new Set(prev);
-      if (open) {
-        next.add(letter);
-      } else {
-        next.delete(letter);
-      }
-      return next;
-    });
-  }, []);
-
+function FilterSection({ title, values, single, activeValues, onToggle, searchTerm }) {
   const currentValues = single ? (activeValues ? [activeValues] : []) : activeValues || [];
+  const filteredValues = useMemo(() => {
+    const term = (searchTerm || "").trim().toLowerCase();
+    if (!term) return values;
+    return values.filter((value) => value.toLowerCase().includes(term));
+  }, [values, searchTerm]);
 
   return (
     <div className="space-y-2">
-      <div className="flex items-center justify-between gap-3">
-        <div className="text-xs font-extrabold uppercase tracking-wide text-white/75">{title}</div>
-        <label className="relative hidden min-w-[160px] sm:block">
-          <span className="sr-only">Search {title}</span>
-          <input
-            value={term}
-            onChange={(event) => setTerm(event.target.value)}
-            className="w-full rounded-lg border border-white/20 bg-black/40 px-3 py-1.5 text-xs font-semibold text-white placeholder:text-white/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300"
-            placeholder="Filter"
-            type="text"
-          />
-          <Search className="pointer-events-none absolute right-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-white/60" aria-hidden="true" />
-        </label>
-      </div>
-      <label className="relative sm:hidden">
-        <span className="sr-only">Search {title}</span>
-        <input
-          value={term}
-          onChange={(event) => setTerm(event.target.value)}
-          className="w-full rounded-lg border border-white/20 bg-black/40 px-3 py-2 text-xs font-semibold text-white placeholder:text-white/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300"
-          placeholder={`Find ${title.toLowerCase()}`}
-          type="text"
-        />
-        <Search className="pointer-events-none absolute right-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-white/60" aria-hidden="true" />
-      </label>
-      <div className="space-y-1.5">
-        {filteredGroups.map(([letter, items]) => (
-          <details
-            key={`${keyName}-${letter}`}
-            open={openGroups.has(letter)}
-            onToggle={(event) => handleToggle(letter, event.target.open)}
-            className="group rounded-xl border border-white/10 bg-white/5 p-3"
-          >
-            <summary className="flex cursor-pointer items-center justify-between text-[11px] font-bold uppercase tracking-[0.35em] text-white/70 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-300">
-              <span>{letter}</span>
-              <ChevronDown className="h-3 w-3 transition group-open:rotate-180" aria-hidden="true" />
-            </summary>
-            <div className="mt-2 flex max-h-40 flex-wrap gap-2 overflow-auto pr-1">
-              {items.map((value) => (
-                <FacetChip
-                  key={value}
-                  active={currentValues.includes(value)}
-                  onClick={() => onToggle(value)}
-                >
-                  {value}
-                </FacetChip>
-              ))}
-            </div>
-          </details>
-        ))}
-        {!filteredGroups.length && (
-          <p className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-white/60">
+      <div className="text-xs font-extrabold tracking-wide text-white/75">{title}</div>
+      <div className="max-h-48 overflow-y-auto rounded-xl border border-white/10 bg-white/5 p-3">
+        {filteredValues.length ? (
+          <div className="flex flex-wrap gap-2">
+            {filteredValues.map((value) => (
+              <FacetChip key={value} active={currentValues.includes(value)} onClick={() => onToggle(value)}>
+                {value}
+              </FacetChip>
+            ))}
+          </div>
+        ) : (
+          <p className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-[11px] font-semibold tracking-wide text-white/60">
             No matches
           </p>
         )}
@@ -2306,8 +3194,22 @@ function FilterSection({ title, values, keyName, single, activeValues, onToggle 
   );
 }
 
-function HeroSection({ featured, onOpenFilters, onScrollToCharacters, onOpenCharacter, onFacet }) {
+function HeroSection({
+  featured,
+  onOpenFilters,
+  onScrollToCharacters,
+  onOpenCharacter,
+  onFacet,
+  onToggleArena,
+  onSync,
+  showArena,
+  characterNames = [],
+}) {
   const isCompact = useMediaQuery("(max-width: 640px)");
+  const heroRef = useRef(null);
+  const [pointer, setPointer] = useState({ x: 50, y: 50 });
+  const [ripples, setRipples] = useState([]);
+  const rippleTimers = useRef(new Map());
   const slides = useMemo(() => {
     const base = [
       { key: "intro", label: "Menelek Makonnen Presents", data: { title: "The Loremaker Universe", blurb: "Author Menelek Makonnen opens the living universe — an ever-growing nexus of characters, factions, and cosmic forces awaiting your exploration." } },
@@ -2321,11 +3223,79 @@ function HeroSection({ featured, onOpenFilters, onScrollToCharacters, onOpenChar
   const [index, setIndex] = useState(0);
   const [direction, setDirection] = useState(1);
   const autoPlayed = useRef(false);
+  const [snippetIndex, setSnippetIndex] = useState(0);
+  const [tickerIndex, setTickerIndex] = useState(0);
+  const [featureImageIndex, setFeatureImageIndex] = useState(0);
+
+  const tickerNames = useMemo(() => {
+    const names = (characterNames || [])
+      .map((name) => (typeof name === "string" ? name.trim() : ""))
+      .filter(Boolean);
+    return Array.from(new Set(names));
+  }, [characterNames]);
+
+  useEffect(() => () => {
+    rippleTimers.current.forEach((timeout) => clearTimeout(timeout));
+    rippleTimers.current.clear();
+  }, []);
+
+  const updatePointerFromEvent = useCallback((event) => {
+    const rect = heroRef.current?.getBoundingClientRect();
+    if (!rect) return null;
+    const x = clamp(((event.clientX - rect.left) / rect.width) * 100, 5, 95);
+    const y = clamp(((event.clientY - rect.top) / rect.height) * 100, 5, 95);
+    return { x, y };
+  }, []);
+
+  const registerRipple = useCallback((coords) => {
+    const id = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    setRipples((prev) => [...prev, { id, ...coords }]);
+    const timeout = setTimeout(() => {
+      rippleTimers.current.delete(id);
+      setRipples((prev) => prev.filter((item) => item.id !== id));
+    }, 900);
+    rippleTimers.current.set(id, timeout);
+  }, []);
+
+  const handlePointerMove = useCallback(
+    (event) => {
+      const coords = updatePointerFromEvent(event);
+      if (coords) setPointer(coords);
+    },
+    [updatePointerFromEvent]
+  );
+
+  const handlePointerLeave = useCallback(() => {
+    setPointer({ x: 50, y: 50 });
+  }, []);
+
+  const handlePointerDown = useCallback(
+    (event) => {
+      const coords = updatePointerFromEvent(event);
+      if (coords) {
+        setPointer(coords);
+        registerRipple(coords);
+      }
+    },
+    [registerRipple, updatePointerFromEvent]
+  );
 
   useEffect(() => {
     setIndex(0);
     autoPlayed.current = false;
   }, [featured?.character?.id, featured?.faction?.name, featured?.location?.name, featured?.power?.name]);
+
+  useEffect(() => {
+    setTickerIndex(0);
+  }, [tickerNames.length]);
+
+  useEffect(() => {
+    if (!tickerNames.length) return undefined;
+    const timer = setInterval(() => {
+      setTickerIndex((value) => (value + 1) % tickerNames.length);
+    }, 3600);
+    return () => clearInterval(timer);
+  }, [tickerNames]);
 
   useEffect(() => {
     if (slides.length <= 1 || autoPlayed.current) return undefined;
@@ -2339,6 +3309,36 @@ function HeroSection({ featured, onOpenFilters, onScrollToCharacters, onOpenChar
 
   const current = slides[index] || slides[0];
 
+  useEffect(() => {
+    if (current?.key !== "character") {
+      setSnippetIndex(0);
+      return undefined;
+    }
+    setSnippetIndex(0);
+    const timer = setInterval(() => {
+      setSnippetIndex((value) => value + 1);
+    }, 4200);
+    return () => clearInterval(timer);
+  }, [current?.key, current?.data?.id]);
+
+  useEffect(() => {
+    if (current?.key !== "character") {
+      setFeatureImageIndex(0);
+      return undefined;
+    }
+    const charData = current?.data;
+    const sources = [charData?.cover, ...(charData?.gallery || [])].filter(Boolean);
+    if (!sources.length) {
+      setFeatureImageIndex(0);
+      return undefined;
+    }
+    setFeatureImageIndex((value) => value % sources.length);
+    const timer = setInterval(() => {
+      setFeatureImageIndex((value) => (value + 1) % sources.length);
+    }, 5200);
+    return () => clearInterval(timer);
+  }, [current]);
+
   const goPrev = () => {
     setDirection(-1);
     setIndex((prev) => (prev - 1 + slides.length) % slides.length);
@@ -2349,28 +3349,44 @@ function HeroSection({ featured, onOpenFilters, onScrollToCharacters, onOpenChar
     setIndex((prev) => (prev + 1) % slides.length);
   };
 
+  const activeTickerName = tickerNames[tickerIndex % Math.max(tickerNames.length, 1)] || "Lore";
+
   const renderCharacter = (slide) => {
     const char = slide.data;
     if (!char) {
       return (
         <div className="flex h-full flex-col justify-center gap-4 rounded-[32px] border border-white/15 bg-black/50 p-8 text-white">
-          <div className="text-xs font-bold uppercase tracking-[0.35em] text-white/60">Featured Character</div>
+          <div className="text-xs font-bold tracking-[0.35em] text-white/60">Featured Character</div>
           <p className="text-base font-semibold text-white/70 sm:text-lg">Loading today’s legend…</p>
         </div>
       );
     }
     const images = [char.cover, ...(char.gallery || [])].filter(Boolean);
     const heroImage = images[0];
-    const accentImages = images.slice(1, 3);
+    const slideshowSources = images.length ? images : heroImage ? [heroImage] : [];
+    const accentImage =
+      slideshowSources.length > 0
+        ? slideshowSources[featureImageIndex % slideshowSources.length]
+        : null;
     const topPowers = [...(char.powers || [])]
       .sort((a, b) => (Number(b.level) || 0) - (Number(a.level) || 0))
       .slice(0, 3);
+    const primaryLocation = (char.locations || [])[0];
+    const snippets = [
+      char.shortDesc,
+      char.longDesc ? `${char.longDesc.slice(0, 160).trimEnd()}${char.longDesc.length > 160 ? "…" : ""}` : null,
+      topPowers[0] ? `Known for ${topPowers[0].name}` : null,
+    ].filter(Boolean);
+    const activeSnippet = snippets.length ? snippets[snippetIndex % snippets.length] : null;
     const openProfile = () => onOpenCharacter?.(char);
     const handleFacetClick = (event, payload) => {
       event.stopPropagation();
       if (payload?.value) onFacet?.(payload);
       openProfile();
     };
+    const dossierAria = activeSnippet
+      ? `Read more about ${char.name}: ${activeSnippet}`
+      : `Read more about ${char.name}`;
     return (
       <div
         role="button"
@@ -2382,80 +3398,113 @@ function HeroSection({ featured, onOpenFilters, onScrollToCharacters, onOpenChar
             openProfile();
           }
         }}
-        className="relative flex h-full flex-col justify-between overflow-hidden rounded-[32px] border border-white/15 bg-black/60 p-8 text-white lg:flex-row"
+        className="relative flex h-full flex-col justify-center overflow-hidden rounded-[32px] border border-white/15 bg-black/60 p-6 text-white sm:p-8 lg:p-12"
       >
-        {heroImage && (
-          <motion.div
-            className="absolute inset-0"
-            initial={{ scale: 1.05, opacity: 0.6 }}
-            animate={{ scale: 1.12, opacity: 0.85 }}
-            transition={{ duration: 18, repeat: Infinity, repeatType: "reverse", ease: "easeInOut" }}
-            style={{
-              backgroundImage: `url(${heroImage})`,
-              backgroundSize: "cover",
-              backgroundPosition: "center",
-              filter: "saturate(1.15) brightness(0.9)",
-            }}
-          />
+        {(heroImage || accentImage) && (
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={`${char.id || "character"}-${heroImage || accentImage}`}
+              initial={{ opacity: 0.55, scale: 1.05 }}
+              animate={{ opacity: 0.85, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.98 }}
+              transition={{ duration: 1.2, ease: "easeOut" }}
+              className="absolute inset-0"
+            >
+              <ImageSafe
+                src={heroImage || accentImage}
+                alt={`${char.name} backdrop`}
+                fallbackLabel={char.name}
+                className="h-full w-full object-cover object-[72%_center]"
+              />
+            </motion.div>
+          </AnimatePresence>
         )}
-        <div className="absolute inset-0 bg-gradient-to-br from-black/85 via-black/70 to-indigo-900/70" />
-        <div className="relative z-10 flex-1 space-y-5 pr-0 sm:pr-8">
-          <Badge className="bg-white/15 text-white/85">{slide.label}</Badge>
-          <h2 className="text-3xl font-black leading-tight tracking-tight text-balance sm:text-5xl">
-            {char.name}
-          </h2>
-          <p className="text-sm font-semibold text-white/80 sm:text-base lg:text-lg">
-            {char.shortDesc || char.longDesc?.slice(0, 220) || "A legend awaits their tale to be told."}
-          </p>
-          <div className="flex flex-wrap gap-2 text-[11px] sm:text-xs">
-            {char.gender && (
-              <FacetChip onClick={(event) => handleFacetClick(event, { key: "gender", value: char.gender })}>
-                Gender: {char.gender}
-              </FacetChip>
-            )}
-            {(char.faction || []).map((faction) => (
-              <FacetChip key={faction} onClick={(event) => handleFacetClick(event, { key: "faction", value: faction })}>
-                {faction}
-              </FacetChip>
-            ))}
+        <div className="absolute inset-0 bg-gradient-to-r from-black/92 via-[#070f29]/78 to-transparent" />
+        {accentImage && (
+          <div className="pointer-events-none absolute inset-y-0 right-0 w-3/4 max-w-2xl">
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={`${char.id || "character"}-accent-${accentImage}`}
+                initial={{ opacity: 0, x: 28 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: 28 }}
+                transition={{ duration: 1.4, ease: "easeOut" }}
+                className="relative h-full"
+              >
+                <ImageSafe
+                  src={accentImage}
+                  alt={`${char.name} highlight`}
+                  fallbackLabel={char.name}
+                  className="h-full w-full object-cover object-[65%_center]"
+                />
+                <div className="absolute inset-y-0 left-0 w-40 bg-gradient-to-r from-[#050917]/95 via-[#050917]/45 to-transparent" />
+                <div className="absolute inset-y-0 right-0 w-12 bg-gradient-to-l from-transparent to-[#050917]/30" />
+              </motion.div>
+            </AnimatePresence>
           </div>
-          <div className="space-y-3">
-            <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wide text-white/70 sm:text-xs">
-              <Atom size={14} /> Top Powers
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {topPowers.map((power) => (
-                <button
-                  key={power.name}
-                  type="button"
-                  onClick={(event) => handleFacetClick(event, { key: "powers", value: power.name })}
-                  className="rounded-full bg-white/10 px-3 py-1 text-[11px] font-bold uppercase tracking-wide text-white/90 transition hover:bg-white/20"
-                >
-                  {power.name} • {power.level}/10
-                </button>
+        )}
+        <div className="relative z-10 flex flex-col gap-8 lg:flex-row lg:items-end">
+          <div className="max-w-3xl space-y-5">
+            <Badge className="bg-white/15 text-white/85">{slide.label}</Badge>
+            <h2 className="text-3xl font-black leading-tight tracking-tight text-balance sm:text-5xl">{char.name}</h2>
+            <p className="text-sm font-semibold text-white/80 sm:text-base lg:text-lg">
+              {char.shortDesc || char.longDesc?.slice(0, 220) || "A legend awaits their tale to be told."}
+            </p>
+            <div className="flex flex-wrap gap-2 text-[11px] sm:text-xs">
+              {char.gender && (
+                <FacetChip onClick={(event) => handleFacetClick(event, { key: "gender", value: char.gender })}>
+                  Gender: {char.gender}
+                </FacetChip>
+              )}
+              {primaryLocation && (
+                <FacetChip onClick={(event) => handleFacetClick(event, { key: "locations", value: primaryLocation })}>
+                  {primaryLocation}
+                </FacetChip>
+              )}
+              {(char.faction || []).map((faction) => (
+                <FacetChip key={faction} onClick={(event) => handleFacetClick(event, { key: "faction", value: faction })}>
+                  {faction}
+                </FacetChip>
               ))}
             </div>
+            <div className="space-y-4">
+              <div className="flex items-center gap-2 text-[11px] font-bold tracking-wide text-white/70 sm:text-xs">
+                <Atom size={14} aria-hidden="true" /> Top powers
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {topPowers.map((power) => (
+                  <button
+                    key={power.name}
+                    type="button"
+                    onClick={(event) => handleFacetClick(event, { key: "powers", value: power.name })}
+                    className="rounded-full bg-white/10 px-3 py-1 text-[11px] font-bold tracking-wide text-white/90 transition hover:bg-white/20"
+                  >
+                    {power.name} • {power.level}/10
+                  </button>
+                ))}
+              </div>
+              <Button
+                type="button"
+                variant="gradient"
+                size="sm"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  openProfile();
+                }}
+                aria-label={dossierAria}
+                className="inline-flex items-center gap-2 rounded-full px-5 py-2 text-sm font-semibold shadow-[0_18px_48px_rgba(253,230,138,0.35)]"
+              >
+                Dive into the dossier
+                <ArrowRight className="h-4 w-4" aria-hidden="true" />
+              </Button>
+            </div>
           </div>
         </div>
-        <div className="relative z-10 mt-6 flex flex-1 items-end justify-end gap-4 lg:mt-0 lg:flex-col">
-          {accentImages.map((src, idx) => (
-            <motion.div
-              key={src}
-              className="relative h-28 w-28 overflow-hidden rounded-2xl border border-white/20 shadow-[0_15px_40px_rgba(9,12,28,0.6)] sm:h-32 sm:w-32"
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.15 * idx, duration: 0.45 }}
-              style={{ backgroundImage: `url(${src})`, backgroundSize: "cover", backgroundPosition: "center" }}
-            >
-              <div className="absolute inset-0 bg-gradient-to-t from-black/65 to-transparent" />
-            </motion.div>
-          ))}
-          {!accentImages.length && (
-            <div className="rounded-2xl border border-dashed border-white/25 bg-black/40 px-4 py-6 text-center text-xs font-semibold text-white/70 sm:text-sm">
-              Classified imagery — open dossier
-            </div>
-          )}
-        </div>
+        {!accentImage && !heroImage && (
+          <div className="relative z-10 mt-6 rounded-2xl border border-dashed border-white/30 bg-black/50 px-4 py-5 text-center text-xs font-semibold text-white/70 sm:text-sm">
+            Classified imagery — open dossier
+          </div>
+        )}
       </div>
     );
   };
@@ -2470,6 +3519,25 @@ function HeroSection({ featured, onOpenFilters, onScrollToCharacters, onOpenChar
       { inset: "18%", duration: 34, delay: 0.6, dotClass: "bg-fuchsia-300" },
       { inset: "30%", duration: 40, delay: 1.1, dotClass: "bg-indigo-300" },
     ];
+    if (isCompact) {
+      return (
+        <div className="relative flex h-full flex-col justify-between rounded-[32px] border border-white/15 bg-black/60 p-6 text-white">
+          <div className="space-y-4">
+            <div className="text-sm font-semibold text-white/80">{slide.label}</div>
+            <h2 className="text-2xl font-black leading-snug text-balance">{title}</h2>
+            <p className="text-sm font-semibold text-white/75">{blurb}</p>
+          </div>
+          <Button
+            variant="gradient"
+            size="md"
+            onClick={onScrollToCharacters}
+            className="self-start shadow-[0_18px_48px_rgba(253,230,138,0.35)]"
+          >
+            Discover the Universe
+          </Button>
+        </div>
+      );
+    }
     return (
       <div className="relative flex h-full flex-col overflow-hidden rounded-[32px] border border-white/15 bg-gradient-to-br from-black/70 via-indigo-900/60 to-fuchsia-700/45 p-8 text-white md:p-12">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.12),transparent_55%)]" />
@@ -2480,18 +3548,20 @@ function HeroSection({ featured, onOpenFilters, onScrollToCharacters, onOpenChar
         />
         <div className="relative z-10 grid flex-1 gap-8 lg:grid-cols-[3fr_2fr] lg:items-center">
           <div className="space-y-6">
-            <div className="text-xs font-bold uppercase tracking-[0.35em] text-white/70">{slide.label}</div>
+            <div className="text-sm font-semibold text-white/80">{slide.label}</div>
             <h2 className="text-3xl font-black leading-tight tracking-tight text-balance sm:text-5xl lg:text-6xl">{title}</h2>
             <p className="max-w-xl text-sm font-semibold text-white/80 sm:text-base lg:text-lg">{blurb}</p>
             <div className="flex flex-wrap gap-3">
-              <Button variant="gradient" size="lg" onClick={onScrollToCharacters} className="shadow-[0_18px_48px_rgba(253,230,138,0.35)]">
+              <Button
+                variant="gradient"
+                size="lg"
+                onClick={onScrollToCharacters}
+                className="shadow-[0_18px_48px_rgba(253,230,138,0.35)]"
+              >
                 Discover the Universe
               </Button>
-              <Button variant="outline" size="lg" onClick={onOpenFilters} className="border-white/60 text-white/90 hover:bg-white/10">
-                Shape Your Lore Feed
-              </Button>
             </div>
-            <div className="flex flex-wrap gap-2 text-[11px] font-semibold uppercase tracking-[0.35em] text-white/70 sm:text-xs">
+            <div className="flex flex-wrap gap-2 text-[11px] font-semibold tracking-[0.35em] text-white/70 sm:text-xs">
               <span>Daily sync across every device</span>
               <span className="hidden sm:inline">•</span>
               <span>One universe — countless stories</span>
@@ -2532,33 +3602,14 @@ function HeroSection({ featured, onOpenFilters, onScrollToCharacters, onOpenChar
                 </motion.div>
               ))}
               <motion.span
-                className="absolute inset-0 flex items-center justify-center text-xs font-extrabold uppercase tracking-[0.45em] text-white/70"
-                animate={{ opacity: [0.6, 1, 0.6], letterSpacing: ["0.45em", "0.5em", "0.45em"] }}
-                transition={{ duration: 14, repeat: Infinity, ease: "easeInOut" }}
+                className="absolute inset-0 flex items-center justify-center text-sm font-black text-white"
+                animate={{ opacity: [0.6, 1, 0.6] }}
+                transition={{ duration: 12, repeat: Infinity, ease: "easeInOut" }}
               >
-                Lore
+                {activeTickerName}
               </motion.span>
             </div>
           </div>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-4">
-          <Button
-            variant="gradient"
-            size="lg"
-            onClick={onOpenFilters}
-            className="shadow-[0_18px_48px_rgba(253,230,138,0.35)]"
-          >
-            Launch Filters
-          </Button>
-          <Button
-            variant="outline"
-            size="lg"
-            onClick={onScrollToCharacters}
-            className="border-white/60 text-white/90 hover:bg-white/10"
-          >
-            Explore Universe
-          </Button>
         </div>
       </div>
     );
@@ -2608,84 +3659,194 @@ function HeroSection({ featured, onOpenFilters, onScrollToCharacters, onOpenChar
     }
   };
 
+  const heroHeightClass = isCompact ? "h-[360px]" : "h-[520px] lg:h-[560px]";
+
   return (
-    <section className="relative overflow-hidden rounded-[36px] border border-white/15 bg-gradient-to-br from-indigo-900/60 via-fuchsia-700/40 to-amber-500/25 shadow-[0_40px_120px_rgba(12,9,32,0.55)]">
+    <section
+      id="hero-showcase"
+      ref={heroRef}
+      onPointerMove={handlePointerMove}
+      onPointerLeave={handlePointerLeave}
+      onPointerDown={handlePointerDown}
+      className="relative flex min-h-screen w-full flex-col overflow-hidden bg-[#080c21]/95 shadow-[0_40px_160px_rgba(8,10,28,0.7)]"
+    >
+      <HeroDynamicBackground pointer={pointer} ripples={ripples} />
       <HeroHalo />
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.18),transparent_55%)]" />
       <div className="absolute inset-x-0 top-0 h-32 bg-gradient-to-b from-black/50 to-transparent" />
       <div className="absolute -left-24 bottom-0 h-72 w-72 rounded-full bg-amber-400/15 blur-3xl" />
       <div className="absolute -right-20 -top-10 h-72 w-72 rounded-full bg-fuchsia-500/15 blur-3xl" />
-      <div className="relative z-10 flex flex-col gap-10 px-6 py-14 sm:px-10 md:px-16">
-        <nav className="flex flex-col gap-4 text-[11px] font-semibold uppercase tracking-[0.4em] text-white/70 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-2 text-white">
-            <Clock size={12} /> {todayKey()} • Daily Lore Sequence
+      <div className="relative z-10 mx-auto flex min-h-screen w-full max-w-none flex-col px-5 pb-[var(--toolbar-offset,7rem)] pt-10 sm:px-10 lg:px-24 xl:px-28">
+        <header
+          id="lore-header"
+          className="flex flex-wrap items-center justify-between gap-4 rounded-[28px] border border-white/30 bg-black/60 px-5 py-2 backdrop-blur-3xl shadow-[0_20px_60px_rgba(8,10,26,0.55)]"
+        >
+          <div className="flex items-center gap-3">
+            <LoreShield onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })} />
+            <div className="flex flex-col gap-1 text-xs font-semibold text-white/80 sm:text-sm">
+              <span className="hidden sm:inline">Pulse of the Loremaker</span>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => window.location.reload()}
+                  className="rounded-full border border-white/35 px-3 py-1 text-white transition hover:bg-white/10"
+                >
+                  Loremaker
+                </button>
+                <Button
+                  as="a"
+                  href="https://menelekmakonnen.com"
+                  target="_blank"
+                  rel="noreferrer"
+                  variant="subtle"
+                  size="sm"
+              className="px-3 py-1 text-xs font-semibold text-white/85"
+            >
+              Menelek Makonnen
+            </Button>
+              </div>
+            </div>
           </div>
-          <button
-            type="button"
-            onClick={() => window.location.reload()}
-            className="self-start rounded-full border border-white/35 px-3 py-1 text-white transition hover:bg-white/10 sm:self-auto"
-          >
-            Loremaker
-          </button>
-        </nav>
-
-        <div className="relative">
-          {slides.length > 1 && (
-            <>
-              <button
-                type="button"
-                onClick={goPrev}
-                className="absolute left-2 top-1/2 z-20 flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full border border-white/40 bg-black/70 text-white shadow-lg transition hover:bg-black/90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-300"
-                aria-label="Previous highlight"
-              >
-                <ChevronLeft className="h-6 w-6 sm:h-7 sm:w-7" />
-              </button>
-              <button
-                type="button"
-                onClick={goNext}
-                className="absolute right-2 top-1/2 z-20 flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full border border-white/40 bg-black/70 text-white shadow-lg transition hover:bg-black/90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-300"
-                aria-label="Next highlight"
-              >
-                <ChevronRight className="h-6 w-6 sm:h-7 sm:w-7" />
-              </button>
-            </>
-          )}
-          <div className="overflow-hidden rounded-[36px] h-[420px] sm:h-[500px] lg:h-[540px]">
-            <AnimatePresence mode="wait" initial={false} custom={direction}>
-              <motion.div
-                key={current?.key}
-                custom={direction}
-                initial={{ opacity: 0, x: direction > 0 ? 140 : -140 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: direction > 0 ? -140 : 140 }}
-                transition={{ duration: 0.85, ease: "easeInOut" }}
-                className="relative h-full"
-              >
-                {renderSlide(current)}
-              </motion.div>
-            </AnimatePresence>
+          <div className="flex items-center gap-2 sm:hidden">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="flex items-center gap-2 px-3"
+              onClick={onOpenFilters}
+              aria-label="Open filters"
+            >
+              <Filter className="h-4 w-4" />
+              <span className="text-xs font-semibold">Filters</span>
+            </Button>
+            <Button
+              variant={showArena ? "subtle" : "ghost"}
+              size="sm"
+              className="flex items-center gap-2 px-3"
+              onClick={onToggleArena}
+              aria-label={showArena ? "Hide arena" : "Open arena"}
+              aria-pressed={showArena}
+            >
+              <Swords className="h-4 w-4" />
+              <span className="text-xs font-semibold">Arena</span>
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="flex items-center gap-2 px-3"
+              onClick={onSync}
+              aria-label="Sync universe"
+            >
+              <RefreshCcw className="h-4 w-4" />
+              <span className="text-xs font-semibold">Sync</span>
+            </Button>
           </div>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-4">
-          <Button
-            variant="gradient"
-            size="lg"
-            onClick={onOpenFilters}
-            className="shadow-[0_18px_48px_rgba(253,230,138,0.35)]"
-          >
-            Launch Filters
-          </Button>
-          <Button
-            variant="outline"
-            size="lg"
-            onClick={onScrollToCharacters}
-            className="border-white/60 text-white/90 hover:bg-white/10"
-          >
-            Explore Universe
-          </Button>
+          <div className="hidden items-center gap-2 sm:flex">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="inline-flex items-center gap-2 px-4 text-sm font-semibold"
+              onClick={onOpenFilters}
+              aria-label="Open filters"
+            >
+              <Filter className="h-4 w-4" aria-hidden="true" />
+              <span>Launch filters</span>
+            </Button>
+            <Button
+              variant={showArena ? "subtle" : "ghost"}
+              size="sm"
+              className={cx(
+                "inline-flex items-center gap-2 px-4 text-sm font-semibold",
+                showArena ? "border border-amber-200/60 bg-amber-200/20" : ""
+              )}
+              onClick={onToggleArena}
+              aria-label={showArena ? "Hide arena" : "Open arena"}
+              aria-pressed={showArena}
+            >
+              <Swords className="h-4 w-4" aria-hidden="true" />
+              <span>{showArena ? "Hide arena" : "Battle arena"}</span>
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="inline-flex items-center gap-2 px-4 text-sm font-semibold"
+              onClick={onSync}
+              aria-label="Sync universe"
+            >
+              <RefreshCcw className="h-4 w-4" aria-hidden="true" />
+              <span>Sync</span>
+            </Button>
+          </div>
+        </header>
+        <div className="mt-10 flex flex-1 flex-col gap-10 sm:mt-14">
+          <div className="flex flex-col gap-3 text-sm font-semibold tracking-[0.18em] text-white/70 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-2 text-white">
+              <Clock size={12} /> {todayKey()} • Daily lore sequence
+            </div>
+            <div className="flex items-center gap-2 text-white/70">
+              <Sparkles className="hidden h-4 w-4 sm:inline" />
+              <span className="text-xs sm:text-sm">Curated highlights from across the cosmos</span>
+            </div>
+          </div>
+          <div className="flex flex-1 items-center">
+            <div
+              className={cx(
+                "relative w-full overflow-hidden rounded-[36px] border border-white/15 bg-black/60 shadow-[0_40px_120px_rgba(12,9,32,0.55)]",
+                heroHeightClass
+              )}
+            >
+              {slides.length > 1 && (
+                <>
+                  <button
+                    type="button"
+                    onClick={goPrev}
+                    className="absolute left-3 top-1/2 z-20 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full border border-white/40 bg-black/70 text-white shadow-lg transition hover:bg-black/90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-300 sm:h-12 sm:w-12"
+                    aria-label="Previous highlight"
+                  >
+                    <ChevronLeft className="h-5 w-5 sm:h-6 sm:w-6" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={goNext}
+                    className="absolute right-3 top-1/2 z-20 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full border border-white/40 bg-black/70 text-white shadow-lg transition hover:bg-black/90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-300 sm:h-12 sm:w-12"
+                    aria-label="Next highlight"
+                  >
+                    <ChevronRight className="h-5 w-5 sm:h-6 sm:w-6" />
+                  </button>
+                </>
+              )}
+              <AnimatePresence mode="wait" initial={false} custom={direction}>
+                <motion.div
+                  key={current?.key}
+                  custom={direction}
+                  initial={{ opacity: 0, x: direction > 0 ? 140 : -140 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: direction > 0 ? -140 : 140 }}
+                  transition={{ duration: 0.85, ease: "easeInOut" }}
+                  className="relative h-full"
+                >
+                  {renderSlide(current)}
+                </motion.div>
+              </AnimatePresence>
+            </div>
+          </div>
+          <div className="mt-12 flex flex-wrap items-center gap-4 pb-6 text-sm font-semibold text-white/75">
+            <Users className="h-4 w-4" />
+            <span>There's more.</span>
+            <Button
+              variant="gradient"
+              size="lg"
+              onClick={onOpenFilters}
+              className="shadow-[0_18px_48px_rgba(253,230,138,0.35)]"
+            >
+              Launch filters
+            </Button>
+          </div>
         </div>
       </div>
+      <div
+        id="hero-toolbar-mount"
+        className="pointer-events-none absolute inset-x-0 bottom-0 z-30 px-5 pb-16 sm:px-10 lg:px-24 xl:px-28"
+      />
     </section>
   );
 }
@@ -2703,11 +3864,20 @@ export default function LoremakerApp({ initialCharacters = [], initialError = nu
   const [showArena, setShowArena] = useState(false);
   const [openModal, setOpenModal] = useState(false);
   const [currentCharacter, setCurrentCharacter] = useState(null);
+  const [modalIndex, setModalIndex] = useState(-1);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [transferNotices, setTransferNotices] = useState([]);
-  const [headerCollapsed, setHeaderCollapsed] = useState(false);
-  const statRingId = useMemo(() => Math.random().toString(36).slice(2), []);
-  const mobileColumns = 2;
+  const sortedRef = useRef([]);
+  const currentYear = useMemo(() => new Date().getFullYear(), []);
+  const slugify = useCallback(
+    (value) =>
+      (value || "")
+        .toString()
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/(^-|-$)+/g, ""),
+    []
+  );
 
   const selectedIds = useMemo(
     () => [arenaSlots.left, arenaSlots.right].filter(Boolean),
@@ -2715,6 +3885,10 @@ export default function LoremakerApp({ initialCharacters = [], initialError = nu
   );
 
   const openCharacter = useCallback((char) => {
+    if (!char) return;
+    const arr = sortedRef.current || [];
+    const idx = arr.findIndex((item) => item.id === char.id);
+    setModalIndex(idx);
     setCurrentCharacter(char);
     setOpenModal(true);
   }, []);
@@ -2722,6 +3896,7 @@ export default function LoremakerApp({ initialCharacters = [], initialError = nu
   const closeCharacter = useCallback(() => {
     setOpenModal(false);
     setCurrentCharacter(null);
+    setModalIndex(-1);
   }, []);
 
   const handleFacet = useCallback(({ key, value }) => {
@@ -2787,10 +3962,28 @@ export default function LoremakerApp({ initialCharacters = [], initialError = nu
     [closeCharacter, onUseInSim]
   );
 
-  const openArena = useCallback(() => {
-    setShowArena(true);
-    setTimeout(focusArena, 80);
-  }, [focusArena]);
+  const navigateCharacter = useCallback(
+    (delta) => {
+      const arr = sortedRef.current;
+      if (!arr.length) return;
+      setModalIndex((prev) => {
+        let index = prev;
+        if (index < 0 && currentCharacter) {
+          index = arr.findIndex((item) => item.id === currentCharacter.id);
+        }
+        if (index < 0) return prev;
+        const nextIndex = (index + delta + arr.length) % arr.length;
+        const next = arr[nextIndex];
+        if (next) {
+          setCurrentCharacter(next);
+          setOpenModal(true);
+          return nextIndex;
+        }
+        return prev;
+      });
+    },
+    [currentCharacter]
+  );
 
   const toggleArena = useCallback(() => {
     setShowArena((prev) => {
@@ -2802,18 +3995,23 @@ export default function LoremakerApp({ initialCharacters = [], initialError = nu
     });
   }, [focusArena]);
 
-  const arenaShortcut = useCallback(() => {
-    if (showArena) {
-      focusArena();
-    } else {
-      openArena();
-    }
-  }, [focusArena, openArena, showArena]);
+  const closeArena = useCallback(() => {
+    setShowArena(false);
+  }, []);
 
   const filtered = useMemo(
     () => data.filter((c) => matchesFilters(c, filters, combineAND, query)),
     [data, filters, combineAND, query]
   );
+
+  const hasActiveFilters = useMemo(() => {
+    if (query.trim()) return true;
+    if (combineAND) return true;
+    return Object.values(filters || {}).some((value) => {
+      if (Array.isArray(value)) return value.length > 0;
+      return Boolean(value);
+    });
+  }, [filters, query, combineAND]);
 
   const sorted = useMemo(() => {
     const arr = [...filtered];
@@ -2835,14 +4033,195 @@ export default function LoremakerApp({ initialCharacters = [], initialError = nu
     }
   }, [filtered, sortMode]);
 
+  useEffect(() => {
+    sortedRef.current = sorted;
+  }, [sorted]);
+
   const featured = useMemo(() => computeFeatured(data), [data]);
+  const universeNames = useMemo(() => data.map((c) => c.name).filter(Boolean), [data]);
+  const siteUrl = useMemo(() => {
+    const envUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://loremaker.app";
+    return envUrl.replace(/\/$/, "");
+  }, []);
+  const previewImage = useMemo(() => {
+    for (const char of data) {
+      if (char?.cover) return char.cover;
+      if (Array.isArray(char?.gallery) && char.gallery.length) return char.gallery[0];
+    }
+    return null;
+  }, [data]);
+  const keywordList = useMemo(() => {
+    const terms = new Set();
+    data.forEach((char) => {
+      if (char.name) terms.add(`${char.name} lore`);
+      if (Array.isArray(char.alias) && char.alias.length) terms.add(`${char.alias[0]} character`);
+      (char.faction || []).forEach((faction) => faction && terms.add(`${faction} faction`));
+      (char.locations || []).forEach((loc) => loc && terms.add(`${loc} heroes`));
+      (char.powers || []).forEach((power) => {
+        if (power?.name) terms.add(`${power.name} powers`);
+      });
+    });
+    return Array.from(terms).slice(0, 40).join(", ");
+  }, [data]);
+  const metaDescription = useMemo(() => {
+    const count = data.length;
+    const heroName = featured?.character?.name;
+    const heroLocale = featured?.character?.locations?.[0];
+    const base = `Explore ${count || "dozens of"} characters, factions, and powers inside Menelek Makonnen's LoreMaker Universe.`;
+    const highlight = heroName ? ` Spotlight on ${heroName}${heroLocale ? ` of ${heroLocale}` : ""}.` : "";
+    return `${base}${highlight}`.trim();
+  }, [data.length, featured?.character?.name, featured?.character?.locations]);
+
+  useEffect(() => {
+    if (!openModal || !currentCharacter) return;
+    const arr = sortedRef.current;
+    if (!arr.length) {
+      closeCharacter();
+      return;
+    }
+    const idx = arr.findIndex((item) => item.id === currentCharacter.id);
+    if (idx === -1) {
+      closeCharacter();
+      return;
+    }
+    setModalIndex(idx);
+    const latest = arr[idx];
+    if (latest && latest !== currentCharacter) {
+      setCurrentCharacter(latest);
+    }
+  }, [openModal, currentCharacter, closeCharacter]);
+  const schemaJson = useMemo(() => {
+    const clean = (value) => {
+      if (Array.isArray(value)) {
+        const arr = value.map((item) => clean(item)).filter((item) => {
+          if (item == null) return false;
+          if (Array.isArray(item)) return item.length > 0;
+          if (typeof item === "object") return Object.keys(item).length > 0;
+          return true;
+        });
+        return arr.length ? arr : null;
+      }
+      if (value && typeof value === "object") {
+        const obj = Object.fromEntries(
+          Object.entries(value)
+            .map(([key, val]) => [key, clean(val)])
+            .filter(([, val]) => val != null)
+        );
+        return Object.keys(obj).length ? obj : null;
+      }
+      return value ?? null;
+    };
+
+    const graph = [];
+    if (!data.length) {
+      graph.push(
+        clean({
+          "@type": "Organization",
+          "@id": `${siteUrl}#organization`,
+          name: "LoreMaker Universe",
+          url: siteUrl,
+          founder: { "@type": "Person", name: "Menelek Makonnen", url: "https://menelekmakonnen.com" },
+        })
+      );
+      return JSON.stringify({ "@context": "https://schema.org", "@graph": graph });
+    }
+
+    const limit = Math.min(120, data.length);
+    const characters = data
+      .slice(0, limit)
+      .map((char) => {
+        const slug = char.id || slugify(char.name);
+        const url = `${siteUrl}/characters/${slug}`;
+        const alias = Array.isArray(char.alias) ? char.alias.filter(Boolean) : [];
+        const factions = (char.faction || []).filter(Boolean);
+        const locations = (char.locations || []).filter(Boolean);
+        const powers = (char.powers || []).map((power) => power?.name).filter(Boolean);
+        return clean({
+          "@type": "FictionalCharacter",
+          "@id": url,
+          url,
+          name: char.name,
+          alternateName: alias.length > 1 ? alias : alias[0],
+          description: char.shortDesc || char.longDesc,
+          image: char.cover || char.gallery?.[0],
+          knowsAbout: powers,
+          workLocation: locations.map((loc) => clean({ "@type": "Place", name: loc })),
+          memberOf: factions.map((fac) => clean({ "@type": "Organization", name: fac })),
+        });
+      })
+      .filter(Boolean);
+
+    graph.push(
+      clean({
+        "@type": "Organization",
+        "@id": `${siteUrl}#organization`,
+        name: "LoreMaker Universe",
+        url: siteUrl,
+        founder: { "@type": "Person", name: "Menelek Makonnen", url: "https://menelekmakonnen.com" },
+        member: characters.slice(0, 50).map((char) => clean({ "@id": char["@id"], name: char.name })),
+      })
+    );
+
+    graph.push(
+      clean({
+        "@type": "ItemList",
+        "@id": `${siteUrl}#codex`,
+        name: "LoreMaker Codex",
+        numberOfItems: characters.length,
+        itemListOrder: "http://schema.org/ItemListOrderAscending",
+        itemListElement: characters.map((char, index) =>
+          clean({
+            "@type": "ListItem",
+            position: index + 1,
+            url: char?.url,
+            name: char?.name,
+          })
+        ),
+      })
+    );
+
+    graph.push(...characters);
+
+    const pruned = graph.filter((node) => node && Object.keys(node).length > 0);
+    return JSON.stringify({ "@context": "https://schema.org", "@graph": pruned });
+  }, [data, siteUrl, slugify]);
+
+  const handleRandomCharacter = useCallback(() => {
+    if (!sorted.length) return;
+    const random = sorted[Math.floor(Math.random() * sorted.length)];
+    if (!random) return;
+    setHighlightedId(random.id);
+    setTimeout(() => setHighlightedId(null), 1200);
+    document.getElementById("characters-grid")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    openCharacter(random);
+  }, [sorted, openCharacter]);
 
   const scrollToCharacters = useCallback(() => {
     document.getElementById("characters-grid")?.scrollIntoView({ behavior: "smooth", block: "start" });
   }, []);
 
   return (
-    <div className="relative min-h-screen w-full overflow-x-hidden bg-[#050813] text-white">
+    <>
+      <Head>
+        <title>LoreMaker Universe Codex | Menelek Makonnen</title>
+        <meta name="description" content={metaDescription} />
+        {keywordList && <meta name="keywords" content={keywordList} />}
+        <meta name="author" content="Menelek Makonnen" />
+        <meta name="robots" content="index,follow" />
+        <link rel="canonical" href={siteUrl} />
+        <meta property="og:type" content="website" />
+        <meta property="og:title" content="LoreMaker Universe Codex | Menelek Makonnen" />
+        <meta property="og:description" content={metaDescription} />
+        <meta property="og:url" content={siteUrl} />
+        {previewImage && <meta property="og:image" content={previewImage} />}
+        <meta property="og:site_name" content="LoreMaker Universe" />
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:title" content="LoreMaker Universe Codex | Menelek Makonnen" />
+        <meta name="twitter:description" content={metaDescription} />
+        {previewImage && <meta name="twitter:image" content={previewImage} />}
+        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: schemaJson }} />
+      </Head>
+      <div className="relative min-h-screen w-full overflow-x-hidden bg-[#050813] text-white">
       <CosmicBackdrop />
       <Aurora className="opacity-70" />
       <AnimatePresence>
@@ -2861,205 +4240,23 @@ export default function LoremakerApp({ initialCharacters = [], initialError = nu
               height: notice.height,
             }}
           >
-            <div className="rounded-3xl border border-amber-300/60 bg-black/80 px-4 py-3 text-center text-xs font-black uppercase tracking-[0.35em] text-amber-200 shadow-[0_12px_40px_rgba(253,230,138,0.35)]">
+            <div className="rounded-3xl border border-amber-300/60 bg-black/80 px-4 py-3 text-center text-xs font-black tracking-[0.35em] text-amber-200 shadow-[0_12px_40px_rgba(253,230,138,0.35)]">
               Moved to Battle Arena
             </div>
           </motion.div>
         ))}
       </AnimatePresence>
-      <header id="lore-header" className="sticky top-0 z-40 border-b border-white/10 bg-black/70 backdrop-blur-2xl">
-        <div className="mx-auto w-full max-w-7xl px-3 py-3 sm:px-4">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="flex items-center gap-3">
-              <LoreShield onClick={() => window.location.reload()} />
-              <div className="flex flex-col text-[10px] font-semibold uppercase tracking-[0.32em] text-white/70">
-                <span className="hidden sm:inline">Pulse of the Loremaker</span>
-                <button
-                  type="button"
-                  onClick={() => window.location.reload()}
-                  className="rounded-full border border-white/30 px-3 py-1 text-white transition hover:bg-white/10"
-                >
-                  Loremaker
-                </button>
-              </div>
-            </div>
-            <div className="flex items-center gap-2 sm:hidden">
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-10 w-10 p-0"
-                onClick={() => setFiltersOpen(true)}
-                aria-label="Open filters"
-              >
-                <Filter className="h-4 w-4" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-10 w-10 p-0"
-                onClick={toggleArena}
-                aria-label={showArena ? "Hide arena" : "Open arena"}
-              >
-                <Swords className="h-4 w-4" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-10 w-10 p-0"
-                onClick={() => refetch()}
-                aria-label="Sync universe"
-              >
-                <RefreshCcw className="h-4 w-4" />
-              </Button>
-            </div>
-            <div className="hidden items-center gap-3 sm:flex">
-              <div className="flex items-center gap-3 rounded-3xl border border-white/20 bg-white/10 px-3 py-2 text-xs font-semibold text-white/80">
-                <div className="relative h-10 w-10">
-                  <motion.svg
-                    viewBox="0 0 48 48"
-                    className="h-10 w-10"
-                    animate={{ rotate: 360 }}
-                    transition={{ repeat: Infinity, duration: 24, ease: "linear" }}
-                  >
-                    <defs>
-                      <linearGradient id={`${statRingId}-arc`} x1="0" x2="1" y1="0" y2="1">
-                        <stop offset="0%" stopColor="rgba(252,211,77,0.9)" />
-                        <stop offset="50%" stopColor="rgba(236,72,153,0.85)" />
-                        <stop offset="100%" stopColor="rgba(129,140,248,0.9)" />
-                      </linearGradient>
-                    </defs>
-                    <circle cx="24" cy="24" r="18" stroke="rgba(255,255,255,0.12)" strokeWidth="6" fill="none" />
-                    <motion.circle
-                      cx="24"
-                      cy="24"
-                      r="18"
-                      stroke={`url(#${statRingId}-arc)`}
-                      strokeWidth="6"
-                      strokeDasharray="113"
-                      strokeDashoffset="20"
-                      strokeLinecap="round"
-                      fill="none"
-                      animate={{ strokeDashoffset: [20, 140, 20] }}
-                      transition={{ duration: 14, repeat: Infinity, ease: "easeInOut" }}
-                    />
-                  </motion.svg>
-                  <span className="pointer-events-none absolute inset-0 flex items-center justify-center text-[9px] font-black uppercase tracking-[0.35em] text-white/80">
-                    Lore
-                  </span>
-                </div>
-                <div className="flex flex-col gap-0.5 text-right">
-                  <span className="text-[10px] font-bold uppercase tracking-[0.35em] text-white/60">Living Codex</span>
-                  <span className="text-base font-black text-white sm:text-lg">{data.length} Legends catalogued</span>
-                </div>
-              </div>
-              {showArena && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setShowArena(false)}
-                  className="h-10 w-10 p-0"
-                  aria-label="Hide arena"
-                >
-                  <X className="h-4 w-4" />
-                </Button>
-              )}
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setHeaderCollapsed((prev) => !prev)}
-                className="h-10 w-10 p-0"
-                aria-label={headerCollapsed ? "Expand header controls" : "Collapse header controls"}
-              >
-                {headerCollapsed ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
-              </Button>
-            </div>
-          </div>
-          <div className="mt-3 flex items-center justify-between gap-3 sm:hidden">
-            <div className="flex flex-1 items-center gap-3 rounded-3xl border border-white/20 bg-white/10 px-3 py-2 text-[11px] font-semibold text-white/80">
-              <div className="relative h-9 w-9">
-                <motion.svg
-                  viewBox="0 0 48 48"
-                  className="h-9 w-9"
-                  animate={{ rotate: 360 }}
-                  transition={{ repeat: Infinity, duration: 26, ease: "linear" }}
-                >
-                  <defs>
-                    <linearGradient id={`${statRingId}-mobile-arc`} x1="0" x2="1" y1="0" y2="1">
-                      <stop offset="0%" stopColor="rgba(236,72,153,0.85)" />
-                      <stop offset="100%" stopColor="rgba(129,140,248,0.9)" />
-                    </linearGradient>
-                  </defs>
-                  <circle cx="24" cy="24" r="18" stroke="rgba(255,255,255,0.12)" strokeWidth="6" fill="none" />
-                  <motion.circle
-                    cx="24"
-                    cy="24"
-                    r="18"
-                    stroke={`url(#${statRingId}-mobile-arc)`}
-                    strokeWidth="6"
-                    strokeDasharray="113"
-                    strokeDashoffset="30"
-                    strokeLinecap="round"
-                    fill="none"
-                    animate={{ strokeDashoffset: [30, 150, 30] }}
-                    transition={{ duration: 16, repeat: Infinity, ease: "easeInOut" }}
-                  />
-                </motion.svg>
-                <span className="pointer-events-none absolute inset-0 flex items-center justify-center text-[8px] font-black uppercase tracking-[0.35em] text-white/80">
-                  Lore
-                </span>
-              </div>
-              <div className="flex flex-col">
-                <span className="text-[9px] font-bold uppercase tracking-[0.3em] text-white/60">Living Codex</span>
-                <span className="text-sm font-black text-white">{data.length} Legends</span>
-              </div>
-            </div>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setHeaderCollapsed((prev) => !prev)}
-              className="h-10 w-10 p-0"
-              aria-label={headerCollapsed ? "Expand header controls" : "Collapse header controls"}
-            >
-              {headerCollapsed ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
-            </Button>
-          </div>
-          <AnimatePresence initial={false}>
-            {!headerCollapsed && (
-              <motion.div
-                key="header-note"
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: "auto" }}
-                exit={{ opacity: 0, height: 0 }}
-                transition={{ duration: 0.3, ease: "easeInOut" }}
-                className="overflow-hidden"
-              >
-                <p className="mt-4 text-xs font-semibold uppercase tracking-[0.35em] text-white/80">
-                  Shape the daily lore feed using the controls below the hero showcase.
-                </p>
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
-      </header>
-
-      <main className="mx-auto max-w-7xl space-y-10 px-3 py-8 sm:px-4">
-        {loading && (
-          <div className="rounded-3xl border border-white/15 bg-white/5 px-6 py-4 text-sm font-semibold text-white/80">
-            Synchronising the universe…
-          </div>
-        )}
-        {!loading && error && (
-          <div className="rounded-3xl border border-red-400/40 bg-red-500/10 px-6 py-4 text-sm font-semibold text-red-200">
-            {error}
-          </div>
-        )}
-
+      <main className="pb-12 pt-0">
         <HeroSection
           featured={featured}
           onOpenFilters={() => setFiltersOpen(true)}
           onScrollToCharacters={scrollToCharacters}
           onOpenCharacter={openCharacter}
           onFacet={handleFacet}
+          onToggleArena={toggleArena}
+          onSync={refetch}
+          showArena={showArena}
+          characterNames={universeNames}
         />
         <ToolsBar
           query={query}
@@ -3068,47 +4265,151 @@ export default function LoremakerApp({ initialCharacters = [], initialError = nu
           onSortModeChange={setSortMode}
           onOpenFilters={() => setFiltersOpen(true)}
           onClearFilters={clearFilters}
-          onArenaShortcut={arenaShortcut}
+          onArenaToggle={toggleArena}
           onSync={refetch}
           showArena={showArena}
+          totalCount={data.length}
+          filteredCount={filtered.length}
+          hasActiveFilters={hasActiveFilters}
         />
-        {showArena && (
-          <div id="arena-anchor" className="mt-10">
-            <BattleArena
-              characters={sorted}
-              slots={arenaSlots}
-              setSlots={setArenaSlots}
-              onOpenCharacter={openCharacter}
-              pulseKey={arenaPulseKey}
+        <div className="mx-auto max-w-7xl space-y-10 px-3 pt-6 sm:px-4">
+          {loading && (
+            <div className="rounded-3xl border border-white/15 bg-white/5 px-6 py-4 text-sm font-semibold text-white/80">
+              Synchronising the universe…
+            </div>
+          )}
+          {!loading && error && (
+            <div className="rounded-3xl border border-red-400/40 bg-red-500/10 px-6 py-4 text-sm font-semibold text-red-200">
+              {error}
+            </div>
+          )}
+          {showArena && (
+            <div id="arena-anchor" className="mt-10 scroll-mt-40">
+              <BattleArena
+                characters={sorted}
+                slots={arenaSlots}
+                setSlots={setArenaSlots}
+                onOpenCharacter={openCharacter}
+                pulseKey={arenaPulseKey}
+                onClose={closeArena}
+              />
+            </div>
+          )}
+
+          {!showArena && (
+            <QuickFilterRail
+              data={sorted}
+              onFacet={handleFacet}
+              onSortModeChange={setSortMode}
+              sortMode={sortMode}
+              onOpenFilters={() => setFiltersOpen(true)}
+            />
+          )}
+
+          <section className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex flex-wrap items-center gap-2 text-xs font-semibold text-white/70">
+              <Users size={14} /> {filtered.length} heroes ready
+            </div>
+          </section>
+
+          <div id="characters-grid" className="mt-6 scroll-mt-40">
+            <CharacterGrid
+              data={sorted.filter((c) => !selectedIds.includes(c.id))}
+              onOpen={openCharacter}
+              onFacet={handleFacet}
+              onUseInSim={onUseInSim}
+              highlightId={highlightedId}
             />
           </div>
-        )}
-
-        <section className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex flex-wrap items-center gap-2 text-xs font-semibold uppercase tracking-[0.3em] text-white/60">
-            <Users size={14} /> {filtered.length} heroes ready
-          </div>
-        </section>
-
-        <div id="characters-grid" className="mt-6">
-          <CharacterGrid
-            data={sorted.filter((c) => !selectedIds.includes(c.id))}
-            onOpen={openCharacter}
-            onFacet={handleFacet}
-            onUseInSim={onUseInSim}
-            highlightId={highlightedId}
-            mobileColumns={mobileColumns}
-          />
         </div>
       </main>
 
-        <CharacterModal
-          open={openModal}
-          onClose={closeCharacter}
-          char={currentCharacter}
-          onFacet={handleFacet}
-          onUseInSim={useInSim}
-        />
+      <footer className="border-t border-white/10 bg-black/50 backdrop-blur-2xl">
+        <div className="mx-auto max-w-7xl px-3 py-10 sm:px-4">
+          <div className="grid gap-8 md:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)]">
+            <div className="space-y-4">
+              <p className="text-xs font-black tracking-[0.35em] text-white/70">LoreMaker Universe</p>
+              <p className="text-[11px] font-semibold tracking-[0.3em] text-white/60">
+                © {currentYear} Menelek Makonnen.
+              </p>
+              <p className="text-[11px] font-semibold tracking-[0.3em] text-white/60">
+                All characters, stories, lore, and artwork from the LoreMaker Universe are protected by copyright.
+              </p>
+            </div>
+            <div className="space-y-4">
+              <p className="text-xs font-black tracking-[0.35em] text-white/70">Explore</p>
+              <div className="flex flex-col gap-2">
+                <Button
+                  as="a"
+                  href="#arena-anchor"
+                  variant="subtle"
+                  size="sm"
+                  className="justify-start gap-2 px-4 text-[10px] tracking-[0.3em]"
+                >
+                  <Swords className="h-4 w-4" aria-hidden="true" />
+                  Battle Arena
+                </Button>
+                <Button
+                  type="button"
+                  onClick={handleRandomCharacter}
+                  variant="subtle"
+                  size="sm"
+                  className="justify-start gap-2 px-4 text-[10px] tracking-[0.3em]"
+                >
+                  <Sparkles className="h-4 w-4" aria-hidden="true" />
+                  Random Character
+                </Button>
+                <Button
+                  as="a"
+                  href="#characters-grid"
+                  variant="subtle"
+                  size="sm"
+                  className="justify-start gap-2 px-4 text-[10px] tracking-[0.3em]"
+                >
+                  <Users className="h-4 w-4" aria-hidden="true" />
+                  Character Archive
+                </Button>
+              </div>
+            </div>
+            <div className="space-y-4">
+              <p className="text-xs font-black tracking-[0.35em] text-white/70">Connect</p>
+              <div className="flex flex-col gap-2">
+                <Button
+                  as="a"
+                  href="https://menelekmakonnen.com"
+                  target="_blank"
+                  rel="noreferrer"
+                  variant="subtle"
+                  size="sm"
+              className="justify-start gap-2 px-4 text-[10px] tracking-[0.3em]"
+            >
+              <ArrowRight className="h-4 w-4" aria-hidden="true" />
+              Menelek Makonnen
+            </Button>
+                <Button
+                  type="button"
+                  onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+                  variant="ghost"
+                  size="sm"
+                  className="justify-start gap-2 px-4 text-[10px] tracking-[0.3em] text-white/70 hover:text-white"
+                >
+                  <ArrowUp className="h-4 w-4" aria-hidden="true" />
+                  Back to Top
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </footer>
+
+      <CharacterModal
+        open={openModal}
+        onClose={closeCharacter}
+        char={currentCharacter}
+        onNavigate={navigateCharacter}
+        onFacet={handleFacet}
+        onUseInSim={useInSim}
+      />
 
         <FilterDrawer open={filtersOpen} onClose={() => setFiltersOpen(false)}>
           <SidebarFilters
@@ -3122,7 +4423,8 @@ export default function LoremakerApp({ initialCharacters = [], initialError = nu
         </FilterDrawer>
 
         <ScrollShortcuts />
-    </div>
+      </div>
+    </>
   );
 }
 
