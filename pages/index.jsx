@@ -1936,6 +1936,7 @@ function SidebarFilters({ data, filters, setFilters, combineAND, setCombineAND, 
   const statuses = useMemo(() => uniq(data.map((item) => item.status || "")), [data]);
   const stories = useMemo(() => uniq(data.flatMap((item) => item.stories || [])), [data]);
   const powers = useMemo(() => uniq(data.flatMap((item) => (item.powers || []).map((p) => p.name))), [data]);
+  const [searchTerm, setSearchTerm] = useState("");
 
   const toggle = (key, value, single = false) => {
     setFilters((prev) => {
@@ -1980,6 +1981,7 @@ function SidebarFilters({ data, filters, setFilters, combineAND, setCombineAND, 
         single
         activeValues={filters.gender}
         onToggle={(value) => toggle("gender", value, true)}
+        searchTerm={searchTerm}
       />
       <FilterSection
         title="Alignment"
@@ -1987,48 +1989,56 @@ function SidebarFilters({ data, filters, setFilters, combineAND, setCombineAND, 
         single
         activeValues={filters.alignment}
         onToggle={(value) => toggle("alignment", value, true)}
+        searchTerm={searchTerm}
       />
       <FilterSection
         title="Era"
         values={eras}
         activeValues={filters.era || []}
         onToggle={(value) => toggle("era", value)}
+        searchTerm={searchTerm}
       />
       <FilterSection
         title="Locations"
         values={locations}
         activeValues={filters.locations || []}
         onToggle={(value) => toggle("locations", value)}
+        searchTerm={searchTerm}
       />
       <FilterSection
         title="Faction / Team"
         values={factions}
         activeValues={filters.faction || []}
         onToggle={(value) => toggle("faction", value)}
+        searchTerm={searchTerm}
       />
       <FilterSection
         title="Powers"
         values={powers}
         activeValues={filters.powers || []}
         onToggle={(value) => toggle("powers", value)}
+        searchTerm={searchTerm}
       />
       <FilterSection
         title="Tags"
         values={tags}
         activeValues={filters.tags || []}
         onToggle={(value) => toggle("tags", value)}
+        searchTerm={searchTerm}
       />
       <FilterSection
         title="Status"
         values={statuses}
         activeValues={filters.status || []}
         onToggle={(value) => toggle("status", value)}
+        searchTerm={searchTerm}
       />
       <FilterSection
         title="Stories"
         values={stories}
         activeValues={filters.stories || []}
         onToggle={(value) => toggle("stories", value)}
+        searchTerm={searchTerm}
       />
     </div>
   );
@@ -2592,6 +2602,52 @@ function HeroSection({
   const [direction, setDirection] = useState(1);
   const autoPlayed = useRef(false);
   const [snippetIndex, setSnippetIndex] = useState(0);
+
+  useEffect(() => () => {
+    rippleTimers.current.forEach((timeout) => clearTimeout(timeout));
+    rippleTimers.current.clear();
+  }, []);
+
+  const updatePointerFromEvent = useCallback((event) => {
+    const rect = heroRef.current?.getBoundingClientRect();
+    if (!rect) return null;
+    const x = clamp(((event.clientX - rect.left) / rect.width) * 100, 5, 95);
+    const y = clamp(((event.clientY - rect.top) / rect.height) * 100, 5, 95);
+    return { x, y };
+  }, []);
+
+  const registerRipple = useCallback((coords) => {
+    const id = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    setRipples((prev) => [...prev, { id, ...coords }]);
+    const timeout = setTimeout(() => {
+      rippleTimers.current.delete(id);
+      setRipples((prev) => prev.filter((item) => item.id !== id));
+    }, 900);
+    rippleTimers.current.set(id, timeout);
+  }, []);
+
+  const handlePointerMove = useCallback(
+    (event) => {
+      const coords = updatePointerFromEvent(event);
+      if (coords) setPointer(coords);
+    },
+    [updatePointerFromEvent]
+  );
+
+  const handlePointerLeave = useCallback(() => {
+    setPointer({ x: 50, y: 50 });
+  }, []);
+
+  const handlePointerDown = useCallback(
+    (event) => {
+      const coords = updatePointerFromEvent(event);
+      if (coords) {
+        setPointer(coords);
+        registerRipple(coords);
+      }
+    },
+    [registerRipple, updatePointerFromEvent]
+  );
 
   useEffect(() => () => {
     rippleTimers.current.forEach((timeout) => clearTimeout(timeout));
@@ -3409,7 +3465,7 @@ export default function LoremakerApp({ initialCharacters = [], initialError = nu
             />
           </div>
         </div>
-      </main>
+      </footer>
 
       <footer className="border-t border-white/10 bg-black/50 backdrop-blur-2xl">
         <div className="mx-auto max-w-7xl px-3 py-10 sm:px-4">
