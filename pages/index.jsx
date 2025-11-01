@@ -21,6 +21,7 @@ import {
   ChevronRight,
   ChevronUp,
   ChevronDown,
+  ArrowUpDown,
   Filter,
   Users,
   MapPin,
@@ -1202,52 +1203,178 @@ function CharacterCard({ char, onOpen, onFacet, onUseInSim, highlight }) {
 }
 function Gallery({ images, cover, name }) {
   const [index, setIndex] = useState(0);
-  const sources = [cover, ...(images || [])].filter(Boolean);
+  const [lightboxOpen, setLightboxOpen] = useState(false);
+  const sources = useMemo(() => [cover, ...(images || [])].filter(Boolean), [cover, images]);
+
+  useEffect(() => {
+    if (!sources.length) {
+      setIndex(0);
+      return;
+    }
+    setIndex((current) => (current >= sources.length ? 0 : current));
+  }, [sources]);
+
+  const goPrevious = useCallback(() => {
+    if (!sources.length) return;
+    setIndex((i) => (i - 1 + sources.length) % sources.length);
+  }, [sources]);
+
+  const goNext = useCallback(() => {
+    if (!sources.length) return;
+    setIndex((i) => (i + 1) % sources.length);
+  }, [sources]);
+
+  const openLightbox = useCallback(() => {
+    if (sources.length) setLightboxOpen(true);
+  }, [sources.length]);
+
+  const closeLightbox = useCallback(() => setLightboxOpen(false), []);
+
   if (!sources.length) {
     return (
-      <div className="flex h-64 items-center justify-center rounded-2xl border border-white/15 bg-white/12">
+      <div className="flex h-72 items-center justify-center rounded-[32px] border border-white/15 bg-white/12">
         <Insignia label={name} size={72} />
       </div>
     );
   }
+
+  const activeSrc = sources[index];
+
   return (
-    <div className="group relative">
-      <ImageSafe
-        src={sources[index]}
-        alt={`${name} gallery ${index + 1}`}
-        fallbackLabel={name}
-        className="h-64 w-full rounded-2xl border border-white/12 object-cover"
-      />
-      {sources.length > 1 && (
-        <>
-          <button
-            className="absolute left-3 top-1/2 -translate-y-1/2 rounded-full bg-black/50 p-2 text-white opacity-0 transition group-hover:opacity-100"
-            onClick={() => setIndex((i) => (i - 1 + sources.length) % sources.length)}
-            aria-label="Previous"
+    <>
+      <div
+        className="group relative overflow-hidden rounded-[32px] border border-white/12 bg-black/40 shadow-[0_24px_80px_rgba(8,10,20,0.45)]"
+        data-gallery-root
+      >
+        <div className="aspect-[3/4] w-full">
+          <ImageSafe
+            src={activeSrc}
+            alt={`${name} gallery ${index + 1}`}
+            fallbackLabel={name}
+            className="h-full w-full object-cover"
+          />
+        </div>
+        <button
+          type="button"
+          onClick={openLightbox}
+          className="absolute inset-0 z-20 flex items-end justify-end bg-gradient-to-t from-black/45 via-black/10 to-transparent p-5 opacity-0 transition focus-visible:outline focus-visible:ring-2 focus-visible:ring-amber-300 group-hover:opacity-100"
+          aria-label="Open full-size gallery"
+        >
+          <span className="rounded-full border border-white/30 bg-black/60 px-3 py-1 text-[11px] font-semibold text-white/80 shadow-lg">
+            Tap to expand
+          </span>
+        </button>
+        {sources.length > 1 && (
+          <>
+            <button
+              type="button"
+              className="absolute left-4 top-1/2 z-30 -translate-y-1/2 rounded-full bg-black/60 p-2 text-white opacity-0 transition focus-visible:outline focus-visible:ring-2 focus-visible:ring-amber-300 group-hover:opacity-100"
+              onClick={goPrevious}
+              aria-label="Previous"
+            >
+              <ChevronLeft size={16} />
+            </button>
+            <button
+              type="button"
+              className="absolute right-4 top-1/2 z-30 -translate-y-1/2 rounded-full bg-black/60 p-2 text-white opacity-0 transition focus-visible:outline focus-visible:ring-2 focus-visible:ring-amber-300 group-hover:opacity-100"
+              onClick={goNext}
+              aria-label="Next"
+            >
+              <ChevronRight size={16} />
+            </button>
+            <div className="pointer-events-none absolute bottom-4 left-1/2 z-30 flex -translate-x-1/2 gap-2">
+              {sources.map((_, idx) => (
+                <span key={idx} className={cx("h-1.5 w-5 rounded-full", idx === index ? "bg-white" : "bg-white/50")} />
+              ))}
+            </div>
+          </>
+        )}
+      </div>
+      <AnimatePresence>
+        {lightboxOpen && (
+          <motion.div
+            key="gallery-lightbox"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.25 }}
+            className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-black/90 p-6"
+            data-gallery-root
+            onClick={closeLightbox}
           >
-            <ChevronLeft size={16} />
-          </button>
-          <button
-            className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full bg-black/50 p-2 text-white opacity-0 transition group-hover:opacity-100"
-            onClick={() => setIndex((i) => (i + 1) % sources.length)}
-            aria-label="Next"
-          >
-            <ChevronRight size={16} />
-          </button>
-          <div className="absolute bottom-3 left-1/2 flex -translate-x-1/2 gap-2">
-            {sources.map((_, idx) => (
-              <span key={idx} className={cx("h-1.5 w-5 rounded-full", idx === index ? "bg-white" : "bg-white/50")} />
-            ))}
-          </div>
-        </>
-      )}
-    </div>
+            <button
+              type="button"
+              onClick={closeLightbox}
+              className="absolute right-6 top-6 inline-flex items-center gap-2 rounded-full border border-white/20 bg-black/60 px-4 py-2 text-sm font-semibold text-white shadow-lg transition hover:bg-black/80 focus-visible:outline focus-visible:ring-2 focus-visible:ring-amber-300"
+            >
+              <X size={16} /> Close
+            </button>
+            <div
+              className="flex max-h-[80vh] w-full max-w-4xl items-center justify-center gap-4"
+              onClick={(event) => event.stopPropagation()}
+            >
+              {sources.length > 1 && (
+                <button
+                  type="button"
+                  onClick={goPrevious}
+                  className="hidden rounded-full border border-white/20 bg-black/60 p-3 text-white shadow-lg transition hover:bg-black/80 focus-visible:outline focus-visible:ring-2 focus-visible:ring-amber-300 sm:inline-flex"
+                  aria-label="Previous image"
+                >
+                  <ChevronLeft size={18} />
+                </button>
+              )}
+              <div className="relative flex-1">
+                <ImageSafe
+                  src={activeSrc}
+                  alt={`${name} full image ${index + 1}`}
+                  fallbackLabel={name}
+                  className="mx-auto max-h-[70vh] w-auto max-w-full rounded-[32px] border border-white/20 object-contain shadow-[0_40px_140px_rgba(0,0,0,0.6)]"
+                />
+                <div className="absolute bottom-4 left-1/2 flex -translate-x-1/2 items-center gap-3 rounded-full bg-black/60 px-4 py-2 text-[11px] font-semibold text-white/80">
+                  <span>
+                    {index + 1} / {sources.length}
+                  </span>
+                  <span className="hidden sm:inline">{name}</span>
+                </div>
+              </div>
+              {sources.length > 1 && (
+                <button
+                  type="button"
+                  onClick={goNext}
+                  className="hidden rounded-full border border-white/20 bg-black/60 p-3 text-white shadow-lg transition hover:bg-black/80 focus-visible:outline focus-visible:ring-2 focus-visible:ring-amber-300 sm:inline-flex"
+                  aria-label="Next image"
+                >
+                  <ChevronRight size={18} />
+                </button>
+              )}
+            </div>
+            {sources.length > 1 && (
+              <div className="mt-6 flex gap-2">
+                {sources.map((src, idx) => (
+                  <button
+                    key={src + idx}
+                    type="button"
+                    onClick={() => setIndex(idx)}
+                    className={cx(
+                      "h-2.5 w-8 rounded-full transition",
+                      idx === index ? "bg-white" : "bg-white/30 hover:bg-white/60"
+                    )}
+                    aria-label={`View image ${idx + 1}`}
+                  />
+                ))}
+              </div>
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </>
   );
 }
 
-function CharacterModal({ open, onClose, char, onFacet, onUseInSim }) {
+function CharacterModal({ open, onClose, char, onFacet, onUseInSim, onNavigate }) {
   const dialogRef = useRef(null);
   const previouslyFocused = useRef(null);
+  const pointerStart = useRef(null);
   const titleId = useId();
   useEffect(() => {
     if (!open) return;
@@ -1274,6 +1401,12 @@ function CharacterModal({ open, onClose, char, onFacet, onUseInSim }) {
         event.preventDefault();
         onClose();
       }
+      if ((event.key === "ArrowRight" || event.key === "ArrowLeft") && typeof onNavigate === "function") {
+        if (!node.contains(event.target)) return;
+        if (event.target?.closest?.("[data-gallery-root]")) return;
+        event.preventDefault();
+        onNavigate(event.key === "ArrowRight" ? 1 : -1);
+      }
       if (event.key === "Tab" && focusable.length) {
         if (event.shiftKey && document.activeElement === first) {
           event.preventDefault();
@@ -1290,7 +1423,39 @@ function CharacterModal({ open, onClose, char, onFacet, onUseInSim }) {
       document.removeEventListener("keydown", handleKeyDown);
       previouslyFocused.current && previouslyFocused.current.focus?.();
     };
-  }, [open, onClose]);
+  }, [open, onClose, onNavigate]);
+
+  const handlePointerDown = useCallback(
+    (event) => {
+      if (typeof onNavigate !== "function") return;
+      if (event.pointerType === "mouse" && event.button !== 0) return;
+      pointerStart.current = {
+        x: event.clientX,
+        y: event.clientY,
+        target: event.target,
+      };
+    },
+    [onNavigate]
+  );
+
+  const handlePointerUp = useCallback(
+    (event) => {
+      if (!pointerStart.current || typeof onNavigate !== "function") return;
+      const start = pointerStart.current;
+      pointerStart.current = null;
+      if (start.target?.closest?.("[data-gallery-root]")) return;
+      const dx = event.clientX - start.x;
+      const dy = event.clientY - start.y;
+      if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 60) {
+        onNavigate(dx < 0 ? 1 : -1);
+      }
+    },
+    [onNavigate]
+  );
+
+  const resetPointer = useCallback(() => {
+    pointerStart.current = null;
+  }, []);
   if (!open || !char) return null;
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby={titleId}>
@@ -1299,6 +1464,10 @@ function CharacterModal({ open, onClose, char, onFacet, onUseInSim }) {
       <div
         ref={dialogRef}
         className="relative z-10 w-full max-w-6xl overflow-hidden rounded-3xl border border-white/15 bg-black/65 backdrop-blur-2xl"
+        onPointerDown={handlePointerDown}
+        onPointerUp={handlePointerUp}
+        onPointerLeave={resetPointer}
+        onPointerCancel={resetPointer}
       >
         <div className="grid items-center gap-4 border-b border-white/15 px-6 py-4 text-white md:grid-cols-[auto_minmax(0,1fr)_auto]">
           <div className="flex items-center gap-4">
@@ -1604,12 +1773,22 @@ function computeBattleTimeline(charA, charB) {
   };
 }
 
-function ArenaCard({ char, position, onRelease, onOpen, health, isWinner, showX }) {
+function ArenaCard({ char, position, onRelease, onOpen, health, isWinner, showX, onAutoFill }) {
   if (!char) {
     return (
-      <div className="flex min-h-[280px] items-center justify-center rounded-3xl border-2 border-dashed border-slate-500/60 bg-slate-900/40 p-6 text-center text-sm font-bold text-slate-400">
-        Choose combatant {position}
-      </div>
+      <button
+        type="button"
+        onClick={() => onAutoFill?.()}
+        className="group flex min-h-[280px] w-full flex-col items-center justify-center gap-3 rounded-3xl border-2 border-dashed border-slate-500/60 bg-slate-900/40 p-6 text-center text-sm font-bold text-slate-300 transition hover:border-amber-300/60 hover:bg-slate-900/70 hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300"
+        aria-label={`Summon a random combatant for slot ${position}`}
+      >
+        <span className="text-base font-black tracking-[0.3em] text-slate-400 group-hover:text-amber-200">
+          Combatant {position}
+        </span>
+        <span className="max-w-[16rem] text-xs font-semibold text-slate-400 group-hover:text-slate-100">
+          Tap to deploy a random warrior from the codex
+        </span>
+      </button>
     );
   }
   const [expanded, setExpanded] = useState(false);
@@ -1835,7 +2014,7 @@ const swordVariants = {
   explode: { rotate: [0, -15, 15, 0], scale: [1, 1.2, 0.9, 1], filter: "drop-shadow(0 0 45px rgba(255,196,12,1))" },
 };
 
-function BattleArena({ characters, slots, setSlots, onOpenCharacter, pulseKey }) {
+function BattleArena({ characters, slots, setSlots, onOpenCharacter, pulseKey, onClose }) {
   const left = characters.find((item) => item.id === slots.left) || null;
   const right = characters.find((item) => item.id === slots.right) || null;
   const [battleState, setBattleState] = useState("idle");
@@ -1893,14 +2072,24 @@ function BattleArena({ characters, slots, setSlots, onOpenCharacter, pulseKey })
     setTimeout(() => setShowX(null), 2200);
   };
 
-  const runRandom = () => {
-    if (characters.length < 2) return;
-    const rng = seededRandom(`arena|${Date.now()}`);
-    const shuffled = [...characters].sort(() => rng() - 0.5);
-    const first = shuffled[0];
-    const second = shuffled.find((char) => char.id !== first.id) || shuffled[1];
-    setSlots({ left: first?.id || null, right: second?.id || null });
-  };
+  const fillSlot = useCallback(
+    (side) => {
+      if (!characters.length) return;
+      setSlots((prev) => {
+        if (prev[side]) return prev;
+        const otherSide = side === "left" ? prev.right : prev.left;
+        const pool = characters.filter((char) => char?.id && char.id !== otherSide);
+        if (!pool.length) return prev;
+        const random = pool[Math.floor(Math.random() * pool.length)];
+        if (!random?.id) return prev;
+        return { ...prev, [side]: random.id };
+      });
+    },
+    [characters, setSlots]
+  );
+
+  const autoFillLeft = useCallback(() => fillSlot("left"), [fillSlot]);
+  const autoFillRight = useCallback(() => fillSlot("right"), [fillSlot]);
 
   const reset = () => {
     setSlots({ left: null, right: null });
@@ -1940,6 +2129,7 @@ function BattleArena({ characters, slots, setSlots, onOpenCharacter, pulseKey })
                 health={health.left}
                 isWinner={result?.winner?.id === left?.id}
                 showX={showX === left?.id}
+                onAutoFill={autoFillLeft}
               />
             </div>
             <div className="col-span-1 order-2 min-w-0 lg:order-none lg:col-span-1 lg:col-start-3 lg:row-start-1">
@@ -1951,6 +2141,7 @@ function BattleArena({ characters, slots, setSlots, onOpenCharacter, pulseKey })
                 health={health.right}
                 isWinner={result?.winner?.id === right?.id}
                 showX={showX === right?.id}
+                onAutoFill={autoFillRight}
               />
             </div>
             <div className="order-3 col-span-2 flex flex-col items-center justify-center gap-3 rounded-3xl border border-slate-800/60 bg-[#0f1329]/80 p-4 text-center lg:order-none lg:col-span-1 lg:col-start-2 lg:row-start-1 lg:row-end-2 lg:self-stretch lg:justify-self-center lg:p-5">
@@ -1971,12 +2162,19 @@ function BattleArena({ characters, slots, setSlots, onOpenCharacter, pulseKey })
                 <Button variant="gradient" size="sm" onClick={runBattle} className="text-[10px] sm:text-[11px]">
                   Fight
                 </Button>
-                <Button variant="outline" size="sm" onClick={runRandom} className="text-[10px] sm:text-[11px]">
-                  Random Duel
-                </Button>
                 <Button variant="destructive" size="sm" onClick={reset} className="text-[10px] sm:text-[11px]">
                   Reset Arena
                 </Button>
+                {onClose && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={onClose}
+                    className="text-[10px] sm:text-[11px]"
+                  >
+                    Close Arena
+                  </Button>
+                )}
                 <span className="text-[10px] font-semibold tracking-[0.3em] text-slate-400">
                   Tap combatants to view dossiers
                 </span>
@@ -2297,10 +2495,10 @@ function ToolsBar({
   const [barHeight, setBarHeight] = useState(0);
   const [lastKnownHeight, setLastKnownHeight] = useState(0);
   const [mode, setMode] = useState("attached");
-  const [collapsed, setCollapsed] = useState(false);
   const [contentEl, setContentEl] = useState(null);
   const [heroEl, setHeroEl] = useState(null);
   const [mountEl, setMountEl] = useState(null);
+  const [displayMode, setDisplayMode] = useState("full");
   const isMobile = useMediaQuery("(max-width: 640px)");
 
   const handleContentRef = useCallback((node) => {
@@ -2333,10 +2531,23 @@ function ToolsBar({
     }
   }, [barHeight]);
 
+  useEffect(() => {
+    if (!isMobile && displayMode === "compact") {
+      setDisplayMode("full");
+    }
+  }, [isMobile, displayMode]);
+
+  useEffect(() => {
+    if (!isMobile) return;
+    if (showArena) {
+      setDisplayMode("hidden");
+    }
+  }, [isMobile, showArena]);
+
   useIsomorphicLayoutEffect(() => {
     if (!heroEl) return undefined;
     const height = barHeight || lastKnownHeight || 0;
-    heroEl.style.setProperty("--toolbar-offset", `${Math.ceil(height + 48)}px`);
+    heroEl.style.setProperty("--toolbar-offset", `${Math.ceil(height + 80)}px`);
     return () => {
       heroEl.style.removeProperty("--toolbar-offset");
     };
@@ -2369,34 +2580,116 @@ function ToolsBar({
     };
   }, [heroEl, barHeight, lastKnownHeight]);
 
+  const cycleDisplayMode = useCallback(() => {
+    if (isMobile) {
+      setDisplayMode((state) => {
+        if (state === "full") return "compact";
+        if (state === "compact") return "hidden";
+        return "full";
+      });
+    } else {
+      setDisplayMode((state) => (state === "full" ? "hidden" : "full"));
+    }
+  }, [isMobile]);
+
+  const showFullControls = useCallback(() => {
+    setDisplayMode("full");
+  }, []);
+
   const effectiveHeight = barHeight || lastKnownHeight || 0;
-  const placeholderHeight = mode === "fixed" ? effectiveHeight + 16 : 0;
+  const placeholderHeight = mode === "fixed" && displayMode !== "hidden" ? effectiveHeight + 16 : 0;
   const countLabel = hasActiveFilters ? `${filteredCount} / ${totalCount} in view` : `${totalCount} catalogued`;
 
   const renderToolbar = () => (
     <AnimatePresence initial={false} mode="wait">
-      {collapsed ? (
+      {displayMode === "hidden" ? null : displayMode === "compact" ? (
         <motion.div
-          key="toolbar-collapsed"
+          key="toolbar-compact"
           ref={handleContentRef}
-          initial={{ opacity: 0, y: 12 }}
+          initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -12 }}
-          transition={{ duration: 0.25, ease: "easeOut" }}
-          className="rounded-3xl border border-white/12 bg-[#070b1c]/90 px-4 py-3 text-[10px] font-semibold tracking-[0.2em] text-white/70 shadow-[0_18px_48px_rgba(8,8,20,0.45)] backdrop-blur-xl"
+          exit={{ opacity: 0, y: -16 }}
+          transition={{ duration: 0.24, ease: "easeOut" }}
+          className={cx(
+            "border border-white/12 bg-[#070b1c]/90 shadow-[0_14px_40px_rgba(8,8,20,0.45)] backdrop-blur-xl",
+            isMobile ? "rounded-none border-x-0 border-t border-white/10 border-b border-white/15 px-3 py-2" : "rounded-2xl px-4 py-2.5"
+          )}
         >
-          <div className="flex items-center justify-between gap-3">
-            <span>Lore controls hidden</span>
-            <Button
-              variant="subtle"
-              size="sm"
-              onClick={() => setCollapsed(false)}
-              className="flex-none"
-              aria-label="Expand universe controls"
+          <div className="flex items-center gap-2">
+            <label className="relative flex-1">
+              <span className="sr-only" id="universe-search-compact">
+                Search heroes, powers, locations and tags
+              </span>
+              <Input
+                aria-labelledby="universe-search-compact"
+                value={query}
+                onChange={(event) => onQueryChange(event.target.value)}
+                placeholder={isMobile ? "" : "Search"}
+                className="h-10 w-full rounded-lg border border-white/15 bg-white/10 pl-9 pr-3 text-xs text-white placeholder:text-white/50"
+              />
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/70" aria-hidden="true" />
+            </label>
+            <button
+              type="button"
+              onClick={() => {
+                const currentIndex = SORT_OPTIONS.findIndex((item) => item.value === sortMode);
+                const next = SORT_OPTIONS[(currentIndex + 1) % SORT_OPTIONS.length];
+                onSortModeChange(next.value);
+              }}
+              className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-white/15 bg-white/10 text-white transition hover:bg-white/20"
+              aria-label="Cycle sort order"
             >
-              <ChevronUp className="h-4 w-4" aria-hidden="true" />
-              <span className="text-xs font-semibold">Show</span>
+              <ArrowUpDown className="h-4 w-4" aria-hidden="true" />
+            </button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onOpenFilters}
+              className="inline-flex h-10 w-10 flex-none items-center justify-center rounded-lg border border-white/15 bg-white/10 p-0 text-white hover:bg-white/20"
+              aria-label="Open filters"
+            >
+              <Filter className="h-4 w-4" aria-hidden="true" />
+              <span className="sr-only">Filters</span>
             </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onClearFilters}
+              className="inline-flex h-10 w-10 flex-none items-center justify-center rounded-lg border border-white/15 bg-white/10 p-0 text-white hover:bg-white/20"
+              aria-label="Clear filters"
+            >
+              <X className="h-4 w-4" aria-hidden="true" />
+              <span className="sr-only">Clear</span>
+            </Button>
+            <button
+              type="button"
+              onClick={onArenaToggle}
+              className={cx(
+                "inline-flex h-10 w-10 items-center justify-center rounded-lg border text-white transition",
+                showArena ? "border-amber-200/70 bg-amber-200/20" : "border-white/15 bg-white/10 hover:bg-white/20"
+              )}
+              aria-label={showArena ? "Hide arena" : "Open arena"}
+              aria-pressed={showArena}
+            >
+              <Swords className="h-4 w-4" aria-hidden="true" />
+            </button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onSync}
+              className="inline-flex h-10 w-10 flex-none items-center justify-center rounded-lg border border-white/15 bg-white/10 p-0 text-white hover:bg-white/20"
+              aria-label="Sync universe"
+            >
+              <RefreshCcw className="h-4 w-4" aria-hidden="true" />
+            </Button>
+            <button
+              type="button"
+              onClick={cycleDisplayMode}
+              className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-white/15 bg-white/10 text-white transition hover:bg-white/20"
+              aria-label="Hide universe controls"
+            >
+              <ChevronDown className="h-4 w-4" aria-hidden="true" />
+            </button>
           </div>
         </motion.div>
       ) : (
@@ -2407,7 +2700,10 @@ function ToolsBar({
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: -24 }}
           transition={{ duration: 0.28, ease: "easeOut" }}
-          className="rounded-3xl border border-white/12 bg-[#070b1c]/90 p-4 shadow-[0_20px_60px_rgba(8,8,20,0.45)] backdrop-blur-xl"
+          className={cx(
+            "border border-white/12 bg-[#070b1c]/90 shadow-[0_20px_60px_rgba(8,8,20,0.45)] backdrop-blur-xl",
+            isMobile ? "rounded-none border-x-0 border-t border-white/10 border-b border-white/15 px-3 py-3" : "rounded-3xl p-4"
+          )}
         >
           <div className="flex flex-wrap items-center gap-3 sm:gap-4">
             <label className="relative flex-1 min-w-[220px]">
@@ -2420,7 +2716,7 @@ function ToolsBar({
                 value={query}
                 onChange={(event) => onQueryChange(event.target.value)}
                 placeholder="Search characters, powers, locations, tags…"
-                className="w-full bg-white/15 pl-10 pr-3 text-sm text-white placeholder:text-white/60"
+                className="w-full rounded-2xl bg-white/15 pl-10 pr-3 text-sm text-white placeholder:text-white/60"
               />
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/70" aria-hidden="true" />
             </label>
@@ -2432,230 +2728,25 @@ function ToolsBar({
                 aria-labelledby="sort-menu-label"
                 value={sortMode}
                 onChange={(event) => onSortModeChange(event.target.value)}
-                className="w-full appearance-none rounded-xl border border-white/25 bg-black/70 px-3 py-2 pr-9 text-sm font-semibold text-white shadow-inner focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300"
+                className="w-full appearance-none rounded-2xl border border-white/25 bg-black/70 px-3 py-2 pr-9 text-sm font-semibold text-white shadow-inner focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300"
               >
-                <div className="flex items-center justify-between gap-3">
-                  <span>Lore controls hidden</span>
-                  <Button
-                    variant="subtle"
-                    size="sm"
-                    onClick={() => setCollapsed(false)}
-                    className="flex-none"
-                    aria-label="Expand universe controls"
-                  >
-                    <ChevronUp className="h-4 w-4" aria-hidden="true" />
-                    <span className="text-xs font-semibold">Show</span>
-                  </Button>
-                </div>
-              </motion.div>
-            ) : (
-              <motion.div
-                key="toolbar-expanded"
-                ref={setContentEl}
-                layout
-                initial={{ opacity: 0, y: 12 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -12 }}
-                transition={{ duration: 0.25, ease: "easeOut" }}
-                className="rounded-3xl border border-white/12 bg-[#070b1c]/90 px-4 py-3 shadow-[0_18px_48px_rgba(8,8,20,0.45)] backdrop-blur-xl"
-              >
-                <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-                  <label className="relative flex-1 min-w-[220px] sm:min-w-[260px]" htmlFor="universe-search">
-                    <span className="sr-only">Search the universe</span>
-                    <Input
-                      id="universe-search"
-                      value={query}
-                      onChange={(event) => onQueryChange(event.target.value)}
-                      placeholder="Search characters, powers, locations, tags…"
-                      className="w-full bg-white/15 pl-10 pr-3 text-sm text-white placeholder:text-white/60"
-                    />
-                    <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/70" aria-hidden="true" />
-                  </label>
-                  <div className="relative w-full min-w-[160px] sm:w-48">
-                    <span className="sr-only" id="sort-menu-label">
-                      Sort heroes
-                    </span>
-                    <select
-                      aria-labelledby="sort-menu-label"
-                      value={sortMode}
-                      onChange={(event) => onSortModeChange(event.target.value)}
-                      className="w-full appearance-none rounded-xl border border-white/25 bg-black/70 px-3 py-2 pr-9 text-sm font-semibold text-white shadow-inner focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300"
-                    >
-                      {SORT_OPTIONS.map((item) => (
-                        <option key={item.value} value={item.value} className="bg-black text-white">
-                          {item.label}
-                        </option>
-                      ))}
-                    </select>
-                    <ArrowDown className="pointer-events-none absolute right-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-white/70" aria-hidden="true" />
-                  </div>
-                  <Button
-                    variant="gradient"
-                    size="sm"
-                    onClick={onOpenFilters}
-                    className="flex-none shadow-[0_15px_40px_rgba(250,204,21,0.3)]"
-                    aria-label="Open filters"
-                  >
-                    <Filter className="h-4 w-4" aria-hidden="true" />
-                    <span className="text-xs font-semibold sm:text-sm">Filters</span>
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={onClearFilters}
-                    className="flex-none"
-                    aria-label="Clear filters"
-                  >
-                    <X size={14} aria-hidden="true" />
-                    <span className="text-xs font-semibold sm:text-sm">Clear</span>
-                  </Button>
-                  <div className="flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1.5 text-xs font-semibold text-white/85">
-                    <Users className="h-3.5 w-3.5 text-amber-200" aria-hidden="true" />
-                    <span>{countLabel}</span>
-                  </div>
-                  <Button
-                    variant="subtle"
-                    size="sm"
-                    onClick={onArenaToggle}
-                    className={cx("flex-none", showArena ? "ring-2 ring-amber-300/70" : "")}
-                    aria-pressed={showArena}
-                    aria-label={showArena ? "Hide arena" : "Open arena"}
-                  >
-                    <Swords size={14} aria-hidden="true" />
-                    <span className="text-xs font-semibold sm:text-sm">{showArena ? "Hide Arena" : "Arena"}</span>
-                  </Button>
-                  <Button
-                    variant="dark"
-                    size="sm"
-                    onClick={onSync}
-                    className="flex-none"
-                    aria-label="Sync universe"
-                  >
-                    <RefreshCcw size={14} aria-hidden="true" />
-                    <span className="text-xs font-semibold sm:text-sm">Sync</span>
-                  </Button>
-                  <Button
-                    variant={isMobile ? "gradient" : "ghost"}
-                    size={isMobile ? "md" : "sm"}
-                    onClick={() => setCollapsed(true)}
-                    className={cx("flex-none", isMobile ? "ml-auto px-4" : "px-4 sm:px-3")}
-                    aria-label="Collapse universe controls"
-                  >
-                    <ChevronDown className="h-4 w-4" aria-hidden="true" />
-                    <span
-                      className={cx(
-                        "text-xs font-semibold",
-                        isMobile ? "ml-2" : "ml-1 sm:hidden"
-                      )}
-                    >
-                      {isMobile ? "Hide controls" : "Hide"}
-                    </span>
-                  </Button>
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-
-function QuickFilterRail({ data, onFacet, onSortModeChange, sortMode, onOpenFilters }) {
-  const [open, setOpen] = useState(false);
-  const quickSorts = [
-    { value: "default", label: "Featured" },
-    { value: "az", label: "A-Z" },
-    { value: "faction", label: "By Faction" },
-    { value: "most", label: "Most Powerful" },
-  ];
-
-  const topCollections = useMemo(() => {
-    const tally = (getter) => {
-      const counts = new Map();
-      data.forEach((item) => {
-        getter(item).forEach((value) => {
-          if (!value) return;
-          const entry = counts.get(value) || { count: 0 };
-          entry.count += 1;
-          counts.set(value, entry);
-        });
-      });
-      return Array.from(counts.entries())
-        .map(([value, meta]) => ({ value, count: meta.count }))
-        .sort((a, b) => b.count - a.count);
-    };
-
-    const locations = tally((item) => item.locations || []).slice(0, 6);
-    const factions = tally((item) => item.faction || []).slice(0, 6);
-
-    const powerMap = new Map();
-    data.forEach((item) => {
-      (item.powers || []).forEach((power) => {
-        if (!power?.name) return;
-        const entry = powerMap.get(power.name) || { count: 0, total: 0 };
-        entry.count += 1;
-        entry.total += Number(power.level) || 0;
-        powerMap.set(power.name, entry);
-      });
-    });
-    const powers = Array.from(powerMap.entries())
-      .map(([name, meta]) => ({
-        value: name,
-        count: meta.count,
-        avg: meta.count ? meta.total / meta.count : 0,
-      }))
-      .sort((a, b) => {
-        if (b.avg === a.avg) return b.count - a.count;
-        return b.avg - a.avg;
-      })
-      .slice(0, 8);
-
-    return { locations, factions, powers };
-  }, [data]);
-
-  const renderChip = (item, key) => (
-    <button
-      key={`${key}-${item.value}`}
-      type="button"
-      onClick={() => onFacet({ key, value: item.value })}
-      className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/8 px-3 py-1.5 text-xs font-semibold text-white transition hover:border-amber-200/70 hover:bg-amber-200/15"
-    >
-      <span>{item.value}</span>
-      <span className="text-[11px] text-white/60">{item.count}</span>
-    </button>
-  );
-
-  if (!open) {
-    return (
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        className="group flex w-full items-center justify-between rounded-full border border-white/15 bg-white/5 px-4 py-3 text-xs font-semibold uppercase tracking-[0.3em] text-white/70 transition hover:border-white/40 hover:bg-white/10"
-        aria-expanded="false"
-      >
-        <span className="flex items-center gap-2 text-white/80">
-          <Sparkles className="h-4 w-4 text-amber-200" aria-hidden="true" /> Discover quickly
-        </span>
-        <ChevronDown className="h-4 w-4 text-white/60 transition group-hover:text-white" aria-hidden="true" />
-      </button>
-    );
-  }
-
-  return (
-    <Card className="border border-white/15 bg-white/5 backdrop-blur-2xl">
-      <CardContent className="space-y-6">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-2 text-sm font-semibold text-white/80">
-            <Sparkles className="h-4 w-4 text-amber-200" aria-hidden="true" /> Discover quickly
-          </div>
-          <div className="flex items-center gap-2">
+                {SORT_OPTIONS.map((item) => (
+                  <option key={item.value} value={item.value} className="bg-black text-white">
+                    {item.label}
+                  </option>
+                ))}
+              </select>
+              <ArrowDown className="pointer-events-none absolute right-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-white/70" aria-hidden="true" />
+            </div>
             <Button
-              variant="ghost"
+              variant="gradient"
               size="sm"
               onClick={onOpenFilters}
-              className="px-3 text-xs font-semibold text-white/70 hover:text-white"
+              className={cx(
+                "flex-none shadow-[0_15px_40px_rgba(250,204,21,0.3)]",
+                isMobile ? "order-[-1] w-full justify-center gap-2 rounded-2xl py-3 text-sm" : ""
+              )}
+              aria-label="Open filters"
             >
               <Filter className="h-4 w-4" aria-hidden="true" />
               <span className="text-xs font-semibold sm:text-sm">Filters</span>
@@ -2664,7 +2755,7 @@ function QuickFilterRail({ data, onFacet, onSortModeChange, sortMode, onOpenFilt
               variant="outline"
               size="sm"
               onClick={onClearFilters}
-              className="flex-none"
+              className={cx("flex-none", isMobile ? "w-full justify-center gap-2 rounded-2xl py-3 text-sm" : "")}
               aria-label="Clear filters"
             >
               <X size={14} aria-hidden="true" />
@@ -2678,7 +2769,11 @@ function QuickFilterRail({ data, onFacet, onSortModeChange, sortMode, onOpenFilt
               variant="subtle"
               size="sm"
               onClick={onArenaToggle}
-              className={cx("flex-none", showArena ? "ring-2 ring-amber-300/70" : "")}
+              className={cx(
+                "flex-none",
+                showArena ? "ring-2 ring-amber-300/70" : "",
+                isMobile ? "w-full justify-center gap-2 rounded-2xl py-3 text-sm" : ""
+              )}
               aria-pressed={showArena}
               aria-label={showArena ? "Hide arena" : "Open arena"}
             >
@@ -2689,27 +2784,27 @@ function QuickFilterRail({ data, onFacet, onSortModeChange, sortMode, onOpenFilt
               variant="dark"
               size="sm"
               onClick={onSync}
-              className="flex-none"
+              className={cx("flex-none", isMobile ? "w-full justify-center gap-2 rounded-2xl py-3 text-sm" : "")}
               aria-label="Sync universe"
             >
               <RefreshCcw size={14} aria-hidden="true" />
               <span className="text-xs font-semibold sm:text-sm">Sync</span>
             </Button>
             <Button
-              variant={isMobile ? "gradient" : "ghost"}
-              size={isMobile ? "md" : "sm"}
-              onClick={() => setCollapsed(true)}
-              className={cx("flex-none", isMobile ? "ml-auto px-4" : "px-4 sm:px-3")}
-              aria-label="Collapse universe controls"
+              variant={isMobile ? "ghost" : "ghost"}
+              size={isMobile ? "sm" : "sm"}
+              onClick={cycleDisplayMode}
+              className={cx(
+                "flex-none",
+                isMobile
+                  ? "order-[-2] w-full justify-center gap-2 rounded-2xl border border-white/20 py-3 text-sm"
+                  : "px-4 sm:px-3"
+              )}
+              aria-label={isMobile ? "Compact universe controls" : "Hide universe controls"}
             >
               <ChevronDown className="h-4 w-4" aria-hidden="true" />
-              <span
-                className={cx(
-                  "text-xs font-semibold",
-                  isMobile ? "ml-2" : "ml-1 sm:hidden"
-                )}
-              >
-                {isMobile ? "Hide controls" : "Hide"}
+              <span className="text-xs font-semibold">
+                {isMobile ? "Compact" : "Hide"}
               </span>
             </Button>
           </div>
@@ -2727,7 +2822,7 @@ function QuickFilterRail({ data, onFacet, onSortModeChange, sortMode, onOpenFilt
     );
   } else if (mountEl) {
     renderedToolbar = createPortal(
-      <div className="pointer-events-none px-5 pb-10 sm:px-10 lg:px-20">
+      <div className="pointer-events-none px-5 pt-6 pb-10 sm:px-10 lg:px-20">
         <div className="pointer-events-auto">{renderToolbar()}</div>
       </div>,
       mountEl
@@ -2736,9 +2831,24 @@ function QuickFilterRail({ data, onFacet, onSortModeChange, sortMode, onOpenFilt
     renderedToolbar = <div className="mx-auto max-w-7xl px-3 pt-6 sm:px-4">{renderToolbar()}</div>;
   }
 
+  const hiddenActivator = displayMode === "hidden" ? (
+    <Button
+      type="button"
+      onClick={showFullControls}
+      variant="gradient"
+      size="sm"
+      className="fixed top-4 right-4 z-[60] flex items-center gap-2 rounded-2xl px-4 py-2 text-xs font-semibold shadow-[0_18px_48px_rgba(253,230,138,0.35)]"
+      aria-label="Show universe controls"
+    >
+      <ChevronUp className="h-4 w-4" aria-hidden="true" />
+      <span>Controls</span>
+    </Button>
+  ) : null;
+
   return (
     <>
       {renderedToolbar}
+      {hiddenActivator}
       <div style={{ height: placeholderHeight }} aria-hidden="true" />
     </>
   );
@@ -2815,7 +2925,7 @@ function QuickFilterRail({ data, onFacet, onSortModeChange, sortMode, onOpenFilt
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="group flex w-full items-center justify-between rounded-full border border-white/15 bg-white/5 px-4 py-3 text-xs font-semibold uppercase tracking-[0.3em] text-white/70 transition hover:border-white/40 hover:bg-white/10"
+        className="group flex w-full items-center justify-between rounded-full border border-white/15 bg-white/5 px-4 py-1.5 text-[10px] font-semibold uppercase tracking-[0.45em] text-white/70 transition hover:border-white/40 hover:bg-white/10"
         aria-expanded="false"
       >
         <span className="flex items-center gap-2 text-white/80">
@@ -2829,7 +2939,18 @@ function QuickFilterRail({ data, onFacet, onSortModeChange, sortMode, onOpenFilt
   return (
     <Card className="border border-white/15 bg-white/5 backdrop-blur-2xl">
       <CardContent className="space-y-6">
-        <div className="flex flex-wrap items-center justify-between gap-3">
+        <div
+          className="flex flex-wrap items-center justify-between gap-3"
+          role="button"
+          tabIndex={0}
+          onClick={() => setOpen(false)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" || event.key === " ") {
+              event.preventDefault();
+              setOpen(false);
+            }
+          }}
+        >
           <div className="flex items-center gap-2 text-sm font-semibold text-white/80">
             <Sparkles className="h-4 w-4 text-amber-200" aria-hidden="true" /> Discover quickly
           </div>
@@ -2837,7 +2958,10 @@ function QuickFilterRail({ data, onFacet, onSortModeChange, sortMode, onOpenFilt
             <Button
               variant="ghost"
               size="sm"
-              onClick={onOpenFilters}
+              onClick={(event) => {
+                event.stopPropagation();
+                onOpenFilters();
+              }}
               className="px-3 text-xs font-semibold text-white/70 hover:text-white"
             >
               Open full filters
@@ -2845,7 +2969,10 @@ function QuickFilterRail({ data, onFacet, onSortModeChange, sortMode, onOpenFilt
             <Button
               variant="subtle"
               size="sm"
-              onClick={() => setOpen(false)}
+              onClick={(event) => {
+                event.stopPropagation();
+                setOpen(false);
+              }}
               className="px-3 text-xs font-semibold text-white/80"
               aria-label="Collapse quick filters"
             >
@@ -2963,6 +3090,7 @@ function HeroSection({
   const autoPlayed = useRef(false);
   const [snippetIndex, setSnippetIndex] = useState(0);
   const [tickerIndex, setTickerIndex] = useState(0);
+  const [featureImageIndex, setFeatureImageIndex] = useState(0);
 
   const tickerNames = useMemo(() => {
     const names = (characterNames || [])
@@ -3058,6 +3186,24 @@ function HeroSection({
     return () => clearInterval(timer);
   }, [current?.key, current?.data?.id]);
 
+  useEffect(() => {
+    if (current?.key !== "character") {
+      setFeatureImageIndex(0);
+      return undefined;
+    }
+    const charData = current?.data;
+    const sources = [charData?.cover, ...(charData?.gallery || [])].filter(Boolean);
+    if (!sources.length) {
+      setFeatureImageIndex(0);
+      return undefined;
+    }
+    setFeatureImageIndex((value) => value % sources.length);
+    const timer = setInterval(() => {
+      setFeatureImageIndex((value) => (value + 1) % sources.length);
+    }, 5200);
+    return () => clearInterval(timer);
+  }, [current]);
+
   const goPrev = () => {
     setDirection(-1);
     setIndex((prev) => (prev - 1 + slides.length) % slides.length);
@@ -3082,7 +3228,11 @@ function HeroSection({
     }
     const images = [char.cover, ...(char.gallery || [])].filter(Boolean);
     const heroImage = images[0];
-    const accentImages = images.slice(1, 3);
+    const slideshowSources = images.length ? images : heroImage ? [heroImage] : [];
+    const accentImage =
+      slideshowSources.length > 0
+        ? slideshowSources[featureImageIndex % slideshowSources.length]
+        : null;
     const topPowers = [...(char.powers || [])]
       .sort((a, b) => (Number(b.level) || 0) - (Number(a.level) || 0))
       .slice(0, 3);
@@ -3099,6 +3249,9 @@ function HeroSection({
       if (payload?.value) onFacet?.(payload);
       openProfile();
     };
+    const dossierAria = activeSnippet
+      ? `Read more about ${char.name}: ${activeSnippet}`
+      : `Read more about ${char.name}`;
     return (
       <div
         role="button"
@@ -3114,97 +3267,103 @@ function HeroSection({
       >
         {heroImage && (
           <motion.div
-            className="absolute inset-0"
-            initial={{ scale: 1.05, opacity: 0.6 }}
-            animate={{ scale: 1.12, opacity: 0.85 }}
-            transition={{ duration: 18, repeat: Infinity, repeatType: "reverse", ease: "easeInOut" }}
+            className="absolute inset-0 -m-12"
+            initial={{ opacity: 0.45, scale: 1.05 }}
+            animate={{ opacity: 0.75, scale: 1.15 }}
+            transition={{ duration: 24, repeat: Infinity, repeatType: "reverse", ease: "easeInOut" }}
             style={{
               backgroundImage: `url(${heroImage})`,
               backgroundSize: "cover",
               backgroundPosition: "center",
-              filter: "saturate(1.15) brightness(0.9)",
+              filter: "blur(42px) saturate(1.28) brightness(0.82)",
             }}
           />
         )}
-        <div className="absolute inset-0 bg-gradient-to-br from-black/85 via-black/70 to-indigo-900/70" />
-        <div className="relative z-10 flex-1 space-y-5 pr-0 sm:pr-8">
-          <Badge className="bg-white/15 text-white/85">{slide.label}</Badge>
-          <h2 className="text-3xl font-black leading-tight tracking-tight text-balance sm:text-5xl">
-            {char.name}
-          </h2>
-          <p className="text-sm font-semibold text-white/80 sm:text-base lg:text-lg">
-            {char.shortDesc || char.longDesc?.slice(0, 220) || "A legend awaits their tale to be told."}
-          </p>
-          <div className="flex flex-wrap gap-2 text-[11px] sm:text-xs">
-            {char.gender && (
-              <FacetChip onClick={(event) => handleFacetClick(event, { key: "gender", value: char.gender })}>
-                Gender: {char.gender}
-              </FacetChip>
-            )}
-            {(char.faction || []).map((faction) => (
-              <FacetChip key={faction} onClick={(event) => handleFacetClick(event, { key: "faction", value: faction })}>
-                {faction}
-              </FacetChip>
-            ))}
-          </div>
-            <div className="space-y-3">
+        <div className="absolute inset-0 bg-gradient-to-br from-black/90 via-[#080f2a]/80 to-indigo-900/70" />
+        <div className="relative z-10 flex flex-1 flex-col gap-8 lg:flex-row">
+          <div className="flex-1 space-y-5 pr-0 sm:pr-8">
+            <Badge className="bg-white/15 text-white/85">{slide.label}</Badge>
+            <h2 className="text-3xl font-black leading-tight tracking-tight text-balance sm:text-5xl">{char.name}</h2>
+            <p className="text-sm font-semibold text-white/80 sm:text-base lg:text-lg">
+              {char.shortDesc || char.longDesc?.slice(0, 220) || "A legend awaits their tale to be told."}
+            </p>
+            <div className="flex flex-wrap gap-2 text-[11px] sm:text-xs">
+              {char.gender && (
+                <FacetChip onClick={(event) => handleFacetClick(event, { key: "gender", value: char.gender })}>
+                  Gender: {char.gender}
+                </FacetChip>
+              )}
+              {primaryLocation && (
+                <FacetChip onClick={(event) => handleFacetClick(event, { key: "locations", value: primaryLocation })}>
+                  {primaryLocation}
+                </FacetChip>
+              )}
+              {(char.faction || []).map((faction) => (
+                <FacetChip key={faction} onClick={(event) => handleFacetClick(event, { key: "faction", value: faction })}>
+                  {faction}
+                </FacetChip>
+              ))}
+            </div>
+            <div className="space-y-4">
               <div className="flex items-center gap-2 text-[11px] font-bold tracking-wide text-white/70 sm:text-xs">
-                <Atom size={14} /> Top Powers
+                <Atom size={14} aria-hidden="true" /> Top powers
               </div>
               <div className="flex flex-wrap gap-2">
                 {topPowers.map((power) => (
                   <button
                     key={power.name}
-                  type="button"
-                  onClick={(event) => handleFacetClick(event, { key: "powers", value: power.name })}
-                  className="rounded-full bg-white/10 px-3 py-1 text-[11px] font-bold tracking-wide text-white/90 transition hover:bg-white/20"
-                >
-                  {power.name} • {power.level}/10
-                </button>
+                    type="button"
+                    onClick={(event) => handleFacetClick(event, { key: "powers", value: power.name })}
+                    className="rounded-full bg-white/10 px-3 py-1 text-[11px] font-bold tracking-wide text-white/90 transition hover:bg-white/20"
+                  >
+                    {power.name} • {power.level}/10
+                  </button>
                 ))}
               </div>
-              {(primaryLocation || activeSnippet) && (
-                <div className="grid gap-3 rounded-2xl border border-white/15 bg-white/5 p-4 text-[11px] font-semibold text-white/75 sm:grid-cols-2 sm:text-sm">
-                  {primaryLocation && (
-                    <div className="flex items-start gap-2">
-                      <MapPin className="mt-0.5 h-4 w-4 text-amber-200" aria-hidden="true" />
-                      <div>
-                        <div className="text-white">Based in</div>
-                        <div className="text-white/80">{primaryLocation}</div>
-                      </div>
-                    </div>
-                  )}
-                  {activeSnippet && (
-                    <div className="flex items-start gap-2">
-                      <Sparkles className="mt-0.5 h-4 w-4 text-fuchsia-200" aria-hidden="true" />
-                      <div>
-                        <div className="text-white">Lore spotlight</div>
-                        <p className="text-white/80">{activeSnippet}</p>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
+              <Button
+                type="button"
+                variant="gradient"
+                size="sm"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  openProfile();
+                }}
+                aria-label={dossierAria}
+                className="inline-flex items-center gap-2 rounded-full px-5 py-2 text-sm font-semibold shadow-[0_18px_48px_rgba(253,230,138,0.35)]"
+              >
+                Dive into the dossier
+                <ArrowRight className="h-4 w-4" aria-hidden="true" />
+              </Button>
             </div>
-        </div>
-        <div className="relative z-10 mt-6 flex flex-1 items-end justify-end gap-4 lg:mt-0 lg:flex-col">
-          {accentImages.map((src, idx) => (
-            <motion.div
-              key={src}
-              className="relative h-28 w-28 overflow-hidden rounded-2xl border border-white/20 shadow-[0_15px_40px_rgba(9,12,28,0.6)] sm:h-32 sm:w-32"
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.15 * idx, duration: 0.45 }}
-              style={{ backgroundImage: `url(${src})`, backgroundSize: "cover", backgroundPosition: "center" }}
-            >
-              <div className="absolute inset-0 bg-gradient-to-t from-black/65 to-transparent" />
-            </motion.div>
-          ))}
-          {!accentImages.length && (
-            <div className="rounded-2xl border border-dashed border-white/25 bg-black/40 px-4 py-6 text-center text-xs font-semibold text-white/70 sm:text-sm">
-              Classified imagery — open dossier
-            </div>
-          )}
+          </div>
+          <div className="relative flex flex-1 items-center justify-end">
+            {accentImage ? (
+              <div className="relative w-full max-w-sm overflow-hidden rounded-[32px]">
+                <div className="pointer-events-none absolute inset-y-0 left-0 w-24 bg-gradient-to-r from-[#070b1c]/90 to-transparent" />
+                <div className="pointer-events-none absolute inset-y-0 right-0 w-24 bg-gradient-to-l from-[#070b1c]/90 to-transparent" />
+                <AnimatePresence mode="wait">
+                  <motion.div
+                    key={`${char.id || "character"}-${accentImage}`}
+                    initial={{ opacity: 0, scale: 1.05 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.97 }}
+                    transition={{ duration: 0.8, ease: "easeOut" }}
+                  >
+                    <ImageSafe
+                      src={accentImage}
+                      alt={`${char.name} feature art`}
+                      fallbackLabel={char.name}
+                      className="h-64 w-full rounded-[32px] object-cover sm:h-72 lg:h-80"
+                    />
+                  </motion.div>
+                </AnimatePresence>
+              </div>
+            ) : (
+              <div className="rounded-[28px] border border-dashed border-white/25 bg-black/40 px-4 py-6 text-center text-xs font-semibold text-white/70 sm:text-sm">
+                Classified imagery — open dossier
+              </div>
+            )}
+          </div>
         </div>
       </div>
     );
@@ -3530,7 +3689,7 @@ function HeroSection({
               </AnimatePresence>
             </div>
           </div>
-          <div className="flex flex-wrap items-center gap-4 text-sm font-semibold text-white/75">
+          <div className="mt-12 flex flex-wrap items-center gap-4 pb-6 text-sm font-semibold text-white/75">
             <Users className="h-4 w-4" />
             <span>There's more.</span>
             <Button
@@ -3546,7 +3705,7 @@ function HeroSection({
       </div>
       <div
         id="hero-toolbar-mount"
-        className="pointer-events-none absolute inset-x-0 bottom-0 z-30 px-5 pb-8 sm:px-10 lg:px-20"
+        className="pointer-events-none absolute inset-x-0 bottom-0 z-30 px-5 pb-12 sm:px-10 lg:px-20"
       />
     </section>
   );
@@ -3565,8 +3724,10 @@ export default function LoremakerApp({ initialCharacters = [], initialError = nu
   const [showArena, setShowArena] = useState(false);
   const [openModal, setOpenModal] = useState(false);
   const [currentCharacter, setCurrentCharacter] = useState(null);
+  const [modalIndex, setModalIndex] = useState(-1);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [transferNotices, setTransferNotices] = useState([]);
+  const sortedRef = useRef([]);
   const currentYear = useMemo(() => new Date().getFullYear(), []);
   const slugify = useCallback(
     (value) =>
@@ -3584,6 +3745,10 @@ export default function LoremakerApp({ initialCharacters = [], initialError = nu
   );
 
   const openCharacter = useCallback((char) => {
+    if (!char) return;
+    const arr = sortedRef.current || [];
+    const idx = arr.findIndex((item) => item.id === char.id);
+    setModalIndex(idx);
     setCurrentCharacter(char);
     setOpenModal(true);
   }, []);
@@ -3591,6 +3756,7 @@ export default function LoremakerApp({ initialCharacters = [], initialError = nu
   const closeCharacter = useCallback(() => {
     setOpenModal(false);
     setCurrentCharacter(null);
+    setModalIndex(-1);
   }, []);
 
   const handleFacet = useCallback(({ key, value }) => {
@@ -3656,6 +3822,29 @@ export default function LoremakerApp({ initialCharacters = [], initialError = nu
     [closeCharacter, onUseInSim]
   );
 
+  const navigateCharacter = useCallback(
+    (delta) => {
+      const arr = sortedRef.current;
+      if (!arr.length) return;
+      setModalIndex((prev) => {
+        let index = prev;
+        if (index < 0 && currentCharacter) {
+          index = arr.findIndex((item) => item.id === currentCharacter.id);
+        }
+        if (index < 0) return prev;
+        const nextIndex = (index + delta + arr.length) % arr.length;
+        const next = arr[nextIndex];
+        if (next) {
+          setCurrentCharacter(next);
+          setOpenModal(true);
+          return nextIndex;
+        }
+        return prev;
+      });
+    },
+    [currentCharacter]
+  );
+
   const toggleArena = useCallback(() => {
     setShowArena((prev) => {
       const next = !prev;
@@ -3665,6 +3854,10 @@ export default function LoremakerApp({ initialCharacters = [], initialError = nu
       return next;
     });
   }, [focusArena]);
+
+  const closeArena = useCallback(() => {
+    setShowArena(false);
+  }, []);
 
   const filtered = useMemo(
     () => data.filter((c) => matchesFilters(c, filters, combineAND, query)),
@@ -3700,6 +3893,10 @@ export default function LoremakerApp({ initialCharacters = [], initialError = nu
     }
   }, [filtered, sortMode]);
 
+  useEffect(() => {
+    sortedRef.current = sorted;
+  }, [sorted]);
+
   const featured = useMemo(() => computeFeatured(data), [data]);
   const universeNames = useMemo(() => data.map((c) => c.name).filter(Boolean), [data]);
   const siteUrl = useMemo(() => {
@@ -3734,6 +3931,25 @@ export default function LoremakerApp({ initialCharacters = [], initialError = nu
     const highlight = heroName ? ` Spotlight on ${heroName}${heroLocale ? ` of ${heroLocale}` : ""}.` : "";
     return `${base}${highlight}`.trim();
   }, [data.length, featured?.character?.name, featured?.character?.locations]);
+
+  useEffect(() => {
+    if (!openModal || !currentCharacter) return;
+    const arr = sortedRef.current;
+    if (!arr.length) {
+      closeCharacter();
+      return;
+    }
+    const idx = arr.findIndex((item) => item.id === currentCharacter.id);
+    if (idx === -1) {
+      closeCharacter();
+      return;
+    }
+    setModalIndex(idx);
+    const latest = arr[idx];
+    if (latest && latest !== currentCharacter) {
+      setCurrentCharacter(latest);
+    }
+  }, [openModal, currentCharacter, closeCharacter]);
   const schemaJson = useMemo(() => {
     const clean = (value) => {
       if (Array.isArray(value)) {
@@ -3935,6 +4151,7 @@ export default function LoremakerApp({ initialCharacters = [], initialError = nu
                 setSlots={setArenaSlots}
                 onOpenCharacter={openCharacter}
                 pulseKey={arenaPulseKey}
+                onClose={closeArena}
               />
             </div>
           )}
@@ -4045,91 +4262,14 @@ export default function LoremakerApp({ initialCharacters = [], initialError = nu
         </div>
       </footer>
 
-      <footer className="border-t border-white/10 bg-black/50 backdrop-blur-2xl">
-        <div className="mx-auto max-w-7xl px-3 py-10 sm:px-4">
-          <div className="grid gap-8 md:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)]">
-            <div className="space-y-4">
-              <p className="text-xs font-black tracking-[0.35em] text-white/70">LoreMaker Universe</p>
-              <p className="text-[11px] font-semibold tracking-[0.3em] text-white/60">
-                © {currentYear} Menelek Makonnen.
-              </p>
-              <p className="text-[11px] font-semibold tracking-[0.3em] text-white/60">
-                All characters, stories, lore, and artwork from the LoreMaker Universe are protected by copyright.
-              </p>
-            </div>
-            <div className="space-y-4">
-              <p className="text-xs font-black tracking-[0.35em] text-white/70">Explore</p>
-              <div className="flex flex-col gap-2">
-                <Button
-                  as="a"
-                  href="#arena-anchor"
-                  variant="subtle"
-                  size="sm"
-                  className="justify-start gap-2 px-4 text-[10px] tracking-[0.3em]"
-                >
-                  <Swords className="h-4 w-4" aria-hidden="true" />
-                  Battle Arena
-                </Button>
-                <Button
-                  type="button"
-                  onClick={handleRandomCharacter}
-                  variant="subtle"
-                  size="sm"
-                  className="justify-start gap-2 px-4 text-[10px] tracking-[0.3em]"
-                >
-                  <Sparkles className="h-4 w-4" aria-hidden="true" />
-                  Random Character
-                </Button>
-                <Button
-                  as="a"
-                  href="#characters-grid"
-                  variant="subtle"
-                  size="sm"
-                  className="justify-start gap-2 px-4 text-[10px] tracking-[0.3em]"
-                >
-                  <Users className="h-4 w-4" aria-hidden="true" />
-                  Character Archive
-                </Button>
-              </div>
-            </div>
-            <div className="space-y-4">
-              <p className="text-xs font-black tracking-[0.35em] text-white/70">Connect</p>
-              <div className="flex flex-col gap-2">
-                <Button
-                  as="a"
-                  href="https://menelekmakonnen.com"
-                  target="_blank"
-                  rel="noreferrer"
-                  variant="subtle"
-                  size="sm"
-              className="justify-start gap-2 px-4 text-[10px] tracking-[0.3em]"
-            >
-              <ArrowRight className="h-4 w-4" aria-hidden="true" />
-              Menelek Makonnen
-            </Button>
-                <Button
-                  type="button"
-                  onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
-                  variant="ghost"
-                  size="sm"
-                  className="justify-start gap-2 px-4 text-[10px] tracking-[0.3em] text-white/70 hover:text-white"
-                >
-                  <ArrowUp className="h-4 w-4" aria-hidden="true" />
-                  Back to Top
-                </Button>
-              </div>
-            </div>
-          </div>
-        </div>
-      </footer>
-
       <CharacterModal
         open={openModal}
         onClose={closeCharacter}
         char={currentCharacter}
-          onFacet={handleFacet}
-          onUseInSim={useInSim}
-        />
+        onNavigate={navigateCharacter}
+        onFacet={handleFacet}
+        onUseInSim={useInSim}
+      />
 
         <FilterDrawer open={filtersOpen} onClose={() => setFiltersOpen(false)}>
           <SidebarFilters
