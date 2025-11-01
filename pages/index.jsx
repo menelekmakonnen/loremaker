@@ -1202,46 +1202,167 @@ function CharacterCard({ char, onOpen, onFacet, onUseInSim, highlight }) {
 }
 function Gallery({ images, cover, name }) {
   const [index, setIndex] = useState(0);
-  const sources = [cover, ...(images || [])].filter(Boolean);
+  const [lightboxOpen, setLightboxOpen] = useState(false);
+  const sources = useMemo(() => [cover, ...(images || [])].filter(Boolean), [cover, images]);
+
+  useEffect(() => {
+    if (!sources.length) {
+      setIndex(0);
+      return;
+    }
+    setIndex((current) => (current >= sources.length ? 0 : current));
+  }, [sources]);
+
+  const goPrevious = useCallback(() => {
+    if (!sources.length) return;
+    setIndex((i) => (i - 1 + sources.length) % sources.length);
+  }, [sources]);
+
+  const goNext = useCallback(() => {
+    if (!sources.length) return;
+    setIndex((i) => (i + 1) % sources.length);
+  }, [sources]);
+
+  const openLightbox = useCallback(() => {
+    if (sources.length) setLightboxOpen(true);
+  }, [sources.length]);
+
+  const closeLightbox = useCallback(() => setLightboxOpen(false), []);
+
   if (!sources.length) {
     return (
-      <div className="flex h-64 items-center justify-center rounded-2xl border border-white/15 bg-white/12">
+      <div className="flex h-72 items-center justify-center rounded-[32px] border border-white/15 bg-white/12">
         <Insignia label={name} size={72} />
       </div>
     );
   }
+
+  const activeSrc = sources[index];
+
   return (
-    <div className="group relative">
-      <ImageSafe
-        src={sources[index]}
-        alt={`${name} gallery ${index + 1}`}
-        fallbackLabel={name}
-        className="h-64 w-full rounded-2xl border border-white/12 object-cover"
-      />
-      {sources.length > 1 && (
-        <>
-          <button
-            className="absolute left-3 top-1/2 -translate-y-1/2 rounded-full bg-black/50 p-2 text-white opacity-0 transition group-hover:opacity-100"
-            onClick={() => setIndex((i) => (i - 1 + sources.length) % sources.length)}
-            aria-label="Previous"
+    <>
+      <div className="group relative overflow-hidden rounded-[32px] border border-white/12 bg-black/40 shadow-[0_24px_80px_rgba(8,10,20,0.45)]">
+        <div className="aspect-[3/4] w-full">
+          <ImageSafe
+            src={activeSrc}
+            alt={`${name} gallery ${index + 1}`}
+            fallbackLabel={name}
+            className="h-full w-full object-cover"
+          />
+        </div>
+        <button
+          type="button"
+          onClick={openLightbox}
+          className="absolute inset-0 z-20 flex items-end justify-end bg-gradient-to-t from-black/45 via-black/10 to-transparent p-5 opacity-0 transition focus-visible:outline focus-visible:ring-2 focus-visible:ring-amber-300 group-hover:opacity-100"
+          aria-label="Open full-size gallery"
+        >
+          <span className="rounded-full border border-white/30 bg-black/60 px-3 py-1 text-[11px] font-semibold text-white/80 shadow-lg">
+            Tap to expand
+          </span>
+        </button>
+        {sources.length > 1 && (
+          <>
+            <button
+              type="button"
+              className="absolute left-4 top-1/2 z-30 -translate-y-1/2 rounded-full bg-black/60 p-2 text-white opacity-0 transition focus-visible:outline focus-visible:ring-2 focus-visible:ring-amber-300 group-hover:opacity-100"
+              onClick={goPrevious}
+              aria-label="Previous"
+            >
+              <ChevronLeft size={16} />
+            </button>
+            <button
+              type="button"
+              className="absolute right-4 top-1/2 z-30 -translate-y-1/2 rounded-full bg-black/60 p-2 text-white opacity-0 transition focus-visible:outline focus-visible:ring-2 focus-visible:ring-amber-300 group-hover:opacity-100"
+              onClick={goNext}
+              aria-label="Next"
+            >
+              <ChevronRight size={16} />
+            </button>
+            <div className="pointer-events-none absolute bottom-4 left-1/2 z-30 flex -translate-x-1/2 gap-2">
+              {sources.map((_, idx) => (
+                <span key={idx} className={cx("h-1.5 w-5 rounded-full", idx === index ? "bg-white" : "bg-white/50")} />
+              ))}
+            </div>
+          </>
+        )}
+      </div>
+      <AnimatePresence>
+        {lightboxOpen && (
+          <motion.div
+            key="gallery-lightbox"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.25 }}
+            className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-black/90 p-6"
+            onClick={closeLightbox}
           >
-            <ChevronLeft size={16} />
-          </button>
-          <button
-            className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full bg-black/50 p-2 text-white opacity-0 transition group-hover:opacity-100"
-            onClick={() => setIndex((i) => (i + 1) % sources.length)}
-            aria-label="Next"
-          >
-            <ChevronRight size={16} />
-          </button>
-          <div className="absolute bottom-3 left-1/2 flex -translate-x-1/2 gap-2">
-            {sources.map((_, idx) => (
-              <span key={idx} className={cx("h-1.5 w-5 rounded-full", idx === index ? "bg-white" : "bg-white/50")} />
-            ))}
-          </div>
-        </>
-      )}
-    </div>
+            <button
+              type="button"
+              onClick={closeLightbox}
+              className="absolute right-6 top-6 inline-flex items-center gap-2 rounded-full border border-white/20 bg-black/60 px-4 py-2 text-sm font-semibold text-white shadow-lg transition hover:bg-black/80 focus-visible:outline focus-visible:ring-2 focus-visible:ring-amber-300"
+            >
+              <X size={16} /> Close
+            </button>
+            <div
+              className="flex max-h-[80vh] w-full max-w-4xl items-center justify-center gap-4"
+              onClick={(event) => event.stopPropagation()}
+            >
+              {sources.length > 1 && (
+                <button
+                  type="button"
+                  onClick={goPrevious}
+                  className="hidden rounded-full border border-white/20 bg-black/60 p-3 text-white shadow-lg transition hover:bg-black/80 focus-visible:outline focus-visible:ring-2 focus-visible:ring-amber-300 sm:inline-flex"
+                  aria-label="Previous image"
+                >
+                  <ChevronLeft size={18} />
+                </button>
+              )}
+              <div className="relative flex-1">
+                <ImageSafe
+                  src={activeSrc}
+                  alt={`${name} full image ${index + 1}`}
+                  fallbackLabel={name}
+                  className="mx-auto max-h-[70vh] w-auto max-w-full rounded-[32px] border border-white/20 object-contain shadow-[0_40px_140px_rgba(0,0,0,0.6)]"
+                />
+                <div className="absolute bottom-4 left-1/2 flex -translate-x-1/2 items-center gap-3 rounded-full bg-black/60 px-4 py-2 text-[11px] font-semibold text-white/80">
+                  <span>
+                    {index + 1} / {sources.length}
+                  </span>
+                  <span className="hidden sm:inline">{name}</span>
+                </div>
+              </div>
+              {sources.length > 1 && (
+                <button
+                  type="button"
+                  onClick={goNext}
+                  className="hidden rounded-full border border-white/20 bg-black/60 p-3 text-white shadow-lg transition hover:bg-black/80 focus-visible:outline focus-visible:ring-2 focus-visible:ring-amber-300 sm:inline-flex"
+                  aria-label="Next image"
+                >
+                  <ChevronRight size={18} />
+                </button>
+              )}
+            </div>
+            {sources.length > 1 && (
+              <div className="mt-6 flex gap-2">
+                {sources.map((src, idx) => (
+                  <button
+                    key={src + idx}
+                    type="button"
+                    onClick={() => setIndex(idx)}
+                    className={cx(
+                      "h-2.5 w-8 rounded-full transition",
+                      idx === index ? "bg-white" : "bg-white/30 hover:bg-white/60"
+                    )}
+                    aria-label={`View image ${idx + 1}`}
+                  />
+                ))}
+              </div>
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </>
   );
 }
 
@@ -1604,12 +1725,22 @@ function computeBattleTimeline(charA, charB) {
   };
 }
 
-function ArenaCard({ char, position, onRelease, onOpen, health, isWinner, showX }) {
+function ArenaCard({ char, position, onRelease, onOpen, health, isWinner, showX, onAutoFill }) {
   if (!char) {
     return (
-      <div className="flex min-h-[280px] items-center justify-center rounded-3xl border-2 border-dashed border-slate-500/60 bg-slate-900/40 p-6 text-center text-sm font-bold text-slate-400">
-        Choose combatant {position}
-      </div>
+      <button
+        type="button"
+        onClick={() => onAutoFill?.()}
+        className="group flex min-h-[280px] w-full flex-col items-center justify-center gap-3 rounded-3xl border-2 border-dashed border-slate-500/60 bg-slate-900/40 p-6 text-center text-sm font-bold text-slate-300 transition hover:border-amber-300/60 hover:bg-slate-900/70 hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300"
+        aria-label={`Summon a random combatant for slot ${position}`}
+      >
+        <span className="text-base font-black tracking-[0.3em] text-slate-400 group-hover:text-amber-200">
+          Combatant {position}
+        </span>
+        <span className="max-w-[16rem] text-xs font-semibold text-slate-400 group-hover:text-slate-100">
+          Tap to deploy a random warrior from the codex
+        </span>
+      </button>
     );
   }
   const [expanded, setExpanded] = useState(false);
@@ -1835,7 +1966,7 @@ const swordVariants = {
   explode: { rotate: [0, -15, 15, 0], scale: [1, 1.2, 0.9, 1], filter: "drop-shadow(0 0 45px rgba(255,196,12,1))" },
 };
 
-function BattleArena({ characters, slots, setSlots, onOpenCharacter, pulseKey }) {
+function BattleArena({ characters, slots, setSlots, onOpenCharacter, pulseKey, onClose }) {
   const left = characters.find((item) => item.id === slots.left) || null;
   const right = characters.find((item) => item.id === slots.right) || null;
   const [battleState, setBattleState] = useState("idle");
@@ -1893,14 +2024,24 @@ function BattleArena({ characters, slots, setSlots, onOpenCharacter, pulseKey })
     setTimeout(() => setShowX(null), 2200);
   };
 
-  const runRandom = () => {
-    if (characters.length < 2) return;
-    const rng = seededRandom(`arena|${Date.now()}`);
-    const shuffled = [...characters].sort(() => rng() - 0.5);
-    const first = shuffled[0];
-    const second = shuffled.find((char) => char.id !== first.id) || shuffled[1];
-    setSlots({ left: first?.id || null, right: second?.id || null });
-  };
+  const fillSlot = useCallback(
+    (side) => {
+      if (!characters.length) return;
+      setSlots((prev) => {
+        if (prev[side]) return prev;
+        const otherSide = side === "left" ? prev.right : prev.left;
+        const pool = characters.filter((char) => char?.id && char.id !== otherSide);
+        if (!pool.length) return prev;
+        const random = pool[Math.floor(Math.random() * pool.length)];
+        if (!random?.id) return prev;
+        return { ...prev, [side]: random.id };
+      });
+    },
+    [characters, setSlots]
+  );
+
+  const autoFillLeft = useCallback(() => fillSlot("left"), [fillSlot]);
+  const autoFillRight = useCallback(() => fillSlot("right"), [fillSlot]);
 
   const reset = () => {
     setSlots({ left: null, right: null });
@@ -1940,6 +2081,7 @@ function BattleArena({ characters, slots, setSlots, onOpenCharacter, pulseKey })
                 health={health.left}
                 isWinner={result?.winner?.id === left?.id}
                 showX={showX === left?.id}
+                onAutoFill={autoFillLeft}
               />
             </div>
             <div className="col-span-1 order-2 min-w-0 lg:order-none lg:col-span-1 lg:col-start-3 lg:row-start-1">
@@ -1951,6 +2093,7 @@ function BattleArena({ characters, slots, setSlots, onOpenCharacter, pulseKey })
                 health={health.right}
                 isWinner={result?.winner?.id === right?.id}
                 showX={showX === right?.id}
+                onAutoFill={autoFillRight}
               />
             </div>
             <div className="order-3 col-span-2 flex flex-col items-center justify-center gap-3 rounded-3xl border border-slate-800/60 bg-[#0f1329]/80 p-4 text-center lg:order-none lg:col-span-1 lg:col-start-2 lg:row-start-1 lg:row-end-2 lg:self-stretch lg:justify-self-center lg:p-5">
@@ -1971,12 +2114,19 @@ function BattleArena({ characters, slots, setSlots, onOpenCharacter, pulseKey })
                 <Button variant="gradient" size="sm" onClick={runBattle} className="text-[10px] sm:text-[11px]">
                   Fight
                 </Button>
-                <Button variant="outline" size="sm" onClick={runRandom} className="text-[10px] sm:text-[11px]">
-                  Random Duel
-                </Button>
                 <Button variant="destructive" size="sm" onClick={reset} className="text-[10px] sm:text-[11px]">
                   Reset Arena
                 </Button>
+                {onClose && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={onClose}
+                    className="text-[10px] sm:text-[11px]"
+                  >
+                    Close Arena
+                  </Button>
+                )}
                 <span className="text-[10px] font-semibold tracking-[0.3em] text-slate-400">
                   Tap combatants to view dossiers
                 </span>
@@ -2333,6 +2483,13 @@ function ToolsBar({
     }
   }, [barHeight]);
 
+  useEffect(() => {
+    if (!isMobile) return;
+    if (showArena) {
+      setCollapsed(true);
+    }
+  }, [isMobile, showArena]);
+
   useIsomorphicLayoutEffect(() => {
     if (!heroEl) return undefined;
     const height = barHeight || lastKnownHeight || 0;
@@ -2434,228 +2591,23 @@ function ToolsBar({
                 onChange={(event) => onSortModeChange(event.target.value)}
                 className="w-full appearance-none rounded-xl border border-white/25 bg-black/70 px-3 py-2 pr-9 text-sm font-semibold text-white shadow-inner focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300"
               >
-                <div className="flex items-center justify-between gap-3">
-                  <span>Lore controls hidden</span>
-                  <Button
-                    variant="subtle"
-                    size="sm"
-                    onClick={() => setCollapsed(false)}
-                    className="flex-none"
-                    aria-label="Expand universe controls"
-                  >
-                    <ChevronUp className="h-4 w-4" aria-hidden="true" />
-                    <span className="text-xs font-semibold">Show</span>
-                  </Button>
-                </div>
-              </motion.div>
-            ) : (
-              <motion.div
-                key="toolbar-expanded"
-                ref={setContentEl}
-                layout
-                initial={{ opacity: 0, y: 12 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -12 }}
-                transition={{ duration: 0.25, ease: "easeOut" }}
-                className="rounded-3xl border border-white/12 bg-[#070b1c]/90 px-4 py-3 shadow-[0_18px_48px_rgba(8,8,20,0.45)] backdrop-blur-xl"
-              >
-                <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-                  <label className="relative flex-1 min-w-[220px] sm:min-w-[260px]" htmlFor="universe-search">
-                    <span className="sr-only">Search the universe</span>
-                    <Input
-                      id="universe-search"
-                      value={query}
-                      onChange={(event) => onQueryChange(event.target.value)}
-                      placeholder="Search characters, powers, locations, tags…"
-                      className="w-full bg-white/15 pl-10 pr-3 text-sm text-white placeholder:text-white/60"
-                    />
-                    <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/70" aria-hidden="true" />
-                  </label>
-                  <div className="relative w-full min-w-[160px] sm:w-48">
-                    <span className="sr-only" id="sort-menu-label">
-                      Sort heroes
-                    </span>
-                    <select
-                      aria-labelledby="sort-menu-label"
-                      value={sortMode}
-                      onChange={(event) => onSortModeChange(event.target.value)}
-                      className="w-full appearance-none rounded-xl border border-white/25 bg-black/70 px-3 py-2 pr-9 text-sm font-semibold text-white shadow-inner focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300"
-                    >
-                      {SORT_OPTIONS.map((item) => (
-                        <option key={item.value} value={item.value} className="bg-black text-white">
-                          {item.label}
-                        </option>
-                      ))}
-                    </select>
-                    <ArrowDown className="pointer-events-none absolute right-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-white/70" aria-hidden="true" />
-                  </div>
-                  <Button
-                    variant="gradient"
-                    size="sm"
-                    onClick={onOpenFilters}
-                    className="flex-none shadow-[0_15px_40px_rgba(250,204,21,0.3)]"
-                    aria-label="Open filters"
-                  >
-                    <Filter className="h-4 w-4" aria-hidden="true" />
-                    <span className="text-xs font-semibold sm:text-sm">Filters</span>
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={onClearFilters}
-                    className="flex-none"
-                    aria-label="Clear filters"
-                  >
-                    <X size={14} aria-hidden="true" />
-                    <span className="text-xs font-semibold sm:text-sm">Clear</span>
-                  </Button>
-                  <div className="flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1.5 text-xs font-semibold text-white/85">
-                    <Users className="h-3.5 w-3.5 text-amber-200" aria-hidden="true" />
-                    <span>{countLabel}</span>
-                  </div>
-                  <Button
-                    variant="subtle"
-                    size="sm"
-                    onClick={onArenaToggle}
-                    className={cx("flex-none", showArena ? "ring-2 ring-amber-300/70" : "")}
-                    aria-pressed={showArena}
-                    aria-label={showArena ? "Hide arena" : "Open arena"}
-                  >
-                    <Swords size={14} aria-hidden="true" />
-                    <span className="text-xs font-semibold sm:text-sm">{showArena ? "Hide Arena" : "Arena"}</span>
-                  </Button>
-                  <Button
-                    variant="dark"
-                    size="sm"
-                    onClick={onSync}
-                    className="flex-none"
-                    aria-label="Sync universe"
-                  >
-                    <RefreshCcw size={14} aria-hidden="true" />
-                    <span className="text-xs font-semibold sm:text-sm">Sync</span>
-                  </Button>
-                  <Button
-                    variant={isMobile ? "gradient" : "ghost"}
-                    size={isMobile ? "md" : "sm"}
-                    onClick={() => setCollapsed(true)}
-                    className={cx("flex-none", isMobile ? "ml-auto px-4" : "px-4 sm:px-3")}
-                    aria-label="Collapse universe controls"
-                  >
-                    <ChevronDown className="h-4 w-4" aria-hidden="true" />
-                    <span
-                      className={cx(
-                        "text-xs font-semibold",
-                        isMobile ? "ml-2" : "ml-1 sm:hidden"
-                      )}
-                    >
-                      {isMobile ? "Hide controls" : "Hide"}
-                    </span>
-                  </Button>
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-
-function QuickFilterRail({ data, onFacet, onSortModeChange, sortMode, onOpenFilters }) {
-  const [open, setOpen] = useState(false);
-  const quickSorts = [
-    { value: "default", label: "Featured" },
-    { value: "az", label: "A-Z" },
-    { value: "faction", label: "By Faction" },
-    { value: "most", label: "Most Powerful" },
-  ];
-
-  const topCollections = useMemo(() => {
-    const tally = (getter) => {
-      const counts = new Map();
-      data.forEach((item) => {
-        getter(item).forEach((value) => {
-          if (!value) return;
-          const entry = counts.get(value) || { count: 0 };
-          entry.count += 1;
-          counts.set(value, entry);
-        });
-      });
-      return Array.from(counts.entries())
-        .map(([value, meta]) => ({ value, count: meta.count }))
-        .sort((a, b) => b.count - a.count);
-    };
-
-    const locations = tally((item) => item.locations || []).slice(0, 6);
-    const factions = tally((item) => item.faction || []).slice(0, 6);
-
-    const powerMap = new Map();
-    data.forEach((item) => {
-      (item.powers || []).forEach((power) => {
-        if (!power?.name) return;
-        const entry = powerMap.get(power.name) || { count: 0, total: 0 };
-        entry.count += 1;
-        entry.total += Number(power.level) || 0;
-        powerMap.set(power.name, entry);
-      });
-    });
-    const powers = Array.from(powerMap.entries())
-      .map(([name, meta]) => ({
-        value: name,
-        count: meta.count,
-        avg: meta.count ? meta.total / meta.count : 0,
-      }))
-      .sort((a, b) => {
-        if (b.avg === a.avg) return b.count - a.count;
-        return b.avg - a.avg;
-      })
-      .slice(0, 8);
-
-    return { locations, factions, powers };
-  }, [data]);
-
-  const renderChip = (item, key) => (
-    <button
-      key={`${key}-${item.value}`}
-      type="button"
-      onClick={() => onFacet({ key, value: item.value })}
-      className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/8 px-3 py-1.5 text-xs font-semibold text-white transition hover:border-amber-200/70 hover:bg-amber-200/15"
-    >
-      <span>{item.value}</span>
-      <span className="text-[11px] text-white/60">{item.count}</span>
-    </button>
-  );
-
-  if (!open) {
-    return (
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        className="group flex w-full items-center justify-between rounded-full border border-white/15 bg-white/5 px-4 py-3 text-xs font-semibold uppercase tracking-[0.3em] text-white/70 transition hover:border-white/40 hover:bg-white/10"
-        aria-expanded="false"
-      >
-        <span className="flex items-center gap-2 text-white/80">
-          <Sparkles className="h-4 w-4 text-amber-200" aria-hidden="true" /> Discover quickly
-        </span>
-        <ChevronDown className="h-4 w-4 text-white/60 transition group-hover:text-white" aria-hidden="true" />
-      </button>
-    );
-  }
-
-  return (
-    <Card className="border border-white/15 bg-white/5 backdrop-blur-2xl">
-      <CardContent className="space-y-6">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-2 text-sm font-semibold text-white/80">
-            <Sparkles className="h-4 w-4 text-amber-200" aria-hidden="true" /> Discover quickly
-          </div>
-          <div className="flex items-center gap-2">
+                {SORT_OPTIONS.map((item) => (
+                  <option key={item.value} value={item.value} className="bg-black text-white">
+                    {item.label}
+                  </option>
+                ))}
+              </select>
+              <ArrowDown className="pointer-events-none absolute right-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-white/70" aria-hidden="true" />
+            </div>
             <Button
-              variant="ghost"
+              variant="gradient"
               size="sm"
               onClick={onOpenFilters}
-              className="px-3 text-xs font-semibold text-white/70 hover:text-white"
+              className={cx(
+                "flex-none shadow-[0_15px_40px_rgba(250,204,21,0.3)]",
+                isMobile ? "order-[-1] w-full justify-center gap-2" : ""
+              )}
+              aria-label="Open filters"
             >
               <Filter className="h-4 w-4" aria-hidden="true" />
               <span className="text-xs font-semibold sm:text-sm">Filters</span>
@@ -2664,7 +2616,7 @@ function QuickFilterRail({ data, onFacet, onSortModeChange, sortMode, onOpenFilt
               variant="outline"
               size="sm"
               onClick={onClearFilters}
-              className="flex-none"
+              className={cx("flex-none", isMobile ? "w-full justify-center gap-2" : "")}
               aria-label="Clear filters"
             >
               <X size={14} aria-hidden="true" />
@@ -2678,7 +2630,11 @@ function QuickFilterRail({ data, onFacet, onSortModeChange, sortMode, onOpenFilt
               variant="subtle"
               size="sm"
               onClick={onArenaToggle}
-              className={cx("flex-none", showArena ? "ring-2 ring-amber-300/70" : "")}
+              className={cx(
+                "flex-none",
+                showArena ? "ring-2 ring-amber-300/70" : "",
+                isMobile ? "w-full justify-center gap-2" : ""
+              )}
               aria-pressed={showArena}
               aria-label={showArena ? "Hide arena" : "Open arena"}
             >
@@ -2699,16 +2655,16 @@ function QuickFilterRail({ data, onFacet, onSortModeChange, sortMode, onOpenFilt
               variant={isMobile ? "gradient" : "ghost"}
               size={isMobile ? "md" : "sm"}
               onClick={() => setCollapsed(true)}
-              className={cx("flex-none", isMobile ? "ml-auto px-4" : "px-4 sm:px-3")}
+              className={cx(
+                "flex-none",
+                isMobile
+                  ? "order-[-2] w-full justify-center gap-2 rounded-2xl px-5 py-3 text-sm shadow-[0_18px_48px_rgba(253,230,138,0.35)]"
+                  : "px-4 sm:px-3"
+              )}
               aria-label="Collapse universe controls"
             >
               <ChevronDown className="h-4 w-4" aria-hidden="true" />
-              <span
-                className={cx(
-                  "text-xs font-semibold",
-                  isMobile ? "ml-2" : "ml-1 sm:hidden"
-                )}
-              >
+              <span className="text-xs font-semibold">
                 {isMobile ? "Hide controls" : "Hide"}
               </span>
             </Button>
@@ -2727,7 +2683,7 @@ function QuickFilterRail({ data, onFacet, onSortModeChange, sortMode, onOpenFilt
     );
   } else if (mountEl) {
     renderedToolbar = createPortal(
-      <div className="pointer-events-none px-5 pb-10 sm:px-10 lg:px-20">
+      <div className="pointer-events-none px-5 pt-6 pb-10 sm:px-10 lg:px-20">
         <div className="pointer-events-auto">{renderToolbar()}</div>
       </div>,
       mountEl
@@ -2815,7 +2771,7 @@ function QuickFilterRail({ data, onFacet, onSortModeChange, sortMode, onOpenFilt
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="group flex w-full items-center justify-between rounded-full border border-white/15 bg-white/5 px-4 py-3 text-xs font-semibold uppercase tracking-[0.3em] text-white/70 transition hover:border-white/40 hover:bg-white/10"
+        className="group flex w-full items-center justify-between rounded-full border border-white/15 bg-white/5 px-4 py-2 text-[10px] font-semibold uppercase tracking-[0.45em] text-white/70 transition hover:border-white/40 hover:bg-white/10"
         aria-expanded="false"
       >
         <span className="flex items-center gap-2 text-white/80">
@@ -3530,7 +3486,7 @@ function HeroSection({
               </AnimatePresence>
             </div>
           </div>
-          <div className="flex flex-wrap items-center gap-4 text-sm font-semibold text-white/75">
+          <div className="mt-12 flex flex-wrap items-center gap-4 pb-6 text-sm font-semibold text-white/75">
             <Users className="h-4 w-4" />
             <span>There's more.</span>
             <Button
@@ -3665,6 +3621,10 @@ export default function LoremakerApp({ initialCharacters = [], initialError = nu
       return next;
     });
   }, [focusArena]);
+
+  const closeArena = useCallback(() => {
+    setShowArena(false);
+  }, []);
 
   const filtered = useMemo(
     () => data.filter((c) => matchesFilters(c, filters, combineAND, query)),
@@ -3935,6 +3895,7 @@ export default function LoremakerApp({ initialCharacters = [], initialError = nu
                 setSlots={setArenaSlots}
                 onOpenCharacter={openCharacter}
                 pulseKey={arenaPulseKey}
+                onClose={closeArena}
               />
             </div>
           )}
@@ -3963,84 +3924,6 @@ export default function LoremakerApp({ initialCharacters = [], initialError = nu
               onUseInSim={onUseInSim}
               highlightId={highlightedId}
             />
-          </div>
-        </div>
-      </footer>
-
-      <footer className="border-t border-white/10 bg-black/50 backdrop-blur-2xl">
-        <div className="mx-auto max-w-7xl px-3 py-10 sm:px-4">
-          <div className="grid gap-8 md:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)]">
-            <div className="space-y-4">
-              <p className="text-xs font-black tracking-[0.35em] text-white/70">LoreMaker Universe</p>
-              <p className="text-[11px] font-semibold tracking-[0.3em] text-white/60">
-                © {currentYear} Menelek Makonnen.
-              </p>
-              <p className="text-[11px] font-semibold tracking-[0.3em] text-white/60">
-                All characters, stories, lore, and artwork from the LoreMaker Universe are protected by copyright.
-              </p>
-            </div>
-            <div className="space-y-4">
-              <p className="text-xs font-black tracking-[0.35em] text-white/70">Explore</p>
-              <div className="flex flex-col gap-2">
-                <Button
-                  as="a"
-                  href="#arena-anchor"
-                  variant="subtle"
-                  size="sm"
-                  className="justify-start gap-2 px-4 text-[10px] tracking-[0.3em]"
-                >
-                  <Swords className="h-4 w-4" aria-hidden="true" />
-                  Battle Arena
-                </Button>
-                <Button
-                  type="button"
-                  onClick={handleRandomCharacter}
-                  variant="subtle"
-                  size="sm"
-                  className="justify-start gap-2 px-4 text-[10px] tracking-[0.3em]"
-                >
-                  <Sparkles className="h-4 w-4" aria-hidden="true" />
-                  Random Character
-                </Button>
-                <Button
-                  as="a"
-                  href="#characters-grid"
-                  variant="subtle"
-                  size="sm"
-                  className="justify-start gap-2 px-4 text-[10px] tracking-[0.3em]"
-                >
-                  <Users className="h-4 w-4" aria-hidden="true" />
-                  Character Archive
-                </Button>
-              </div>
-            </div>
-            <div className="space-y-4">
-              <p className="text-xs font-black tracking-[0.35em] text-white/70">Connect</p>
-              <div className="flex flex-col gap-2">
-                <Button
-                  as="a"
-                  href="https://menelekmakonnen.com"
-                  target="_blank"
-                  rel="noreferrer"
-                  variant="subtle"
-                  size="sm"
-              className="justify-start gap-2 px-4 text-[10px] tracking-[0.3em]"
-            >
-              <ArrowRight className="h-4 w-4" aria-hidden="true" />
-              Menelek Makonnen
-            </Button>
-                <Button
-                  type="button"
-                  onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
-                  variant="ghost"
-                  size="sm"
-                  className="justify-start gap-2 px-4 text-[10px] tracking-[0.3em] text-white/70 hover:text-white"
-                >
-                  <ArrowUp className="h-4 w-4" aria-hidden="true" />
-                  Back to Top
-                </Button>
-              </div>
-            </div>
           </div>
         </div>
       </footer>
