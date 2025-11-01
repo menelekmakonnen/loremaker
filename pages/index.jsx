@@ -5,6 +5,7 @@ import React, {
   useRef,
   useState,
   useId,
+  useLayoutEffect,
 } from "react";
 import { AnimatePresence, motion, useMotionValue, useSpring, useTransform } from "framer-motion";
 import {
@@ -28,6 +29,10 @@ import {
   Crown,
   Swords,
   Sparkles,
+  ShieldCheck,
+  HeartPulse,
+  Skull,
+  Circle,
 } from "lucide-react";
 import {
   computeFeatured,
@@ -51,6 +56,22 @@ function cx(...classes) {
 
 function clamp(value, min, max) {
   return Math.min(Math.max(value, min), max);
+}
+
+const useIsomorphicLayoutEffect = typeof window !== "undefined" ? useLayoutEffect : useEffect;
+
+const STATUS_PRESETS = [
+  { test: /active|alive/i, label: "Active", dot: "bg-emerald-400", ring: "ring-emerald-400/60", icon: ShieldCheck },
+  { test: /deceased|dead|fallen/i, label: "Fallen", dot: "bg-rose-400", ring: "ring-rose-400/60", icon: Skull },
+  { test: /missing|unknown|undisclosed/i, label: "Unknown", dot: "bg-indigo-300", ring: "ring-indigo-300/60", icon: Circle },
+  { test: /retired|dormant|inactive/i, label: "Dormant", dot: "bg-amber-300", ring: "ring-amber-300/60", icon: HeartPulse },
+];
+
+function statusVisual(status) {
+  if (!status) return null;
+  const preset = STATUS_PRESETS.find((entry) => entry.test.test(status));
+  if (!preset) return null;
+  return preset;
 }
 
 function Button({ variant = "solid", size = "md", className = "", children, as: Tag = "button", ...props }) {
@@ -858,7 +879,6 @@ function ImageSafe({ src, alt, className = "", fallbackLabel }) {
       className={className}
       loading="lazy"
       referrerPolicy="no-referrer"
-      crossOrigin="anonymous"
       decoding="async"
     />
   );
@@ -963,10 +983,12 @@ function CharacterCard({ char, onOpen, onFacet, onUseInSim, highlight }) {
   const minimalFilters = quickFilters.slice(0, 3);
   const description = char.shortDesc || char.longDesc || "No description yet.";
   const heroImage = char.cover || char.gallery?.[0];
-  const accentLabel = highlightFacts.join(" • ") || char.era || char.alignment || "LoreMaker";
+  const accentLabel = (char.locations || [])[0] || char.era || char.status || "LoreMaker dossier";
   const shortCaption =
     description.length > 150 ? `${description.slice(0, 147).trimEnd()}…` : description;
   const primaryAlias = Array.isArray(char.alias) ? char.alias[0] : char.alias;
+  const statusMeta = statusVisual(char.status);
+  const alignmentLabel = char.alignment || "Unaligned";
   const openProfile = () => onOpen(char);
   const handleProfileKey = (event) => {
     if (event.key === "Enter" || event.key === " ") {
@@ -995,7 +1017,12 @@ function CharacterCard({ char, onOpen, onFacet, onUseInSim, highlight }) {
             onKeyDown={handleProfileKey}
             className="group relative block"
           >
-            <div className="relative aspect-[4/5] overflow-hidden">
+            <div
+              className={cx(
+                "relative aspect-[4/5] overflow-hidden rounded-[28px] border border-white/15",
+                statusMeta?.ring
+              )}
+            >
               <ImageSafe
                 src={heroImage}
                 alt={char.name}
@@ -1003,12 +1030,19 @@ function CharacterCard({ char, onOpen, onFacet, onUseInSim, highlight }) {
                 className="h-full w-full object-cover transition duration-700 ease-out group-hover:scale-105"
               />
               <div className="absolute inset-x-0 bottom-0 flex flex-col gap-1 bg-gradient-to-t from-black/90 via-black/35 to-transparent p-4">
-                <div className="text-[10px] font-semibold tracking-[0.35em] text-white/70">{accentLabel}</div>
+                <div className="text-xs font-semibold text-white/80">{accentLabel}</div>
                 <h3 className="text-lg font-black leading-tight text-white">{char.name}</h3>
                 {primaryAlias && (
-                  <span className="text-[11px] font-semibold tracking-[0.3em] text-white/55">{primaryAlias}</span>
+                  <span className="text-[11px] font-semibold text-white/65">{primaryAlias}</span>
                 )}
               </div>
+              {statusMeta && (
+                <span className="absolute left-3 top-3 inline-flex items-center gap-2 rounded-full border border-white/25 bg-black/60 px-3 py-1 text-[11px] font-semibold text-white shadow-md">
+                  <statusMeta.icon className="h-3.5 w-3.5 text-white/80" aria-hidden="true" />
+                  <span>{statusMeta.label}</span>
+                  <span className={cx("h-2 w-2 rounded-full", statusMeta.dot)} />
+                </span>
+              )}
             </div>
           </div>
           <button
@@ -1024,7 +1058,18 @@ function CharacterCard({ char, onOpen, onFacet, onUseInSim, highlight }) {
           </button>
         </div>
         <div className="flex flex-1 flex-col justify-between px-4 pb-4 pt-3 text-white/80">
-          <p className="text-sm font-semibold leading-relaxed text-white/75">{shortCaption}</p>
+          <div className="flex items-center gap-2">
+            <span className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-3 py-1 text-[11px] font-semibold text-white">
+              <span>{alignmentLabel}</span>
+              {statusMeta && (
+                <span className="flex items-center gap-1 text-white/70">
+                  <span className={cx("h-2 w-2 rounded-full", statusMeta.dot)} />
+                  {statusMeta.label}
+                </span>
+              )}
+            </span>
+          </div>
+          <p className="mt-3 text-sm font-semibold leading-relaxed text-white/75">{shortCaption}</p>
           <div className="mt-4 flex flex-wrap gap-2">
             {minimalFilters.map((item) => (
               <button
@@ -1034,13 +1079,13 @@ function CharacterCard({ char, onOpen, onFacet, onUseInSim, highlight }) {
                   event.stopPropagation();
                   onFacet?.(item);
                 }}
-                className="rounded-full border border-white/25 bg-white/10 px-3 py-1 text-[10px] font-bold tracking-[0.3em] text-white/75 transition hover:bg-white/20"
+                className="rounded-full border border-white/25 bg-white/10 px-3 py-1 text-[11px] font-semibold text-white/80 transition hover:bg-white/20"
               >
                 {item.value}
               </button>
             ))}
             {!minimalFilters.length && !!highlightFacts.length && (
-              <span className="rounded-full border border-white/15 bg-white/10 px-3 py-1 text-[10px] font-bold tracking-[0.3em] text-white/65">
+              <span className="rounded-full border border-white/15 bg-white/10 px-3 py-1 text-[11px] font-semibold text-white/70">
                 {highlightFacts.join(" • ")}
               </span>
             )}
@@ -1053,7 +1098,7 @@ function CharacterCard({ char, onOpen, onFacet, onUseInSim, highlight }) {
                 event.stopPropagation();
                 openProfile();
               }}
-              className="px-4 text-[10px] font-bold tracking-[0.3em] text-white/70 transition hover:text-white"
+              className="px-4 text-xs font-semibold text-white/70 transition hover:text-white"
             >
               View Profile
             </Button>
@@ -1173,13 +1218,13 @@ function CharacterModal({ open, onClose, char, onFacet, onUseInSim }) {
               {char.era && <div className="text-[11px] font-extrabold tracking-[0.3em] text-white/70">{char.era}</div>}
             </div>
           </div>
-          <div className="ml-auto flex flex-1 items-center gap-2 sm:flex-none sm:justify-end">
+          <div className="ml-auto flex items-center gap-3 sm:gap-2">
             <Button
               variant="gradient"
               size="sm"
               onClick={() => onUseInSim(char)}
               aria-label="Send to arena"
-              className="mx-auto flex h-11 w-11 items-center justify-center rounded-full px-0 py-0"
+              className="flex h-12 w-12 items-center justify-center rounded-full px-0 py-0 sm:h-11 sm:w-11"
             >
               <Swords size={18} />
             </Button>
@@ -1920,21 +1965,10 @@ function SidebarFilters({ data, filters, setFilters, combineAND, setCombineAND, 
           <Switch checked={combineAND} onCheckedChange={setCombineAND} aria-describedby={blendTooltipId} />
         </div>
       </div>
-      <div>
-        <label className="text-[11px] font-semibold tracking-[0.3em] text-white/60">
-          Search all filters
-        </label>
-        <div className="relative mt-2">
-          <Input
-            value={searchTerm}
-            onChange={(event) => setSearchTerm(event.target.value)}
-            placeholder="Type to narrow filters"
-            className="bg-black/40 pr-9 text-xs font-semibold text-white placeholder:text-white/50"
-            type="search"
-          />
-          <Search className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/60" aria-hidden="true" />
-        </div>
-      </div>
+      <p className="text-[11px] font-semibold leading-relaxed text-white/65">
+        Use the global search above the codex for anything specific. These filters stay open so you can tap through factions,
+        locations, powers, and more without losing your place.
+      </p>
       <p id={blendTooltipId} className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-[11px] font-semibold leading-relaxed text-white/70">
         Blend finds legends that match any of your selections. Switch to AND for precise dossiers that match every chosen filter.
       </p>
@@ -2171,8 +2205,9 @@ function ToolsBar({
   const [floatingTop, setFloatingTop] = useState(0);
   const [collapsed, setCollapsed] = useState(false);
   const [contentEl, setContentEl] = useState(null);
+  const [ready, setReady] = useState(false);
 
-  useEffect(() => {
+  useIsomorphicLayoutEffect(() => {
     if (!contentEl || typeof ResizeObserver === "undefined") return undefined;
     const observer = new ResizeObserver((entries) => {
       const entry = entries[0];
@@ -2191,7 +2226,7 @@ function ToolsBar({
     }
   }, [barHeight]);
 
-  useEffect(() => {
+  useIsomorphicLayoutEffect(() => {
     if (typeof window === "undefined") return undefined;
     const hero = document.getElementById("hero-showcase");
     if (!hero) return undefined;
@@ -2203,22 +2238,28 @@ function ToolsBar({
       if (!height) {
         setMode("static");
         setFloatingTop(0);
+        setReady(false);
         return;
       }
 
       const heroBottom = rect.bottom;
       const threshold = height + 4;
+      hero.style.setProperty("--toolbar-offset", `${Math.ceil(height + 32)}px`);
 
       if (heroBottom <= threshold) {
         setMode("fixed");
         setFloatingTop(0);
+        setReady(true);
         return;
       }
 
       const attachedTop = heroBottom - height;
-      const safe = clamp(attachedTop, 0, Math.max(viewHeight - height, 0));
+      const maxTop = Math.max(viewHeight - height, 0);
+      const safe = clamp(attachedTop, 0, maxTop);
       setMode("attached");
       setFloatingTop(safe);
+      hero.style.setProperty("--toolbar-offset", `${Math.ceil(height + 32)}px`);
+      setReady(true);
     };
 
     update();
@@ -2228,11 +2269,12 @@ function ToolsBar({
     return () => {
       window.removeEventListener("scroll", update);
       window.removeEventListener("resize", update);
+      hero.style.removeProperty("--toolbar-offset");
     };
   }, [barHeight, lastKnownHeight]);
 
   const effectiveHeight = barHeight || lastKnownHeight || 0;
-  const isFloating = mode !== "static";
+  const isFloating = ready && mode !== "static";
   const safeTop = mode === "fixed" ? 0 : floatingTop;
   const placeholderHeight = isFloating ? effectiveHeight : 0;
   const countLabel = hasActiveFilters ? `${filteredCount} / ${totalCount} in view` : `${totalCount} catalogued`;
@@ -2303,7 +2345,7 @@ function ToolsBar({
                       aria-labelledby="sort-menu-label"
                       value={sortMode}
                       onChange={(event) => onSortModeChange(event.target.value)}
-                      className="w-full appearance-none rounded-xl border border-white/25 bg-black/70 px-3 py-2 pr-9 text-[11px] font-bold tracking-wide text-white/85 shadow-inner focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300 sm:text-xs"
+                      className="w-full appearance-none rounded-xl border border-white/25 bg-black/70 px-3 py-2 pr-9 text-sm font-semibold text-white shadow-inner focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300"
                     >
                       {SORT_OPTIONS.map((item) => (
                         <option key={item.value} value={item.value} className="bg-black text-white">
@@ -2321,7 +2363,7 @@ function ToolsBar({
                     aria-label="Open filters"
                   >
                     <Filter className="h-4 w-4" aria-hidden="true" />
-                    <span className="hidden sm:inline">Filters</span>
+                    <span className="text-xs font-semibold sm:text-sm">Filters</span>
                   </Button>
                   <Button
                     variant="outline"
@@ -2331,9 +2373,9 @@ function ToolsBar({
                     aria-label="Clear filters"
                   >
                     <X size={14} aria-hidden="true" />
-                    <span className="hidden sm:inline">Clear</span>
+                    <span className="text-xs font-semibold sm:text-sm">Clear</span>
                   </Button>
-                  <div className="flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1.5 text-[10px] font-semibold tracking-[0.25em] text-white/80">
+                  <div className="flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1.5 text-xs font-semibold text-white/85">
                     <Users className="h-3.5 w-3.5 text-amber-200" aria-hidden="true" />
                     <span>{countLabel}</span>
                   </div>
@@ -2346,7 +2388,7 @@ function ToolsBar({
                     aria-label={showArena ? "Hide arena" : "Open arena"}
                   >
                     <Swords size={14} aria-hidden="true" />
-                    <span className="hidden sm:inline">{showArena ? "Hide Arena" : "Arena"}</span>
+                    <span className="text-xs font-semibold sm:text-sm">{showArena ? "Hide Arena" : "Arena"}</span>
                   </Button>
                   <Button
                     variant="dark"
@@ -2356,16 +2398,17 @@ function ToolsBar({
                     aria-label="Sync universe"
                   >
                     <RefreshCcw size={14} aria-hidden="true" />
-                    <span className="hidden sm:inline">Sync</span>
+                    <span className="text-xs font-semibold sm:text-sm">Sync</span>
                   </Button>
                   <Button
                     variant="ghost"
                     size="sm"
                     onClick={() => setCollapsed(true)}
-                    className="flex-none"
+                    className="flex-none px-4 sm:px-3"
                     aria-label="Collapse universe controls"
                   >
                     <ChevronDown className="h-4 w-4" aria-hidden="true" />
+                    <span className="ml-1 text-xs font-semibold sm:hidden">Hide</span>
                   </Button>
                 </div>
               </motion.div>
@@ -2378,10 +2421,132 @@ function ToolsBar({
 }
 
 
+function QuickFilterRail({ data, onFacet, onSortModeChange, sortMode, onOpenFilters }) {
+  const quickSorts = [
+    { value: "default", label: "Featured" },
+    { value: "az", label: "A-Z" },
+    { value: "faction", label: "By Faction" },
+    { value: "most", label: "Most Powerful" },
+  ];
+
+  const topCollections = useMemo(() => {
+    const tally = (getter) => {
+      const counts = new Map();
+      data.forEach((item) => {
+        getter(item).forEach((value) => {
+          if (!value) return;
+          const entry = counts.get(value) || { count: 0 };
+          entry.count += 1;
+          counts.set(value, entry);
+        });
+      });
+      return Array.from(counts.entries())
+        .map(([value, meta]) => ({ value, count: meta.count }))
+        .sort((a, b) => b.count - a.count);
+    };
+
+    const locations = tally((item) => item.locations || []).slice(0, 6);
+    const factions = tally((item) => item.faction || []).slice(0, 6);
+
+    const powerMap = new Map();
+    data.forEach((item) => {
+      (item.powers || []).forEach((power) => {
+        if (!power?.name) return;
+        const entry = powerMap.get(power.name) || { count: 0, total: 0 };
+        entry.count += 1;
+        entry.total += Number(power.level) || 0;
+        powerMap.set(power.name, entry);
+      });
+    });
+    const powers = Array.from(powerMap.entries())
+      .map(([name, meta]) => ({
+        value: name,
+        count: meta.count,
+        avg: meta.count ? meta.total / meta.count : 0,
+      }))
+      .sort((a, b) => {
+        if (b.avg === a.avg) return b.count - a.count;
+        return b.avg - a.avg;
+      })
+      .slice(0, 8);
+
+    return { locations, factions, powers };
+  }, [data]);
+
+  const renderChip = (item, key) => (
+    <button
+      key={`${key}-${item.value}`}
+      type="button"
+      onClick={() => onFacet({ key, value: item.value })}
+      className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/8 px-3 py-1.5 text-xs font-semibold text-white transition hover:border-amber-200/70 hover:bg-amber-200/15"
+    >
+      <span>{item.value}</span>
+      <span className="text-[11px] text-white/60">{item.count}</span>
+    </button>
+  );
+
+  return (
+    <Card className="border border-white/15 bg-white/5 backdrop-blur-2xl">
+      <CardContent className="space-y-6">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="text-sm font-semibold text-white/80">Discover quickly</div>
+          <Button variant="ghost" size="sm" onClick={onOpenFilters} className="px-3 text-xs font-semibold text-white/70 hover:text-white">
+            Open full filters
+          </Button>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          {quickSorts.map((item) => (
+            <button
+              key={item.value}
+              type="button"
+              onClick={() => onSortModeChange(item.value)}
+              className={cx(
+                "rounded-full border px-4 py-1.5 text-xs font-semibold transition",
+                sortMode === item.value
+                  ? "border-amber-200/80 bg-amber-200/20 text-white"
+                  : "border-white/20 bg-white/5 text-white/75 hover:border-white/40 hover:bg-white/10"
+              )}
+            >
+              {item.label}
+            </button>
+          ))}
+        </div>
+        {!!topCollections.factions.length && (
+          <div className="space-y-2">
+            <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-white/60">
+              <ShieldCheck className="h-4 w-4 text-amber-200" /> Factions
+            </div>
+            <div className="flex flex-wrap gap-2">{topCollections.factions.map((item) => renderChip(item, "faction"))}</div>
+          </div>
+        )}
+        {!!topCollections.locations.length && (
+          <div className="space-y-2">
+            <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-white/60">
+              <MapPin className="h-4 w-4 text-amber-200" /> Locations
+            </div>
+            <div className="flex flex-wrap gap-2">{topCollections.locations.map((item) => renderChip(item, "locations"))}</div>
+          </div>
+        )}
+        {!!topCollections.powers.length && (
+          <div className="space-y-2">
+            <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-white/60">
+              <HeartPulse className="h-4 w-4 text-amber-200" /> Top Powers
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {topCollections.powers.map((item) => renderChip(item, "powers"))}
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+
 function FilterSection({ title, values, single, activeValues, onToggle, searchTerm }) {
   const currentValues = single ? (activeValues ? [activeValues] : []) : activeValues || [];
   const filteredValues = useMemo(() => {
-    const term = searchTerm.trim().toLowerCase();
+    const term = (searchTerm || "").trim().toLowerCase();
     if (!term) return values;
     return values.filter((value) => value.toLowerCase().includes(term));
   }, [values, searchTerm]);
@@ -2436,6 +2601,53 @@ function HeroSection({
   const [index, setIndex] = useState(0);
   const [direction, setDirection] = useState(1);
   const autoPlayed = useRef(false);
+  const [snippetIndex, setSnippetIndex] = useState(0);
+
+  useEffect(() => () => {
+    rippleTimers.current.forEach((timeout) => clearTimeout(timeout));
+    rippleTimers.current.clear();
+  }, []);
+
+  const updatePointerFromEvent = useCallback((event) => {
+    const rect = heroRef.current?.getBoundingClientRect();
+    if (!rect) return null;
+    const x = clamp(((event.clientX - rect.left) / rect.width) * 100, 5, 95);
+    const y = clamp(((event.clientY - rect.top) / rect.height) * 100, 5, 95);
+    return { x, y };
+  }, []);
+
+  const registerRipple = useCallback((coords) => {
+    const id = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    setRipples((prev) => [...prev, { id, ...coords }]);
+    const timeout = setTimeout(() => {
+      rippleTimers.current.delete(id);
+      setRipples((prev) => prev.filter((item) => item.id !== id));
+    }, 900);
+    rippleTimers.current.set(id, timeout);
+  }, []);
+
+  const handlePointerMove = useCallback(
+    (event) => {
+      const coords = updatePointerFromEvent(event);
+      if (coords) setPointer(coords);
+    },
+    [updatePointerFromEvent]
+  );
+
+  const handlePointerLeave = useCallback(() => {
+    setPointer({ x: 50, y: 50 });
+  }, []);
+
+  const handlePointerDown = useCallback(
+    (event) => {
+      const coords = updatePointerFromEvent(event);
+      if (coords) {
+        setPointer(coords);
+        registerRipple(coords);
+      }
+    },
+    [registerRipple, updatePointerFromEvent]
+  );
 
   useEffect(() => () => {
     rippleTimers.current.forEach((timeout) => clearTimeout(timeout));
@@ -2500,6 +2712,18 @@ function HeroSection({
 
   const current = slides[index] || slides[0];
 
+  useEffect(() => {
+    if (current?.key !== "character") {
+      setSnippetIndex(0);
+      return undefined;
+    }
+    setSnippetIndex(0);
+    const timer = setInterval(() => {
+      setSnippetIndex((value) => value + 1);
+    }, 4200);
+    return () => clearInterval(timer);
+  }, [current?.key, current?.data?.id]);
+
   const goPrev = () => {
     setDirection(-1);
     setIndex((prev) => (prev - 1 + slides.length) % slides.length);
@@ -2526,6 +2750,13 @@ function HeroSection({
     const topPowers = [...(char.powers || [])]
       .sort((a, b) => (Number(b.level) || 0) - (Number(a.level) || 0))
       .slice(0, 3);
+    const primaryLocation = (char.locations || [])[0];
+    const snippets = [
+      char.shortDesc,
+      char.longDesc ? `${char.longDesc.slice(0, 160).trimEnd()}${char.longDesc.length > 160 ? "…" : ""}` : null,
+      topPowers[0] ? `Known for ${topPowers[0].name}` : null,
+    ].filter(Boolean);
+    const activeSnippet = snippets.length ? snippets[snippetIndex % snippets.length] : null;
     const openProfile = () => onOpenCharacter?.(char);
     const handleFacetClick = (event, payload) => {
       event.stopPropagation();
@@ -2580,23 +2811,45 @@ function HeroSection({
               </FacetChip>
             ))}
           </div>
-          <div className="space-y-3">
-            <div className="flex items-center gap-2 text-[11px] font-bold tracking-wide text-white/70 sm:text-xs">
-              <Atom size={14} /> Top Powers
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {topPowers.map((power) => (
-                <button
-                  key={power.name}
+            <div className="space-y-3">
+              <div className="flex items-center gap-2 text-[11px] font-bold tracking-wide text-white/70 sm:text-xs">
+                <Atom size={14} /> Top Powers
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {topPowers.map((power) => (
+                  <button
+                    key={power.name}
                   type="button"
                   onClick={(event) => handleFacetClick(event, { key: "powers", value: power.name })}
                   className="rounded-full bg-white/10 px-3 py-1 text-[11px] font-bold tracking-wide text-white/90 transition hover:bg-white/20"
                 >
                   {power.name} • {power.level}/10
                 </button>
-              ))}
+                ))}
+              </div>
+              {(primaryLocation || activeSnippet) && (
+                <div className="grid gap-3 rounded-2xl border border-white/15 bg-white/5 p-4 text-[11px] font-semibold text-white/75 sm:grid-cols-2 sm:text-sm">
+                  {primaryLocation && (
+                    <div className="flex items-start gap-2">
+                      <MapPin className="mt-0.5 h-4 w-4 text-amber-200" aria-hidden="true" />
+                      <div>
+                        <div className="text-white">Based in</div>
+                        <div className="text-white/80">{primaryLocation}</div>
+                      </div>
+                    </div>
+                  )}
+                  {activeSnippet && (
+                    <div className="flex items-start gap-2">
+                      <Sparkles className="mt-0.5 h-4 w-4 text-fuchsia-200" aria-hidden="true" />
+                      <div>
+                        <div className="text-white">Lore spotlight</div>
+                        <p className="text-white/80">{activeSnippet}</p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
-          </div>
         </div>
         <div className="relative z-10 mt-6 flex flex-1 items-end justify-end gap-4 lg:mt-0 lg:flex-col">
           {accentImages.map((src, idx) => (
@@ -2788,14 +3041,14 @@ function HeroSection({
       <div className="absolute inset-x-0 top-0 h-32 bg-gradient-to-b from-black/50 to-transparent" />
       <div className="absolute -left-24 bottom-0 h-72 w-72 rounded-full bg-amber-400/15 blur-3xl" />
       <div className="absolute -right-20 -top-10 h-72 w-72 rounded-full bg-fuchsia-500/15 blur-3xl" />
-      <div className="relative z-10 mx-auto flex min-h-screen w-full max-w-[110rem] flex-col px-6 pb-28 pt-10 sm:px-12 lg:px-20">
+      <div className="relative z-10 mx-auto flex min-h-screen w-full max-w-[124rem] flex-col px-5 pb-[var(--toolbar-offset,7rem)] pt-10 sm:px-10 lg:px-20">
         <header
           id="lore-header"
-          className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-white/20 bg-black/55 px-5 py-2.5 backdrop-blur-2xl"
+          className="flex flex-wrap items-center justify-between gap-4 rounded-[28px] border border-white/30 bg-black/60 px-5 py-2 backdrop-blur-3xl shadow-[0_20px_60px_rgba(8,10,26,0.55)]"
         >
           <div className="flex items-center gap-3">
             <LoreShield onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })} />
-            <div className="flex flex-col gap-1 text-[11px] font-semibold tracking-[0.12em] text-white/80">
+            <div className="flex flex-col gap-1 text-xs font-semibold text-white/80 sm:text-sm">
               <span className="hidden sm:inline">Pulse of the Loremaker</span>
               <div className="flex flex-wrap items-center gap-2">
                 <button
@@ -2812,7 +3065,7 @@ function HeroSection({
                   rel="noreferrer"
                   variant="subtle"
                   size="sm"
-                  className="px-3 py-1 text-[11px] font-semibold tracking-[0.18em] text-white/85"
+                  className="px-3 py-1 text-xs font-semibold text-white/85"
                 >
                   Creator Profile
                 </Button>
@@ -2823,48 +3076,51 @@ function HeroSection({
             <Button
               variant="ghost"
               size="sm"
-              className="h-10 w-10 p-0"
+              className="flex items-center gap-2 px-3"
               onClick={onOpenFilters}
               aria-label="Open filters"
             >
               <Filter className="h-4 w-4" />
+              <span className="text-xs font-semibold">Filters</span>
             </Button>
             <Button
               variant={showArena ? "subtle" : "ghost"}
               size="sm"
-              className="h-10 w-10 p-0"
+              className="flex items-center gap-2 px-3"
               onClick={onToggleArena}
               aria-label={showArena ? "Hide arena" : "Open arena"}
               aria-pressed={showArena}
             >
               <Swords className="h-4 w-4" />
+              <span className="text-xs font-semibold">Arena</span>
             </Button>
             <Button
               variant="ghost"
               size="sm"
-              className="h-10 w-10 p-0"
+              className="flex items-center gap-2 px-3"
               onClick={onSync}
               aria-label="Sync universe"
             >
               <RefreshCcw className="h-4 w-4" />
+              <span className="text-xs font-semibold">Sync</span>
             </Button>
           </div>
           <div className="hidden items-center gap-2 sm:flex">
             <Button
               variant="ghost"
               size="sm"
-              className="inline-flex items-center gap-2 px-4"
+              className="inline-flex items-center gap-2 px-4 text-sm font-semibold"
               onClick={onOpenFilters}
               aria-label="Open filters"
             >
               <Filter className="h-4 w-4" aria-hidden="true" />
-              <span className="text-xs font-semibold tracking-[0.18em]">Launch filters</span>
+              <span>Launch filters</span>
             </Button>
             <Button
               variant={showArena ? "subtle" : "ghost"}
               size="sm"
               className={cx(
-                "inline-flex items-center gap-2 px-4",
+                "inline-flex items-center gap-2 px-4 text-sm font-semibold",
                 showArena ? "border border-amber-200/60 bg-amber-200/20" : ""
               )}
               onClick={onToggleArena}
@@ -2872,19 +3128,17 @@ function HeroSection({
               aria-pressed={showArena}
             >
               <Swords className="h-4 w-4" aria-hidden="true" />
-              <span className="text-xs font-semibold tracking-[0.18em]">
-                {showArena ? "Hide arena" : "Battle arena"}
-              </span>
+              <span>{showArena ? "Hide arena" : "Battle arena"}</span>
             </Button>
             <Button
               variant="ghost"
               size="sm"
-              className="inline-flex items-center gap-2 px-4"
+              className="inline-flex items-center gap-2 px-4 text-sm font-semibold"
               onClick={onSync}
               aria-label="Sync universe"
             >
               <RefreshCcw className="h-4 w-4" aria-hidden="true" />
-              <span className="text-xs font-semibold tracking-[0.18em]">Sync</span>
+              <span>Sync</span>
             </Button>
           </div>
         </header>
@@ -3187,8 +3441,16 @@ export default function LoremakerApp({ initialCharacters = [], initialError = nu
             </div>
           )}
 
+          <QuickFilterRail
+            data={sorted}
+            onFacet={handleFacet}
+            onSortModeChange={setSortMode}
+            sortMode={sortMode}
+            onOpenFilters={() => setFiltersOpen(true)}
+          />
+
           <section className="flex flex-wrap items-center justify-between gap-3">
-            <div className="flex flex-wrap items-center gap-2 text-xs font-semibold tracking-[0.3em] text-white/60">
+            <div className="flex flex-wrap items-center gap-2 text-xs font-semibold text-white/70">
               <Users size={14} /> {filtered.length} heroes ready
             </div>
           </section>
@@ -3203,7 +3465,7 @@ export default function LoremakerApp({ initialCharacters = [], initialError = nu
             />
           </div>
         </div>
-      </main>
+      </footer>
 
       <footer className="border-t border-white/10 bg-black/50 backdrop-blur-2xl">
         <div className="mx-auto max-w-7xl px-3 py-10 sm:px-4">
