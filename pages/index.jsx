@@ -1210,6 +1210,7 @@ function CharacterCard({ char, onOpen, onFacet, onUseInSim, highlight }) {
 function Gallery({ images, cover, name }) {
   const [index, setIndex] = useState(0);
   const [lightboxOpen, setLightboxOpen] = useState(false);
+  const pointerStart = useRef(null);
   const sources = useMemo(() => [cover, ...(images || [])].filter(Boolean), [cover, images]);
 
   useEffect(() => {
@@ -1234,6 +1235,45 @@ function Gallery({ images, cover, name }) {
     if (sources.length) setLightboxOpen(true);
   }, [sources.length]);
 
+  const handlePointerDown = useCallback((event) => {
+    if (event.pointerType === "mouse" && event.button !== 0) return;
+    pointerStart.current = {
+      x: event.clientX,
+      y: event.clientY,
+      pointerId: event.pointerId,
+      target: event.currentTarget,
+    };
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+  }, []);
+
+  const handlePointerUp = useCallback(
+    (event) => {
+      if (!pointerStart.current) return;
+      const start = pointerStart.current;
+      if (start.pointerId !== event.pointerId) return;
+      start.target?.releasePointerCapture?.(event.pointerId);
+      pointerStart.current = null;
+      const dx = event.clientX - start.x;
+      const dy = event.clientY - start.y;
+      if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 40) {
+        if (dx < 0) {
+          goNext();
+        } else {
+          goPrevious();
+        }
+      }
+    },
+    [goNext, goPrevious]
+  );
+
+  const resetPointer = useCallback((event) => {
+    if (!pointerStart.current) return;
+    const start = pointerStart.current;
+    if (event?.pointerId && start.pointerId && event.pointerId !== start.pointerId) return;
+    start.target?.releasePointerCapture?.(start.pointerId);
+    pointerStart.current = null;
+  }, []);
+
   const closeLightbox = useCallback(() => setLightboxOpen(false), []);
 
   if (!sources.length) {
@@ -1251,6 +1291,10 @@ function Gallery({ images, cover, name }) {
       <div
         className="group relative overflow-hidden rounded-[32px] border border-white/12 bg-black/40 shadow-[0_24px_80px_rgba(8,10,20,0.45)]"
         data-gallery-root
+        onPointerDown={handlePointerDown}
+        onPointerUp={handlePointerUp}
+        onPointerLeave={resetPointer}
+        onPointerCancel={resetPointer}
       >
         <div className="aspect-[3/4] w-full">
           <ImageSafe
@@ -1318,6 +1362,11 @@ function Gallery({ images, cover, name }) {
             <div
               className="flex max-h-[80vh] w-full max-w-4xl items-center justify-center gap-4"
               onClick={(event) => event.stopPropagation()}
+              onPointerDown={handlePointerDown}
+              onPointerUp={handlePointerUp}
+              onPointerLeave={resetPointer}
+              onPointerCancel={resetPointer}
+              data-gallery-root
             >
               {sources.length > 1 && (
                 <button
@@ -2802,7 +2851,7 @@ function ToolsBar({
           )}
         >
           {isMobile ? (
-            <div className="space-y-2">
+            <div className="flex flex-col gap-2">
               <div className="flex items-center gap-1">
                 <label className="relative flex-1">
                   <span className="sr-only" id="universe-search-label">
@@ -2825,65 +2874,62 @@ function ToolsBar({
                     const next = SORT_OPTIONS[(currentIndex + 1) % SORT_OPTIONS.length];
                     onSortModeChange(next.value);
                   }}
-                  className="inline-flex h-10 w-10 flex-none items-center justify-center rounded-xl border border-white/20 bg-white/10 text-white transition hover:bg-white/20"
-                  aria-label="Cycle sort order"
+                  className="inline-flex h-10 flex-none items-center justify-center gap-1 rounded-xl border border-white/20 bg-white/10 px-3 text-xs font-semibold text-white transition hover:bg-white/20"
+                  aria-label="Change sort order"
                 >
                   <ArrowUpDown className="h-4 w-4" aria-hidden="true" />
-                </button>
-              </div>
-              <div className="flex flex-wrap items-center gap-1 text-[10px] font-semibold">
-                <div className="flex basis-[40%] flex-none items-center justify-center gap-1 rounded-lg border border-white/20 bg-black/60 px-3 py-2 text-white/80">
-                  <Users className="h-3.5 w-3.5 text-amber-200" aria-hidden="true" />
-                  <span>{shortCountLabel}</span>
-                </div>
-                <button
-                  type="button"
-                  onClick={onOpenFilters}
-                  className="flex basis-[30%] flex-none items-center justify-center rounded-lg border border-white/20 bg-white/10 px-2 py-2 text-white transition hover:bg-white/20"
-                  aria-label="Open filters"
-                >
-                  <Filter className="h-4 w-4" aria-hidden="true" />
-                  <span className="sr-only">Filters</span>
+                  <span>Sort</span>
                 </button>
                 <button
                   type="button"
                   onClick={onArenaToggle}
                   className={cx(
-                    "flex basis-[30%] flex-none items-center justify-center rounded-lg border px-2 py-2 transition",
+                    "inline-flex h-10 flex-none items-center justify-center gap-1 rounded-xl border px-3 text-xs font-semibold transition",
                     showArena ? "border-amber-200/70 bg-amber-200/20 text-white" : "border-white/20 bg-white/10 text-white hover:bg-white/20"
                   )}
-                  aria-pressed={showArena}
                   aria-label={showArena ? "Hide arena" : "Open arena"}
+                  aria-pressed={showArena}
                 >
                   <Swords className="h-4 w-4" aria-hidden="true" />
-                  <span className="sr-only">Arena</span>
+                  <span>Arena</span>
+                </button>
+              </div>
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={onOpenFilters}
+                  className="inline-flex h-9 w-9 flex-none items-center justify-center rounded-lg border border-white/20 bg-white/10 text-white transition hover:bg-white/20"
+                  aria-label="Open filters"
+                >
+                  <Filter className="h-4 w-4" aria-hidden="true" />
                 </button>
                 <button
                   type="button"
                   onClick={onClearFilters}
-                  className="flex basis-[30%] flex-none items-center justify-center rounded-lg border border-white/20 bg-white/10 px-2 py-2 text-white transition hover:bg-white/20"
+                  className="inline-flex h-9 w-9 flex-none items-center justify-center rounded-lg border border-white/20 bg-white/10 text-white transition hover:bg-white/20"
                   aria-label="Clear filters"
                 >
                   <X className="h-4 w-4" aria-hidden="true" />
-                  <span className="sr-only">Clear</span>
                 </button>
                 <button
                   type="button"
                   onClick={onSync}
-                  className="flex basis-[30%] flex-none items-center justify-center rounded-lg border border-white/20 bg-white/10 px-2 py-2 text-white transition hover:bg-white/20"
+                  className="inline-flex h-9 w-9 flex-none items-center justify-center rounded-lg border border-white/20 bg-white/10 text-white transition hover:bg-white/20"
                   aria-label="Sync universe"
                 >
                   <RefreshCcw className="h-4 w-4" aria-hidden="true" />
-                  <span className="sr-only">Sync</span>
                 </button>
+                <div className="ml-1 inline-flex flex-none items-center gap-1 rounded-lg border border-white/20 bg-black/60 px-3 py-1.5 text-[11px] font-semibold text-white/80">
+                  <Users className="h-3.5 w-3.5 text-amber-200" aria-hidden="true" />
+                  <span>{shortCountLabel}</span>
+                </div>
                 <button
                   type="button"
                   onClick={cycleDisplayMode}
-                  className="flex basis-[30%] flex-none items-center justify-center rounded-lg border border-white/20 bg-white/10 px-2 py-2 text-white transition hover:bg-white/20"
+                  className="ml-auto inline-flex h-9 w-9 flex-none items-center justify-center rounded-lg border border-white/20 bg-white/10 text-white transition hover:bg-white/20"
                   aria-label="Show icon controls"
                 >
                   <ChevronDown className="h-4 w-4" aria-hidden="true" />
-                  <span className="sr-only">Icon mode</span>
                 </button>
               </div>
             </div>
