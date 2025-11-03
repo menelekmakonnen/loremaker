@@ -65,6 +65,22 @@ function clamp(value, min, max) {
   return Math.min(Math.max(value, min), max);
 }
 
+function safeReleasePointerCapture(target, pointerId) {
+  if (!target || typeof pointerId !== "number") return;
+  const release = target.releasePointerCapture;
+  if (typeof release !== "function") return;
+  if (typeof target.hasPointerCapture === "function" && !target.hasPointerCapture(pointerId)) {
+    return;
+  }
+  try {
+    release.call(target, pointerId);
+  } catch (error) {
+    if (process.env.NODE_ENV !== "production") {
+      console.warn("Pointer capture release failed", error);
+    }
+  }
+}
+
 const useIsomorphicLayoutEffect = typeof window !== "undefined" ? useLayoutEffect : useEffect;
 
 function unique(values) {
@@ -227,6 +243,7 @@ function matchesFilters(character, filters = {}, combineAND = false, query = "")
     const searchableParts = [
       character.id,
       character.name,
+      character.identity,
       character.gender,
       character.alignment,
       character.status,
@@ -947,15 +964,17 @@ function CharacterCard({ char, onOpen, onFacet, onUseInSim, highlight }) {
     onUseInSim(char, rect);
     setTimeout(() => setPulse(false), 700);
   };
-  const quickFacts = [char.gender, char.status, char.alignment, char.era]
+  const quickFacts = [char.identity, char.gender, char.status, char.alignment, char.era]
     .filter(Boolean)
     .slice(0, 3);
   const quickFilters = [
+    char.identity && { key: "identity", value: char.identity },
+    char.gender && { key: "gender", value: char.gender },
     ...(char.locations || []).slice(0, 2).map((value) => ({ key: "locations", value })),
     ...(char.faction || []).slice(0, 1).map((value) => ({ key: "faction", value })),
     ...(char.eraTags || []).slice(0, 1).map((value) => ({ key: "era", value })),
     ...(char.tags || []).slice(0, 1).map((value) => ({ key: "tags", value })),
-  ];
+  ].filter(Boolean);
   const highlightFacts = quickFacts.slice(0, 2);
   const minimalFilters = quickFilters.slice(0, 3);
   const description = char.shortDesc || char.longDesc || "No description yet.";
@@ -1180,7 +1199,7 @@ function Gallery({ images, cover, name }) {
       if (!pointerStart.current) return;
       const start = pointerStart.current;
       if (start.pointerId !== event.pointerId) return;
-      start.container?.releasePointerCapture?.(event.pointerId);
+      safeReleasePointerCapture(start.container, event.pointerId);
       pointerStart.current = null;
       if (start.origin?.closest?.('[data-gallery-control]')) return;
       const dx = event.clientX - start.x;
@@ -1200,7 +1219,7 @@ function Gallery({ images, cover, name }) {
     if (!pointerStart.current) return;
     const start = pointerStart.current;
     if (event?.pointerId && start.pointerId && event.pointerId !== start.pointerId) return;
-    start.container?.releasePointerCapture?.(start.pointerId);
+    safeReleasePointerCapture(start.container, start.pointerId);
     pointerStart.current = null;
   }, []);
 
@@ -1522,6 +1541,12 @@ function CharacterModal({ open, onClose, char, onFacet, onUseInSim, onNavigate }
               ))}
             </div>
             <div className="grid grid-cols-2 gap-3 text-sm">
+              {char.identity && (
+                <div className="rounded-2xl border border-white/15 bg-white/8 p-4">
+                  <div className="text-xs font-bold tracking-wide text-white/70">Identity</div>
+                  <div className="text-base font-extrabold">{char.identity}</div>
+                </div>
+              )}
               {char.gender && (
                 <div className="rounded-2xl border border-white/15 bg-white/8 p-4">
                   <div className="text-xs font-bold tracking-wide text-white/70">Gender</div>
@@ -2274,6 +2299,7 @@ function BattleArena({ characters, slots, setSlots, onOpenCharacter, pulseKey, o
 
 function SidebarFilters({ data, filters, setFilters, combineAND, setCombineAND, onClear }) {
   const uniq = (arr) => Array.from(new Set(arr)).filter(Boolean).sort((a, b) => a.localeCompare(b));
+  const identities = useMemo(() => uniq(data.map((item) => item.identity || "")), [data]);
   const genders = useMemo(() => uniq(data.map((item) => item.gender || "")), [data]);
   const alignments = useMemo(() => uniq(data.map((item) => item.alignment || "")), [data]);
   const locations = useMemo(() => uniq(data.flatMap((item) => item.locations || [])), [data]);
@@ -2322,7 +2348,13 @@ function SidebarFilters({ data, filters, setFilters, combineAND, setCombineAND, 
         Clear all
       </Button>
       <FilterSection
-        title="Gender / Sex"
+        title="Identity"
+        values={identities}
+        activeValues={filters.identity || []}
+        onToggle={(value) => toggle("identity", value)}
+      />
+      <FilterSection
+        title="Gender"
         values={genders}
         single
         activeValues={filters.gender}
@@ -3954,6 +3986,101 @@ export default function LoremakerApp({ initialCharacters = [], initialError = nu
     setTimeout(() => setHighlightedId(null), 900);
     setTimeout(focusArena, 120);
   }, [router, data, focusArena]);
+
+  useEffect(() => {
+    if (!router?.isReady) return;
+    const rawPrefilter = router.query?.prefilter;
+    if (!rawPrefilter) return;
+    const normalizeEntry = (entry) => decodeURIComponent(String(entry).trim());
+    const entries = (Array.isArray(rawPrefilter) ? rawPrefilter : [rawPrefilter])
+      .flatMap((value) => String(value).split(/[,;]/))
+      .map(normalizeEntry)
+      .filter(Boolean);
+    if (!entries.length) return;
+
+    const keyMap = {
+      location: "locations",
+      locations: "locations",
+      base: "locations",
+      faction: "faction",
+      factions: "faction",
+      tag: "tags",
+      tags: "tags",
+      power: "powers",
+      powers: "powers",
+      story: "stories",
+      stories: "stories",
+      status: "status",
+      alignment: "alignment",
+      gender: "gender",
+      identity: "identity",
+      era: "era",
+      name: "name",
+      alias: "alias",
+      aliases: "alias",
+      q: "search",
+      query: "search",
+      search: "search",
+    };
+    const singleKeys = new Set(["gender", "alignment"]);
+    const arrayKeys = new Set([
+      "locations",
+      "faction",
+      "tags",
+      "powers",
+      "stories",
+      "status",
+      "identity",
+      "era",
+      "alias",
+    ]);
+    const pendingSearch = [];
+
+    setFilters((prev) => {
+      const next = { ...prev };
+      entries.forEach((entry) => {
+        const match = entry.match(/^([^:=]+)[:=](.+)$/);
+        if (!match) return;
+        const rawKey = match[1].trim().toLowerCase();
+        const value = match[2].trim();
+        if (!value) return;
+        const mapped = keyMap[rawKey] || rawKey;
+        if (mapped === "search") {
+          pendingSearch.push(value);
+          return;
+        }
+        if (singleKeys.has(mapped)) {
+          next[mapped] = value;
+          return;
+        }
+        if (arrayKeys.has(mapped)) {
+          const current = next[mapped];
+          const existing = Array.isArray(current)
+            ? new Set(current)
+            : current
+            ? new Set([current])
+            : new Set();
+          existing.add(value);
+          next[mapped] = Array.from(existing);
+          return;
+        }
+        next[mapped] = value;
+      });
+      return next;
+    });
+
+    if (pendingSearch.length) {
+      setQuery(pendingSearch[pendingSearch.length - 1]);
+    }
+
+    setTimeout(() => {
+      document.getElementById("characters-grid")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 160);
+
+    const nextQuery = { ...router.query };
+    delete nextQuery.prefilter;
+    router.replace({ pathname: router.pathname, query: nextQuery }, undefined, { shallow: true });
+  }, [router, router?.isReady, router?.query?.prefilter]);
 
   const onUseInSim = useCallback((character, rect) => {
     if (!character) return;

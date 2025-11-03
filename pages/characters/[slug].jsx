@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
 import Head from "next/head";
 import Link from "next/link";
 import {
@@ -26,6 +27,22 @@ import {
 import ImageSafe, { characterAltText, imageCandidates } from "../../components/image-safe";
 
 const DEFAULT_SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL || "https://loremaker.app").replace(/\/$/, "");
+
+function safeReleasePointerCapture(target, pointerId) {
+  if (!target || typeof pointerId !== "number") return;
+  const release = target?.releasePointerCapture;
+  if (typeof release !== "function") return;
+  if (typeof target.hasPointerCapture === "function" && !target.hasPointerCapture(pointerId)) {
+    return;
+  }
+  try {
+    release.call(target, pointerId);
+  } catch (error) {
+    if (process.env.NODE_ENV !== "production") {
+      console.warn("Pointer capture release failed", error);
+    }
+  }
+}
 
 function sanitizeCharacter(character) {
   if (!character) return null;
@@ -311,7 +328,7 @@ function GalleryCarousel({ images = [], name = "LoreMaker legend", onActiveChang
       const totalX = event.clientX - current.startX;
       const totalY = event.clientY - current.startY;
       const swiped = Math.abs(totalX) > 40 && Math.abs(totalX) > Math.abs(totalY);
-      current.container?.releasePointerCapture?.(event.pointerId);
+      safeReleasePointerCapture(current.container, event.pointerId);
       pointerRef.current = { id: null, startX: 0, startY: 0, lastX: 0, moved: false, container: null, origin: null };
       if (current.origin?.closest?.('[data-gallery-control]')) {
         return;
@@ -325,7 +342,7 @@ function GalleryCarousel({ images = [], name = "LoreMaker legend", onActiveChang
 
   const handlePointerCancel = useCallback(() => {
     const current = pointerRef.current;
-    current.container?.releasePointerCapture?.(current.id);
+    safeReleasePointerCapture(current.container, current.id);
     pointerRef.current = { id: null, startX: 0, startY: 0, lastX: 0, moved: false, container: null, origin: null };
   }, []);
 
@@ -370,13 +387,13 @@ function GalleryCarousel({ images = [], name = "LoreMaker legend", onActiveChang
   const handleLightboxPointerUp = useCallback((event) => {
     const current = lightboxPointerRef.current;
     if (!current || current.id !== event.pointerId) return;
-    current.container?.releasePointerCapture?.(event.pointerId);
+    safeReleasePointerCapture(current.container, event.pointerId);
     lightboxPointerRef.current = { id: null, startX: 0, startY: 0, lastX: 0, moved: false, container: null, origin: null };
   }, []);
 
   const handleLightboxPointerCancel = useCallback(() => {
     const current = lightboxPointerRef.current;
-    current.container?.releasePointerCapture?.(current.id);
+    safeReleasePointerCapture(current.container, current.id);
     lightboxPointerRef.current = { id: null, startX: 0, startY: 0, lastX: 0, moved: false, container: null, origin: null };
   }, []);
 
@@ -655,17 +672,25 @@ export default function CharacterProfilePage({ character, canonicalUrl, related,
     if (!nextImage) return;
     setHeroBackdrop(imageCandidates(nextImage)[0] || nextImage);
   }, []);
+  const filterHref = (key, value) => {
+    if (!key || !value) return "/#characters-grid";
+    return `/?prefilter=${encodeURIComponent(key)}:${encodeURIComponent(value)}#characters-grid`;
+  };
   const highlightFacts = [
-    character.alignment && { label: "Alignment", value: character.alignment },
-    character.status && { label: "Status", value: character.status },
-    character.era && { label: "Era", value: character.era },
+    character.identity && { label: "Identity", value: character.identity, key: "identity" },
+    character.alignment && { label: "Alignment", value: character.alignment, key: "alignment" },
+    character.status && { label: "Status", value: character.status, key: "status" },
+    character.era && { label: "Era", value: character.era, key: "era" },
   ].filter(Boolean);
   const dossierEntries = [
-    locations.length && { label: "Home bases", value: locations.join(", ") },
-    factions.length && { label: "Allied groups", value: factions.join(", ") },
-    character.firstAppearance && { label: "First seen", value: character.firstAppearance },
-    character.gender && { label: "Identity", value: character.gender },
-    alias.length && { label: "Also known as", value: alias.join(", ") },
+    locations.length && { label: "Home bases", key: "locations", values: locations },
+    factions.length && { label: "Allied groups", key: "faction", values: factions },
+    character.identity && { label: "Identity", key: "identity", values: [character.identity] },
+    character.gender && { label: "Gender", key: "gender", values: [character.gender], single: true },
+    character.alignment && { label: "Alignment", key: "alignment", values: [character.alignment], single: true },
+    character.status && { label: "Status", key: "status", values: [character.status] },
+    character.firstAppearance && { label: "First seen", values: [character.firstAppearance] },
+    alias.length && { label: "Also known as", key: "alias", values: alias },
   ].filter(Boolean);
   const storyParagraphs = useMemo(() => {
     const source = character.longDesc || character.shortDesc || "";
@@ -705,22 +730,34 @@ export default function CharacterProfilePage({ character, canonicalUrl, related,
       </Head>
       <div className="min-h-screen bg-[#050813] text-white">
         <section className="relative isolate overflow-hidden border-b border-white/10">
-          {heroBackdrop ? (
-            <div className="absolute inset-0">
-              <ImageSafe
-                src={heroBackdrop}
-                alt={characterAltText(character.name)}
-                fallbackLabel={character.name}
-                className="h-full w-full scale-110 object-cover object-[65%_center] blur-[8px]"
-                loading="eager"
-                decoding="async"
-              />
-              <div className="absolute inset-0 bg-gradient-to-r from-[#050813] via-[#050813]/85 to-[#050813]/35" />
-              <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(253,230,138,0.25),transparent_55%)]" />
-            </div>
-          ) : (
-            <div className="absolute inset-0 bg-gradient-to-br from-[#040617] via-[#050813] to-[#0d122d]" />
-          )}
+          <div className="absolute inset-0">
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={heroBackdrop || "blank"}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.6, ease: "easeOut" }}
+                className="absolute inset-0"
+              >
+                <div className="absolute inset-0 bg-gradient-to-br from-[#040617] via-[#050813] to-[#0d122d]" />
+                {heroBackdrop && (
+                  <>
+                    <ImageSafe
+                      src={heroBackdrop}
+                      alt={characterAltText(character.name)}
+                      fallbackLabel={character.name}
+                      className="absolute inset-0 h-full w-full scale-110 object-cover object-[65%_center] blur-[16px] opacity-80"
+                      loading="eager"
+                      decoding="async"
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-r from-[#050813] via-[#050813]/82 to-[#050813]/30" />
+                    <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(253,230,138,0.24),transparent_55%)]" />
+                  </>
+                )}
+              </motion.div>
+            </AnimatePresence>
+          </div>
           <div className="relative z-10 mx-auto max-w-7xl px-4 pb-24 pt-20 sm:px-6 lg:px-8">
             <div className="flex flex-col gap-12 lg:grid lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] lg:items-end">
               <div className="space-y-8">
@@ -745,25 +782,36 @@ export default function CharacterProfilePage({ character, canonicalUrl, related,
                 </div>
                 {highlightFacts.length > 0 && (
                   <div className="flex flex-wrap gap-3 text-xs font-semibold uppercase tracking-[0.28em] text-white/80">
-                    {highlightFacts.map((fact) => (
-                      <span
-                        key={fact.label}
-                        className="rounded-full border border-white/20 bg-white/10 px-4 py-1"
-                      >
-                        {fact.label}: {fact.value}
-                      </span>
-                    ))}
-                  </div>
-                )}
+                {highlightFacts.map((fact) => {
+                  const label = `${fact.label}: ${fact.value}`;
+                  return fact.key ? (
+                    <Link
+                      key={`${fact.label}-${fact.value}`}
+                      href={filterHref(fact.key, fact.value)}
+                      className="rounded-full border border-white/20 bg-white/10 px-4 py-1 transition hover:border-amber-300/60 hover:text-amber-100"
+                      prefetch={false}
+                    >
+                      {label}
+                    </Link>
+                  ) : (
+                    <span key={fact.label} className="rounded-full border border-white/20 bg-white/10 px-4 py-1">
+                      {label}
+                    </span>
+                  );
+                })}
+              </div>
+            )}
                 {!!character.eraTags?.length && (
                   <div className="flex flex-wrap gap-2">
                     {character.eraTags.map((era) => (
-                      <span
+                      <Link
                         key={era}
-                        className="rounded-full border border-white/20 bg-white/10 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.35em] text-white/70"
+                        href={filterHref("era", era)}
+                        className="rounded-full border border-white/20 bg-white/10 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.35em] text-white/70 transition hover:border-amber-300/60 hover:text-amber-100"
+                        prefetch={false}
                       >
                         {era}
-                      </span>
+                      </Link>
                     ))}
                   </div>
                 )}
@@ -795,29 +843,73 @@ export default function CharacterProfilePage({ character, canonicalUrl, related,
           </div>
         </section>
         <main className="mx-auto max-w-7xl space-y-20 px-4 py-16 sm:px-6 lg:px-8">
-          <section className="grid gap-10 lg:auto-rows-max lg:grid-cols-2 lg:items-start">
-            <div className="order-1 rounded-3xl border border-white/12 bg-white/5 p-8 shadow-[0_30px_120px_rgba(7,10,25,0.45)] backdrop-blur-xl lg:order-1 lg:col-start-1">
-              <h2 className="text-2xl font-black text-white">Story so far</h2>
+          <section className="grid gap-10 lg:grid-cols-12">
+            <article className="rounded-3xl border border-white/12 bg-white/5 p-8 shadow-[0_30px_120px_rgba(7,10,25,0.45)] backdrop-blur-xl lg:col-span-5">
+              <h2 className="text-2xl font-black text-white">The legend so far</h2>
+              <p className="mt-2 text-sm font-semibold text-white/70">
+                Catch up on {character.name}'s journey before diving deeper.
+              </p>
               <div className="mt-6 space-y-4 text-base leading-relaxed text-white/80">
                 {storyParagraphs.map((paragraph, index) => (
                   <p key={index}>{paragraph}</p>
                 ))}
               </div>
-            </div>
-            <div className="order-2 rounded-3xl border border-white/12 bg-white/5 p-8 backdrop-blur-xl lg:order-2 lg:col-start-2">
+            </article>
+            <article className="rounded-3xl border border-white/12 bg-white/5 p-8 backdrop-blur-xl lg:col-span-7 lg:col-start-6">
               <h2 className="text-2xl font-black text-white">Profile at a glance</h2>
+              <p className="mt-2 text-sm font-semibold text-white/70">
+                Essential identifiers, allegiances, and touchpoints.
+              </p>
               <dl className="mt-6 grid gap-6 sm:grid-cols-2">
                 {dossierEntries.map((entry) => (
                   <div key={entry.label} className="space-y-2">
                     <dt className="text-[11px] font-semibold uppercase tracking-[0.28em] text-white/60">{entry.label}</dt>
-                    <dd className="text-sm font-semibold text-white/85">{entry.value}</dd>
+                    <dd className="flex flex-wrap gap-2 text-sm font-semibold text-white/85">
+                      {(entry.values || []).map((value) =>
+                        entry.key ? (
+                          <Link
+                            key={`${entry.label}-${value}`}
+                            href={filterHref(entry.key, value)}
+                            className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-3 py-1 text-[11px] font-semibold text-white transition hover:border-amber-300/60 hover:text-amber-100"
+                            prefetch={false}
+                          >
+                            {value}
+                          </Link>
+                        ) : (
+                          <span key={`${entry.label}-${value}`}>{value}</span>
+                        )
+                      )}
+                    </dd>
                   </div>
                 ))}
               </dl>
-            </div>
+            </article>
+            {!!tags.length && (
+              <article className="rounded-3xl border border-white/12 bg-white/5 p-8 backdrop-blur-xl lg:col-span-5">
+                <h3 className="text-xl font-black text-white">Motifs &amp; themes</h3>
+                <p className="mt-2 text-sm font-semibold text-white/70">
+                  Recurring symbols and resonant ideas that define this legend.
+                </p>
+                <div className="mt-4 flex flex-wrap gap-2">
+                  {tags.map((tag) => (
+                    <Link
+                      key={tag}
+                      href={filterHref("tags", tag)}
+                      className="rounded-full border border-white/20 bg-white/10 px-3 py-1 text-xs font-semibold text-white/75 transition hover:border-amber-300/60 hover:text-amber-100"
+                      prefetch={false}
+                    >
+                      {tag}
+                    </Link>
+                  ))}
+                </div>
+              </article>
+            )}
             {!!powers.length && (
-              <div className="order-3 rounded-3xl border border-white/12 bg-white/5 p-8 backdrop-blur-xl lg:order-3 lg:col-start-2">
+              <article className="rounded-3xl border border-white/12 bg-white/5 p-8 backdrop-blur-xl lg:col-span-7 lg:col-start-6">
                 <h2 className="text-xl font-black text-white">Signature abilities</h2>
+                <p className="mt-2 text-sm font-semibold text-white/70">
+                  How {character.name} channels their gifts across the universe.
+                </p>
                 <div className="mt-6 space-y-4">
                   {powers.map((power) => {
                     const normalized = Math.max(0, Math.min(10, Number(power.level) || 0));
@@ -837,58 +929,34 @@ export default function CharacterProfilePage({ character, canonicalUrl, related,
                     );
                   })}
                 </div>
-              </div>
-            )}
-            {!!stories.length && (
-              <div className="order-4 rounded-3xl border border-white/12 bg-white/5 p-8 backdrop-blur-xl lg:order-4 lg:col-start-2">
-                <h3 className="text-xl font-black text-white">Key appearances</h3>
-                <ul className="mt-4 space-y-3 text-sm font-semibold text-white/75">
-                  {stories.map((story) => (
-                    <li key={story} className="flex items-start gap-3">
-                      <Sparkles className="mt-1 h-4 w-4 text-amber-200" aria-hidden="true" />
-                      <span>{story}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-            {!!tags.length && (
-              <div className="order-5 rounded-3xl border border-white/12 bg-white/5 p-8 backdrop-blur-xl lg:order-5 lg:col-start-1">
-                <h3 className="text-xl font-black text-white">Motifs &amp; themes</h3>
-                <div className="mt-4 flex flex-wrap gap-2">
-                  {tags.map((tag) => (
-                    <span
-                      key={tag}
-                      className="rounded-full border border-white/20 bg-white/10 px-3 py-1 text-xs font-semibold text-white/75"
-                    >
-                      {tag}
-                    </span>
-                  ))}
-                </div>
-              </div>
+              </article>
             )}
             {!!allyGroups.length && (
-              <div className="order-6 space-y-4 rounded-3xl border border-white/12 bg-white/5 p-6 backdrop-blur-xl lg:order-6 lg:col-start-1">
+              <article className="space-y-4 rounded-3xl border border-white/12 bg-white/5 p-6 backdrop-blur-xl lg:col-span-5">
                 <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.35em] text-white/70">
                   <Crown className="h-4 w-4 text-amber-200" aria-hidden="true" /> Allies &amp; enclaves
                 </div>
+                <p className="text-sm font-semibold text-white/70">
+                  The trusted circles who stand with {character.name}.
+                </p>
                 <div className="space-y-3">
                   {allyGroups.map((group) => (
                     <div key={group.label} className="space-y-3 rounded-2xl border border-white/12 bg-black/35 p-3">
                       <div className="flex items-center justify-between text-[11px] font-bold text-white">
                         <span>{group.label}</span>
                         <span className="text-[9px] font-semibold uppercase tracking-[0.35em] text-white/50">
-                          {group.characters.length} dossiers
+                          {group.characters.length} dossier{group.characters.length === 1 ? "" : "s"}
                         </span>
                       </div>
-                      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+                      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
                         {group.characters.map((entry) => (
                           <Link
                             key={entry.slug}
                             href={`/characters/${entry.slug}`}
                             className="group overflow-hidden rounded-xl border border-white/10 bg-white/5 p-2 text-white transition hover:border-amber-300/60 hover:bg-amber-200/10"
+                            prefetch={false}
                           >
-                            <div className="aspect-square w-full overflow-hidden rounded-lg border border-white/10 bg-black/40">
+                            <div className="aspect-[3/4] w-full overflow-hidden rounded-lg border border-white/10 bg-black/40">
                               <ImageSafe
                                 src={entry.cover}
                                 alt={characterAltText(entry.name)}
@@ -897,10 +965,10 @@ export default function CharacterProfilePage({ character, canonicalUrl, related,
                                 loading="lazy"
                               />
                             </div>
-                            <div className="mt-2 space-y-0.5">
-                              <p className="text-[13px] font-bold text-white">{entry.name}</p>
+                            <div className="mt-2 space-y-0.5 text-left">
+                              <p className="text-[12px] font-bold text-white">{entry.name}</p>
                               {(entry.alignment || entry.status) && (
-                                <p className="text-[9px] font-semibold uppercase tracking-[0.35em] text-white/55">
+                                <p className="text-[9px] font-semibold uppercase tracking-[0.3em] text-white/55">
                                   {[entry.alignment, entry.status].filter(Boolean).join(" • ")}
                                 </p>
                               )}
@@ -915,22 +983,43 @@ export default function CharacterProfilePage({ character, canonicalUrl, related,
                     </div>
                   ))}
                 </div>
-              </div>
+              </article>
+            )}
+            {!!stories.length && (
+              <article className="rounded-3xl border border-white/12 bg-white/5 p-8 backdrop-blur-xl lg:col-span-7 lg:col-start-6">
+                <h3 className="text-xl font-black text-white">Key appearances</h3>
+                <p className="mt-2 text-sm font-semibold text-white/70">
+                  Notable stories and sightings featuring this character.
+                </p>
+                <ul className="mt-4 space-y-3 text-sm font-semibold text-white/75">
+                  {stories.map((story) => (
+                    <li key={story} className="flex items-start gap-3">
+                      <Sparkles className="mt-1 h-4 w-4 text-amber-200" aria-hidden="true" />
+                      <span>{story}</span>
+                    </li>
+                  ))}
+                </ul>
+              </article>
             )}
             {!!character.eraTags?.length && (
-              <div className="order-7 rounded-3xl border border-white/12 bg-white/5 p-8 backdrop-blur-xl lg:order-7 lg:col-start-1">
+              <article className="rounded-3xl border border-white/12 bg-white/5 p-8 backdrop-blur-xl lg:col-span-5">
                 <h3 className="text-xl font-black text-white">Era timeline</h3>
+                <p className="mt-2 text-sm font-semibold text-white/70">
+                  Where this legend fits within the LoreMaker ages.
+                </p>
                 <div className="mt-4 flex flex-wrap gap-2">
                   {character.eraTags.map((era) => (
-                    <span
+                    <Link
                       key={era}
-                      className="rounded-full border border-white/20 bg-white/10 px-3 py-1 text-xs font-semibold text-white/75"
+                      href={filterHref("era", era)}
+                      className="rounded-full border border-white/20 bg-white/10 px-3 py-1 text-xs font-semibold text-white/75 transition hover:border-amber-300/60 hover:text-amber-100"
+                      prefetch={false}
                     >
                       {era}
-                    </span>
+                    </Link>
                   ))}
                 </div>
-              </div>
+              </article>
             )}
           </section>
           {connectionSections.length > 0 && (
@@ -950,7 +1039,7 @@ export default function CharacterProfilePage({ character, canonicalUrl, related,
                   {section.groups.map((group) => (
                     <div
                       key={group.label}
-                      className="space-y-3 rounded-3xl border border-white/12 bg-white/5 p-4 backdrop-blur-xl"
+                      className="space-y-3 rounded-3xl border border-white/12 bg-white/5 p-3 backdrop-blur-xl"
                     >
                       <div className="flex items-center justify-between gap-2">
                         <h3 className="text-base font-black text-white">{group.label}</h3>
