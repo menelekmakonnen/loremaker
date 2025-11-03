@@ -7,6 +7,7 @@ import React, {
   useId,
   useLayoutEffect,
 } from "react";
+import { useRouter } from "next/router";
 import Head from "next/head";
 import Link from "next/link";
 import { createPortal } from "react-dom";
@@ -47,6 +48,7 @@ import {
   publicCharactersError,
   seededRandom,
 } from "../lib/characters";
+import ImageSafe, { characterAltText } from "../components/image-safe";
 
 /**
  * Ultra interactive Loremaker experience
@@ -69,84 +71,11 @@ function unique(values) {
   return Array.from(new Set(values.filter(Boolean)));
 }
 
-function characterAltText(name) {
-  const label = name && String(name).trim().length ? String(name).trim() : "LoreMaker Legend";
-  return `${label} | Loremaker Universe | Menelek Makonnen`;
-}
-
 function hasIllustration(character) {
   if (!character) return false;
   if (character.cover) return true;
   if (Array.isArray(character.gallery) && character.gallery.some(Boolean)) return true;
   return false;
-}
-
-function parseDriveSource(url) {
-  if (!url) return null;
-  try {
-    const parsed = new URL(url);
-    const host = parsed.hostname;
-    const searchId = parsed.searchParams.get("id");
-    const resourceKey = parsed.searchParams.get("resourcekey") || undefined;
-    let id = null;
-
-    if (/drive\.google\.(com|co)/.test(host)) {
-      const match = parsed.pathname.match(/\/d\/([^/]+)/);
-      if (match?.[1]) {
-        id = match[1];
-      } else if (parsed.pathname.startsWith("/thumbnail")) {
-        id = searchId;
-      } else if (parsed.pathname.startsWith("/uc") || parsed.pathname.startsWith("/open")) {
-        id = searchId;
-      } else if (searchId) {
-        id = searchId;
-      }
-    } else if (/googleusercontent\.com$/.test(host) || /googleusercontent\.com$/.test(host.replace(/^lh\d+\./, ""))) {
-      const match = parsed.pathname.match(/\/d\/([^/=]+)/);
-      if (match?.[1]) {
-        id = match[1];
-      } else if (searchId) {
-        id = searchId;
-      } else {
-        const segment = parsed.pathname.split("/").pop() || "";
-        const clean = segment.split("=")[0];
-        if (clean && clean.length > 10) id = clean;
-      }
-    }
-
-    if (!id) return null;
-    return { id, resourceKey };
-  } catch {
-    return null;
-  }
-}
-
-function driveImageCandidates(url) {
-  const source = parseDriveSource(url);
-  if (!source) return [];
-  const { id, resourceKey } = source;
-  const resourceQuery = resourceKey ? `&resourcekey=${encodeURIComponent(resourceKey)}` : "";
-  const resourceSuffix = resourceKey ? `?resourcekey=${encodeURIComponent(resourceKey)}` : "";
-
-  return unique([
-    `https://lh3.googleusercontent.com/d/${id}=w2000-h2000-no`,
-    resourceKey ? `https://lh3.googleusercontent.com/d/${id}=w2000-h2000-no${resourceSuffix}` : null,
-    `https://lh3.googleusercontent.com/d/${id}=s2048`,
-    resourceKey ? `https://lh3.googleusercontent.com/d/${id}=s2048${resourceSuffix}` : null,
-    `https://drive.googleusercontent.com/uc?export=view&id=${id}${resourceQuery}`,
-    `https://drive.google.com/uc?export=view&id=${id}${resourceQuery}`,
-    `https://drive.google.com/thumbnail?id=${id}&sz=w2000${resourceQuery}`,
-    url,
-  ]);
-}
-
-function imageCandidates(src) {
-  if (!src) return [];
-  const trimmed = typeof src === "string" ? src.trim() : src;
-  if (!trimmed) return [];
-  const drive = driveImageCandidates(trimmed);
-  if (drive.length) return drive;
-  return unique([trimmed]);
 }
 
 const STATUS_PRESETS = [
@@ -919,91 +848,6 @@ function LoreShield({ size = 56, onClick }) {
   );
 }
 
-function Insignia({ label, size = 48, variant = "character" }) {
-  const fallback = label || "Lore";
-  const initials = fallback
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((word) => word[0]?.toUpperCase())
-    .join("") || "LM";
-  const hue = Math.abs([...fallback].reduce((acc, char) => acc + char.charCodeAt(0), 0)) % 360;
-  const topWidth = variant === "site" ? 42 : variant === "faction" ? 36 : 32;
-  const fillOne = `hsl(${hue}, 85%, 64%)`;
-  const fillTwo = `hsl(${(hue + 48) % 360}, 80%, 60%)`;
-  return (
-    <svg width={size} height={size} viewBox="0 0 64 64" className="drop-shadow-[0_3px_12px_rgba(0,0,0,0.55)]">
-      <defs>
-        <linearGradient id={`ins-${hue}`} x1="0" x2="1" y1="0" y2="1">
-          <stop offset="0%" stopColor={fillOne} />
-          <stop offset="100%" stopColor={fillTwo} />
-        </linearGradient>
-      </defs>
-      <path
-        d={`M32 6 C32 6 ${32 - topWidth / 2} 10 ${32 - topWidth / 2} 10 L ${32 + topWidth / 2} 10 C ${32 + topWidth / 2} 10 32 6 32 6 L 56 16 L 56 36 C 56 47 46 57 32 60 C 18 57 8 47 8 36 L 8 16 Z`}
-        fill={`url(#ins-${hue})`}
-        stroke="rgba(255,255,255,.45)"
-        strokeWidth="1.4"
-      />
-      <text
-        x="32"
-        y="39"
-        textAnchor="middle"
-        fontFamily="var(--font-sans, 'Inter', 'Segoe UI', sans-serif)"
-        fontWeight="900"
-        fontSize="20"
-        fill="#fff"
-        style={{ filter: "drop-shadow(0 1px 2px rgba(0,0,0,.6))" }}
-      >
-        {initials}
-      </text>
-    </svg>
-  );
-}
-
-function ImageSafe({ src, alt, className = "", fallbackLabel }) {
-  const sources = useMemo(() => imageCandidates(src), [src]);
-  const [index, setIndex] = useState(0);
-  const [failed, setFailed] = useState(false);
-
-  useEffect(() => {
-    setIndex(0);
-    setFailed(false);
-  }, [sources]);
-
-  const current = sources[index];
-
-  const handleError = () => {
-    if (index < sources.length - 1) {
-      setIndex((value) => value + 1);
-    } else {
-      setFailed(true);
-    }
-  };
-
-  if (!current || failed) {
-    return (
-      <div className={cx("flex items-center justify-center rounded-2xl border border-white/15 bg-white/10", className)}>
-        <Insignia label={fallbackLabel} size={64} />
-      </div>
-    );
-  }
-
-  return (
-    <img
-      src={current}
-      alt={alt}
-      onError={handleError}
-      onLoad={() => setFailed(false)}
-      className={className}
-      loading="lazy"
-      referrerPolicy="no-referrer"
-      crossOrigin="anonymous"
-      decoding="async"
-    />
-  );
-}
-
 function PowerMeter({ level, accent = "amber" }) {
   const pct = Math.min(100, Math.max(0, (Number(level) || 0) * 10));
   const gradient =
@@ -1070,6 +914,7 @@ const SORT_OPTIONS = [
   { value: "default", label: "Default" },
   { value: "random", label: "Random" },
   { value: "faction", label: "By Faction" },
+  { value: "era", label: "By Era" },
   { value: "az", label: "A-Z" },
   { value: "za", label: "Z-A" },
   { value: "most", label: "From Most Powerful" },
@@ -1097,6 +942,7 @@ function CharacterCard({ char, onOpen, onFacet, onUseInSim, highlight }) {
   const quickFilters = [
     ...(char.locations || []).slice(0, 2).map((value) => ({ key: "locations", value })),
     ...(char.faction || []).slice(0, 1).map((value) => ({ key: "faction", value })),
+    ...(char.eraTags || []).slice(0, 1).map((value) => ({ key: "era", value })),
     ...(char.tags || []).slice(0, 1).map((value) => ({ key: "tags", value })),
   ];
   const highlightFacts = quickFacts.slice(0, 2);
@@ -1681,6 +1527,18 @@ function CharacterModal({ open, onClose, char, onFacet, onUseInSim, onNavigate }
                 <div className="rounded-2xl border border-white/15 bg-white/8 p-4">
                   <div className="text-xs font-bold tracking-wide text-white/70">Status</div>
                   <div className="text-base font-extrabold">{char.status}</div>
+                </div>
+              )}
+              {!!(char.eraTags || []).length && (
+                <div className="rounded-2xl border border-white/15 bg-white/8 p-4">
+                  <div className="text-xs font-bold tracking-wide text-white/70">Era</div>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {(char.eraTags || []).map((era) => (
+                      <FacetChip key={era} onClick={() => onFacet({ key: "era", value: era })}>
+                        {era}
+                      </FacetChip>
+                    ))}
+                  </div>
                 </div>
               )}
               {char.slug && (
@@ -2675,6 +2533,7 @@ function ToolsBar({
   const [mountEl, setMountEl] = useState(null);
   const [displayMode, setDisplayMode] = useState("full");
   const isMobile = useMediaQuery("(max-width: 640px)");
+  const sortLabel = useMemo(() => SORT_OPTIONS.find((item) => item.value === sortMode)?.label || "Default", [sortMode]);
 
   const handleContentRef = useCallback((node) => {
     setContentEl(node);
@@ -2722,7 +2581,7 @@ function ToolsBar({
   useIsomorphicLayoutEffect(() => {
     if (!heroEl) return undefined;
     const height = barHeight || lastKnownHeight || 0;
-    heroEl.style.setProperty("--toolbar-offset", `${Math.ceil(height + 160)}px`);
+    heroEl.style.setProperty("--toolbar-offset", `${Math.ceil(height + 210)}px`);
     return () => {
       heroEl.style.removeProperty("--toolbar-offset");
     };
@@ -2809,7 +2668,7 @@ function ToolsBar({
                   onSortModeChange(next.value);
                 }}
                 className="inline-flex h-9 w-9 flex-none items-center justify-center rounded-lg border border-white/20 bg-white/10 text-white transition hover:bg-white/20"
-                aria-label="Cycle sort order"
+                aria-label={`Cycle sort order (current: ${sortLabel})`}
               >
                 <ArrowUpDown className="h-4 w-4" aria-hidden="true" />
               </button>
@@ -2885,7 +2744,7 @@ function ToolsBar({
                   onSortModeChange(next.value);
                 }}
                 className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-white/15 bg-white/10 text-white transition hover:bg-white/20"
-                aria-label="Cycle sort order"
+                aria-label={`Cycle sort order (current: ${sortLabel})`}
               >
                 <ArrowUpDown className="h-4 w-4" aria-hidden="true" />
               </button>
@@ -2976,12 +2835,12 @@ function ToolsBar({
                     const next = SORT_OPTIONS[(currentIndex + 1) % SORT_OPTIONS.length];
                     onSortModeChange(next.value);
                   }}
-                  className="inline-flex h-10 flex-none items-center justify-center gap-1 rounded-xl border border-white/20 bg-white/10 px-3 text-xs font-semibold text-white transition hover:bg-white/20"
-                  aria-label="Change sort order"
-                >
-                  <ArrowUpDown className="h-4 w-4" aria-hidden="true" />
-                  <span>Sort</span>
-                </button>
+                className="inline-flex h-10 flex-none items-center justify-center gap-1 rounded-xl border border-white/20 bg-white/10 px-3 text-xs font-semibold text-white transition hover:bg-white/20"
+                aria-label={`Change sort order (current: ${sortLabel})`}
+              >
+                <ArrowUpDown className="h-4 w-4" aria-hidden="true" />
+                <span>Sort: {sortLabel}</span>
+              </button>
                 <button
                   type="button"
                   onClick={onArenaToggle}
@@ -3200,6 +3059,12 @@ function QuickFilterRail({ data, onFacet, onSortModeChange, sortMode, onOpenFilt
 
     const locations = tally((item) => item.locations || []).slice(0, 6);
     const factions = tally((item) => item.faction || []).slice(0, 6);
+    const eras = tally((item) => {
+      const values = new Set();
+      if (item.era) values.add(item.era);
+      (item.eraTags || []).forEach((value) => value && values.add(value));
+      return Array.from(values);
+    }).slice(0, 6);
 
     const powerMap = new Map();
     data.forEach((item) => {
@@ -3223,7 +3088,7 @@ function QuickFilterRail({ data, onFacet, onSortModeChange, sortMode, onOpenFilt
       })
       .slice(0, 8);
 
-    return { locations, factions, powers };
+    return { locations, factions, powers, eras };
   }, [data]);
 
   const renderChip = (item, key) => (
@@ -3315,6 +3180,14 @@ function QuickFilterRail({ data, onFacet, onSortModeChange, sortMode, onOpenFilt
             </button>
           ))}
         </div>
+        {!!topCollections.eras.length && (
+          <div className="space-y-2">
+            <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-white/60">
+              <Clock className="h-4 w-4 text-amber-200" aria-hidden="true" /> Eras
+            </div>
+            <div className="flex flex-wrap gap-2">{topCollections.eras.map((item) => renderChip(item, "era"))}</div>
+          </div>
+        )}
         {!!topCollections.factions.length && (
           <div className="space-y-2">
             <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-white/60">
@@ -4147,6 +4020,7 @@ function HeroSection({
 /** -------------------- Page -------------------- */
 export default function LoremakerApp({ initialCharacters = [], initialError = null }) {
   const { data, loading, error, refetch } = useCharacters(initialCharacters, initialError);
+  const router = useRouter();
   const [query, setQuery] = useState("");
   const [filters, setFilters] = useState({});
   const [combineAND, setCombineAND] = useState(false);
@@ -4161,6 +4035,7 @@ export default function LoremakerApp({ initialCharacters = [], initialError = nu
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [transferNotices, setTransferNotices] = useState([]);
   const sortedRef = useRef([]);
+  const processedArenaRef = useRef(null);
   const currentYear = useMemo(() => new Date().getFullYear(), []);
   const slugify = useCallback(
     (value) =>
@@ -4211,6 +4086,27 @@ export default function LoremakerApp({ initialCharacters = [], initialError = nu
   const focusArena = useCallback(() => {
     document.getElementById("arena-anchor")?.scrollIntoView({ behavior: "smooth", block: "start" });
   }, []);
+
+  useEffect(() => {
+    if (!router?.isReady) return;
+    const slugParam = router.query?.arena;
+    if (!slugParam) return;
+    const slug = Array.isArray(slugParam) ? slugParam[0] : slugParam;
+    if (!slug || processedArenaRef.current === slug) return;
+    const match = data.find((char) => char.slug === slug || char.id === slug);
+    if (!match?.id) return;
+    processedArenaRef.current = slug;
+    setArenaSlots((slots) => {
+      if (slots.left === match.id) return slots;
+      const nextRight = slots.right && slots.right !== match.id ? slots.right : null;
+      return { left: match.id, right: nextRight };
+    });
+    setShowArena(true);
+    setArenaPulseKey((key) => key + 1);
+    setHighlightedId(match.id);
+    setTimeout(() => setHighlightedId(null), 900);
+    setTimeout(focusArena, 120);
+  }, [router, data, focusArena]);
 
   const onUseInSim = useCallback((character, rect) => {
     if (!character) return;
@@ -4336,6 +4232,16 @@ export default function LoremakerApp({ initialCharacters = [], initialError = nu
       }
       case "faction":
         return arr.sort((a, b) => String(a.faction?.[0] || "").localeCompare(String(b.faction?.[0] || "")));
+      case "era":
+        return arr.sort((a, b) => {
+          const eraA = String(a.era || "").toLowerCase();
+          const eraB = String(b.era || "").toLowerCase();
+          if (eraA && !eraB) return -1;
+          if (!eraA && eraB) return 1;
+          const compare = eraA.localeCompare(eraB);
+          if (compare !== 0) return compare;
+          return orderOf(a) - orderOf(b);
+        });
       case "az":
         return arr.sort((a, b) => a.name.localeCompare(b.name));
       case "za":

@@ -1,7 +1,19 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Head from "next/head";
 import Link from "next/link";
-import { Atom, ChevronLeft, ChevronRight, Crown, MapPin, Maximize2, Sparkles, Swords, X, ArrowUpRight } from "lucide-react";
+import {
+  Atom,
+  ChevronLeft,
+  ChevronRight,
+  Crown,
+  MapPin,
+  Maximize2,
+  Sparkles,
+  Swords,
+  X,
+  ArrowUpRight,
+  ArrowUp,
+} from "lucide-react";
 import fallbackCharacters from "../../data/fallback-characters.json";
 import {
   fetchCharactersFromSheets,
@@ -11,6 +23,7 @@ import {
   ensureUniqueSlugs,
   seededRandom,
 } from "../../lib/characters";
+import ImageSafe, { characterAltText, imageCandidates } from "../../components/image-safe";
 
 const DEFAULT_SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL || "https://loremaker.app").replace(/\/$/, "");
 
@@ -21,6 +34,7 @@ function sanitizeCharacter(character) {
   const faction = normaliseArray(shaped.faction);
   const locations = normaliseArray(shaped.locations);
   const tags = normaliseArray(shaped.tags);
+  const eraTags = normaliseArray(shaped.eraTags || shaped.eras);
   const stories = normaliseArray(shaped.stories);
   const gallery = normaliseArray(shaped.gallery);
   const safe = {
@@ -31,6 +45,7 @@ function sanitizeCharacter(character) {
     faction,
     locations,
     tags,
+    eraTags,
     stories,
     gallery,
   };
@@ -61,6 +76,9 @@ function buildSchema(character, canonicalUrl) {
   }
   if (character.era) {
     attributes.push({ "@type": "PropertyValue", name: "Era", value: character.era });
+  }
+  if (character.eraTags?.length) {
+    attributes.push({ "@type": "PropertyValue", name: "Era timeline", value: character.eraTags.join(", ") });
   }
   const schema = {
     "@context": "https://schema.org",
@@ -385,14 +403,13 @@ function GalleryCarousel({ images = [], name = "LoreMaker legend" }) {
         className="group relative aspect-[3/4] w-full cursor-zoom-in overflow-hidden rounded-[32px] border border-white/15 bg-black/50 touch-pan-y focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300/70"
       >
         {activeImage ? (
-          <img
+          <ImageSafe
             src={activeImage}
             alt={altText}
+            fallbackLabel={name}
             className="h-full w-full select-none object-cover"
             loading="eager"
             decoding="async"
-            referrerPolicy="no-referrer"
-            crossOrigin="anonymous"
             draggable={false}
           />
         ) : (
@@ -461,14 +478,13 @@ function GalleryCarousel({ images = [], name = "LoreMaker legend" }) {
                 aria-label={`Show image ${index + 1}`}
                 data-gallery-control
               >
-                <img
+                <ImageSafe
                   src={image}
                   alt={altText}
+                  fallbackLabel={name}
                   className="h-full w-full object-cover"
                   loading={index < 4 ? "eager" : "lazy"}
                   decoding="async"
-                  referrerPolicy="no-referrer"
-                  crossOrigin="anonymous"
                   draggable={false}
                 />
                 {active && <span className="absolute inset-0 border-2 border-amber-200/60" aria-hidden="true" />}
@@ -528,14 +544,13 @@ function GalleryCarousel({ images = [], name = "LoreMaker legend" }) {
               onPointerUp={handleLightboxPointerUp}
               onPointerCancel={handleLightboxPointerCancel}
             >
-              <img
+              <ImageSafe
                 src={lightboxImage}
                 alt={altText}
+                fallbackLabel={name}
                 className="max-h-[75vh] w-full select-none rounded-[28px] object-contain"
                 loading="eager"
                 decoding="async"
-                referrerPolicy="no-referrer"
-                crossOrigin="anonymous"
                 draggable={false}
               />
             </div>
@@ -576,14 +591,13 @@ function GalleryCarousel({ images = [], name = "LoreMaker legend" }) {
                       aria-label={`View image ${index + 1}`}
                       data-gallery-control
                     >
-                      <img
+                      <ImageSafe
                         src={image}
                         alt={altText}
+                        fallbackLabel={name}
                         className="h-full w-full object-cover"
                         loading={index < 6 ? "eager" : "lazy"}
                         decoding="async"
-                        referrerPolicy="no-referrer"
-                        crossOrigin="anonymous"
                         draggable={false}
                       />
                       {active && <span className="absolute inset-0 border-2 border-amber-200/60" aria-hidden="true" />}
@@ -644,6 +658,7 @@ export default function CharacterProfilePage({ character, canonicalUrl, related,
     heroRotationImages.length > 0
       ? heroRotationImages[heroIndex % heroRotationImages.length]
       : heroImage;
+  const heroBackdrop = useMemo(() => imageCandidates(activeHeroImage)[0] || activeHeroImage, [activeHeroImage]);
   const highlightFacts = [
     character.alignment && { label: "Alignment", value: character.alignment },
     character.status && { label: "Status", value: character.status },
@@ -668,8 +683,8 @@ export default function CharacterProfilePage({ character, canonicalUrl, related,
     return segments;
   }, [character.longDesc, character.shortDesc]);
   const safeConnections = connections || { factions: [], locations: [], powers: [] };
+  const allyGroups = safeConnections.factions || [];
   const connectionSections = [
-    { title: "Allies & enclaves", icon: Crown, groups: safeConnections.factions || [] },
     { title: "World footprint", icon: MapPin, groups: safeConnections.locations || [] },
     { title: "Power constellation", icon: Atom, groups: safeConnections.powers || [] },
   ].filter((section) => section.groups && section.groups.length);
@@ -694,15 +709,14 @@ export default function CharacterProfilePage({ character, canonicalUrl, related,
       </Head>
       <div className="min-h-screen bg-[#050813] text-white">
         <section className="relative isolate overflow-hidden border-b border-white/10">
-          {activeHeroImage ? (
+          {heroBackdrop ? (
             <div className="absolute inset-0">
-              <img
-                src={activeHeroImage}
-                alt={`${character.name} | Loremaker Universe | Menelek Makonnen`}
-                className="h-full w-full object-cover object-[68%_center]"
+              <ImageSafe
+                src={heroBackdrop}
+                alt={characterAltText(character.name)}
+                fallbackLabel={character.name}
+                className="h-full w-full scale-110 object-cover object-[65%_center] blur-[8px]"
                 loading="eager"
-                referrerPolicy="no-referrer"
-                crossOrigin="anonymous"
                 decoding="async"
               />
               <div className="absolute inset-0 bg-gradient-to-r from-[#050813] via-[#050813]/85 to-[#050813]/35" />
@@ -745,6 +759,18 @@ export default function CharacterProfilePage({ character, canonicalUrl, related,
                     ))}
                   </div>
                 )}
+                {!!character.eraTags?.length && (
+                  <div className="flex flex-wrap gap-2">
+                    {character.eraTags.map((era) => (
+                      <span
+                        key={era}
+                        className="rounded-full border border-white/20 bg-white/10 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.35em] text-white/70"
+                      >
+                        {era}
+                      </span>
+                    ))}
+                  </div>
+                )}
                 <p className="max-w-2xl text-base font-semibold text-white/85 lg:text-lg">{metaDescription}</p>
                 <div className="flex flex-wrap gap-3">
                   <Link
@@ -754,7 +780,7 @@ export default function CharacterProfilePage({ character, canonicalUrl, related,
                     ← Back to codex
                   </Link>
                   <Link
-                    href="/#arena-anchor"
+                    href={`/?arena=${character.slug}#arena-anchor`}
                     className="inline-flex items-center gap-2 rounded-full border border-amber-300/60 bg-amber-300/15 px-5 py-2 text-sm font-semibold text-amber-100 transition hover:bg-amber-300/25"
                   >
                     <Swords className="h-4 w-4" aria-hidden="true" />
@@ -769,82 +795,143 @@ export default function CharacterProfilePage({ character, canonicalUrl, related,
           </div>
         </section>
         <main className="mx-auto max-w-7xl space-y-20 px-4 py-16 sm:px-6 lg:px-8">
-          <section className="grid gap-12 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
-            <div className="space-y-8">
-              <div className="rounded-3xl border border-white/12 bg-white/5 p-8 shadow-[0_30px_120px_rgba(7,10,25,0.45)] backdrop-blur-xl">
-                <h2 className="text-2xl font-black text-white">Chronicle</h2>
-                <div className="mt-6 space-y-4 text-base leading-relaxed text-white/80">
-                  {storyParagraphs.map((paragraph, index) => (
-                    <p key={index}>{paragraph}</p>
+          <section className="grid gap-10 lg:auto-rows-max lg:grid-cols-2 lg:items-start">
+            <div className="order-1 rounded-3xl border border-white/12 bg-white/5 p-8 shadow-[0_30px_120px_rgba(7,10,25,0.45)] backdrop-blur-xl lg:order-1 lg:col-start-1">
+              <h2 className="text-2xl font-black text-white">Chronicle</h2>
+              <div className="mt-6 space-y-4 text-base leading-relaxed text-white/80">
+                {storyParagraphs.map((paragraph, index) => (
+                  <p key={index}>{paragraph}</p>
+                ))}
+              </div>
+            </div>
+            <div className="order-2 rounded-3xl border border-white/12 bg-white/5 p-8 backdrop-blur-xl lg:order-2 lg:col-start-2">
+              <h2 className="text-xl font-black text-white">Legend dossier</h2>
+              <dl className="mt-6 grid gap-6 sm:grid-cols-2">
+                {dossierEntries.map((entry) => (
+                  <div key={entry.label} className="space-y-2">
+                    <dt className="text-xs font-semibold uppercase tracking-[0.3em] text-white/60">{entry.label}</dt>
+                    <dd className="text-sm font-semibold text-white/85">{entry.value}</dd>
+                  </div>
+                ))}
+              </dl>
+            </div>
+            {!!stories.length && (
+              <div className="order-3 rounded-3xl border border-white/12 bg-white/5 p-8 backdrop-blur-xl lg:order-3 lg:col-start-1">
+                <h3 className="text-xl font-black text-white">Key appearances</h3>
+                <ul className="mt-4 space-y-3 text-sm font-semibold text-white/75">
+                  {stories.map((story) => (
+                    <li key={story} className="flex items-start gap-3">
+                      <Sparkles className="mt-1 h-4 w-4 text-amber-200" aria-hidden="true" />
+                      <span>{story}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {!!powers.length && (
+              <div className="order-4 rounded-3xl border border-white/12 bg-white/5 p-8 backdrop-blur-xl lg:order-4 lg:col-start-2">
+                <h2 className="text-xl font-black text-white">Power index</h2>
+                <div className="mt-6 space-y-4">
+                  {powers.map((power) => {
+                    const normalized = Math.max(0, Math.min(10, Number(power.level) || 0));
+                    return (
+                      <div key={power.name} className="space-y-2">
+                        <div className="flex items-center justify-between text-sm font-semibold text-white/80">
+                          <span>{power.name}</span>
+                          <span className="text-amber-200">{normalized}/10</span>
+                        </div>
+                        <div className="h-2 rounded-full bg-white/10">
+                          <div
+                            className="h-full rounded-full bg-gradient-to-r from-amber-300 via-fuchsia-300 to-indigo-300"
+                            style={{ width: `${(normalized / 10) * 100}%` }}
+                          />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+            {!!tags.length && (
+              <div className="order-6 rounded-3xl border border-white/12 bg-white/5 p-8 backdrop-blur-xl lg:order-5 lg:col-start-1">
+                <h3 className="text-xl font-black text-white">Motifs &amp; themes</h3>
+                <div className="mt-4 flex flex-wrap gap-2">
+                  {tags.map((tag) => (
+                    <span
+                      key={tag}
+                      className="rounded-full border border-white/20 bg-white/10 px-3 py-1 text-xs font-semibold text-white/75"
+                    >
+                      {tag}
+                    </span>
                   ))}
                 </div>
               </div>
-              {!!stories.length && (
-                <div className="rounded-3xl border border-white/12 bg-white/5 p-8 backdrop-blur-xl">
-                  <h3 className="text-xl font-black text-white">Key appearances</h3>
-                  <ul className="mt-4 space-y-3 text-sm font-semibold text-white/75">
-                    {stories.map((story) => (
-                      <li key={story} className="flex items-start gap-3">
-                        <Sparkles className="mt-1 h-4 w-4 text-amber-200" aria-hidden="true" />
-                        <span>{story}</span>
-                      </li>
-                    ))}
-                  </ul>
+            )}
+            {!!allyGroups.length && (
+              <div className="order-5 space-y-5 rounded-3xl border border-white/12 bg-white/5 p-6 backdrop-blur-xl lg:order-6 lg:col-start-1">
+                <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.35em] text-white/70">
+                  <Crown className="h-4 w-4 text-amber-200" aria-hidden="true" /> Allies &amp; enclaves
                 </div>
-              )}
-              {!!tags.length && (
-                <div className="rounded-3xl border border-white/12 bg-white/5 p-8 backdrop-blur-xl">
-                  <h3 className="text-xl font-black text-white">Motifs &amp; themes</h3>
-                  <div className="mt-4 flex flex-wrap gap-2">
-                    {tags.map((tag) => (
-                      <span
-                        key={tag}
-                        className="rounded-full border border-white/20 bg-white/10 px-3 py-1 text-xs font-semibold text-white/75"
-                      >
-                        {tag}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-            <div className="space-y-8">
-              <div className="rounded-3xl border border-white/12 bg-white/5 p-8 backdrop-blur-xl">
-                <h2 className="text-xl font-black text-white">Legend dossier</h2>
-                <dl className="mt-6 grid gap-6 sm:grid-cols-2">
-                  {dossierEntries.map((entry) => (
-                    <div key={entry.label} className="space-y-2">
-                      <dt className="text-xs font-semibold uppercase tracking-[0.3em] text-white/60">{entry.label}</dt>
-                      <dd className="text-sm font-semibold text-white/85">{entry.value}</dd>
+                <div className="space-y-4">
+                  {allyGroups.map((group) => (
+                    <div key={group.label} className="space-y-3 rounded-2xl border border-white/12 bg-black/35 p-4">
+                      <div className="flex items-center justify-between text-xs font-bold text-white">
+                        <span>{group.label}</span>
+                        <span className="text-[9px] font-semibold uppercase tracking-[0.35em] text-white/50">
+                          {group.characters.length} dossiers
+                        </span>
+                      </div>
+                      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                        {group.characters.map((entry) => (
+                          <Link
+                            key={entry.slug}
+                            href={`/characters/${entry.slug}`}
+                            className="group overflow-hidden rounded-xl border border-white/10 bg-white/5 p-2 text-white transition hover:border-amber-300/60 hover:bg-amber-200/10"
+                          >
+                            <div className="aspect-square w-full overflow-hidden rounded-lg border border-white/10 bg-black/40">
+                              <ImageSafe
+                                src={entry.cover}
+                                alt={characterAltText(entry.name)}
+                                fallbackLabel={entry.name}
+                                className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
+                                loading="lazy"
+                              />
+                            </div>
+                            <div className="mt-2 space-y-0.5">
+                              <p className="text-[13px] font-bold text-white">{entry.name}</p>
+                              {(entry.alignment || entry.status) && (
+                                <p className="text-[9px] font-semibold uppercase tracking-[0.35em] text-white/55">
+                                  {[entry.alignment, entry.status].filter(Boolean).join(" • ")}
+                                </p>
+                              )}
+                            </div>
+                            <span className="mt-2 inline-flex items-center gap-1 text-[10px] font-semibold text-amber-200">
+                              View dossier
+                              <ArrowUpRight className="h-3 w-3" aria-hidden="true" />
+                            </span>
+                          </Link>
+                        ))}
+                      </div>
                     </div>
                   ))}
-                </dl>
-              </div>
-              {!!powers.length && (
-                <div className="rounded-3xl border border-white/12 bg-white/5 p-8 backdrop-blur-xl">
-                  <h2 className="text-xl font-black text-white">Power index</h2>
-                  <div className="mt-6 space-y-4">
-                    {powers.map((power) => {
-                      const normalized = Math.max(0, Math.min(10, Number(power.level) || 0));
-                      return (
-                        <div key={power.name} className="space-y-2">
-                          <div className="flex items-center justify-between text-sm font-semibold text-white/80">
-                            <span>{power.name}</span>
-                            <span className="text-amber-200">{normalized}/10</span>
-                          </div>
-                          <div className="h-2 rounded-full bg-white/10">
-                            <div
-                              className="h-full rounded-full bg-gradient-to-r from-amber-300 via-fuchsia-300 to-indigo-300"
-                              style={{ width: `${(normalized / 10) * 100}%` }}
-                            />
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
                 </div>
-              )}
-            </div>
+              </div>
+            )}
+            {!!character.eraTags?.length && (
+              <div className="order-7 rounded-3xl border border-white/12 bg-white/5 p-8 backdrop-blur-xl lg:order-7 lg:col-start-1">
+                <h3 className="text-xl font-black text-white">Era timeline</h3>
+                <div className="mt-4 flex flex-wrap gap-2">
+                  {character.eraTags.map((era) => (
+                    <span
+                      key={era}
+                      className="rounded-full border border-white/20 bg-white/10 px-3 py-1 text-xs font-semibold text-white/75"
+                    >
+                      {era}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
           </section>
           {connectionSections.length > 0 && (
             <section className="space-y-8">
@@ -863,49 +950,41 @@ export default function CharacterProfilePage({ character, canonicalUrl, related,
                   {section.groups.map((group) => (
                     <div
                       key={group.label}
-                      className="space-y-4 rounded-3xl border border-white/12 bg-white/5 p-6 backdrop-blur-xl"
+                      className="space-y-3 rounded-3xl border border-white/12 bg-white/5 p-4 backdrop-blur-xl"
                     >
-                      <div className="flex items-center justify-between gap-3">
-                        <h3 className="text-lg font-black text-white">{group.label}</h3>
-                        <span className="text-[10px] font-semibold uppercase tracking-[0.4em] text-white/50">
+                      <div className="flex items-center justify-between gap-2">
+                        <h3 className="text-base font-black text-white">{group.label}</h3>
+                        <span className="text-[9px] font-semibold uppercase tracking-[0.35em] text-white/50">
                           {group.characters.length} dossier{group.characters.length === 1 ? "" : "s"}
                         </span>
                       </div>
-                      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
                         {group.characters.map((entry) => (
                           <Link
                             key={entry.slug}
                             href={`/characters/${entry.slug}`}
-                            className="group relative overflow-hidden rounded-2xl border border-white/10 bg-black/40 p-4 shadow-[0_24px_80px_rgba(7,10,25,0.45)] transition hover:border-amber-300/60 hover:shadow-[0_32px_120px_rgba(16,24,40,0.55)]"
+                            className="group relative overflow-hidden rounded-xl border border-white/10 bg-black/35 p-2 transition hover:border-amber-300/60 hover:bg-amber-200/10"
                           >
-                            <div className="aspect-square w-full overflow-hidden rounded-xl border border-white/10 bg-white/5">
-                              {entry.cover ? (
-                                <img
-                                  src={entry.cover}
-                                  alt={`${entry.name} | Loremaker Universe | Menelek Makonnen`}
-                                  className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
-                                  loading="lazy"
-                                  referrerPolicy="no-referrer"
-                                  crossOrigin="anonymous"
-                                  decoding="async"
-                                />
-                              ) : (
-                                <div className="flex h-full items-center justify-center text-[11px] font-semibold text-white/60">
-                                  Visual dossier pending
-                                </div>
-                              )}
+                            <div className="aspect-square w-full overflow-hidden rounded-lg border border-white/10 bg-white/5">
+                              <ImageSafe
+                                src={entry.cover}
+                                alt={characterAltText(entry.name)}
+                                fallbackLabel={entry.name}
+                                className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
+                                loading="lazy"
+                              />
                             </div>
-                            <div className="mt-4 space-y-1">
+                            <div className="mt-2 space-y-0.5">
                               <p className="text-sm font-bold text-white">{entry.name}</p>
                               {(entry.alignment || entry.status) && (
-                                <p className="text-[11px] font-semibold uppercase tracking-[0.3em] text-white/55">
+                                <p className="text-[9px] font-semibold uppercase tracking-[0.35em] text-white/55">
                                   {[entry.alignment, entry.status].filter(Boolean).join(" • ")}
                                 </p>
                               )}
                             </div>
-                            <span className="mt-3 inline-flex items-center gap-1 text-xs font-semibold text-amber-200">
+                            <span className="mt-2 inline-flex items-center gap-1 text-[10px] font-semibold text-amber-200">
                               View dossier
-                              <ArrowUpRight className="h-3.5 w-3.5" aria-hidden="true" />
+                              <ArrowUpRight className="h-3 w-3" aria-hidden="true" />
                             </span>
                           </Link>
                         ))}
@@ -933,24 +1012,16 @@ export default function CharacterProfilePage({ character, canonicalUrl, related,
                   <Link
                     key={item.slug}
                     href={`/characters/${item.slug}`}
-                    className="group overflow-hidden rounded-2xl border border-white/12 bg-white/5 p-4 shadow-[0_24px_80px_rgba(7,10,25,0.35)] transition hover:border-amber-300/60 hover:shadow-[0_28px_110px_rgba(16,24,40,0.5)]"
+                    className="group overflow-hidden rounded-xl border border-white/12 bg-white/5 p-4 transition hover:border-amber-300/60 hover:bg-amber-200/10"
                   >
                     <div className="aspect-[4/5] w-full overflow-hidden rounded-xl border border-white/10 bg-black/40">
-                      {item.cover ? (
-                        <img
-                          src={item.cover}
-                          alt={`${item.name} | Loremaker Universe | Menelek Makonnen`}
-                          className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
-                          loading="lazy"
-                          referrerPolicy="no-referrer"
-                          crossOrigin="anonymous"
-                          decoding="async"
-                        />
-                      ) : (
-                        <div className="flex h-full items-center justify-center text-[11px] font-semibold text-white/60">
-                          Visual dossier pending
-                        </div>
-                      )}
+                      <ImageSafe
+                        src={item.cover}
+                        alt={characterAltText(item.name)}
+                        fallbackLabel={item.name}
+                        className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
+                        loading="lazy"
+                      />
                     </div>
                     <div className="mt-4 space-y-1">
                       <p className="text-lg font-bold text-white">{item.name}</p>
@@ -966,6 +1037,19 @@ export default function CharacterProfilePage({ character, canonicalUrl, related,
             </section>
           )}
         </main>
+        <button
+          type="button"
+          onClick={() => {
+            if (typeof window !== "undefined") {
+              window.scrollTo({ top: 0, behavior: "smooth" });
+            }
+          }}
+          className="fixed bottom-6 right-6 z-40 inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.35em] text-white transition hover:bg-white/20"
+          aria-label="Back to top"
+        >
+          <ArrowUp className="h-4 w-4" aria-hidden="true" />
+          Back to top
+        </button>
       </div>
     </>
   );
