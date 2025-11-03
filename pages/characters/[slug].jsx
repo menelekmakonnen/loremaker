@@ -1,5 +1,7 @@
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Head from "next/head";
 import Link from "next/link";
+import { ChevronLeft, ChevronRight, Maximize2, X } from "lucide-react";
 import fallbackCharacters from "../../data/fallback-characters.json";
 import {
   fetchCharactersFromSheets,
@@ -102,13 +104,353 @@ function buildRelated(characters, currentId) {
     }));
 }
 
+function GalleryCarousel({ images = [], name = "LoreMaker legend" }) {
+  const safeImages = useMemo(() => images.filter(Boolean), [images]);
+  const length = safeImages.length;
+  const [activeIndex, setActiveIndex] = useState(0);
+  const [lightboxOpen, setLightboxOpen] = useState(false);
+  const [lightboxIndex, setLightboxIndex] = useState(0);
+  const pointerRef = useRef({ id: null, startX: 0 });
+  const lightboxPointerRef = useRef({ id: null, startX: 0 });
+
+  useEffect(() => {
+    if (!length) {
+      setActiveIndex(0);
+      setLightboxIndex(0);
+      return;
+    }
+    setActiveIndex((value) => (value >= length ? length - 1 : value));
+    setLightboxIndex((value) => (value >= length ? length - 1 : value));
+  }, [length]);
+
+  const goNext = useCallback(() => {
+    if (!length) return;
+    setActiveIndex((value) => {
+      const next = (value + 1) % length;
+      if (lightboxOpen) setLightboxIndex(next);
+      return next;
+    });
+  }, [length, lightboxOpen]);
+
+  const goPrev = useCallback(() => {
+    if (!length) return;
+    setActiveIndex((value) => {
+      const next = (value - 1 + length) % length;
+      if (lightboxOpen) setLightboxIndex(next);
+      return next;
+    });
+  }, [length, lightboxOpen]);
+
+  const openLightbox = useCallback(
+    (index) => {
+      if (!length) return;
+      setLightboxIndex(index);
+      setLightboxOpen(true);
+    },
+    [length]
+  );
+
+  const closeLightbox = useCallback(() => {
+    setLightboxOpen(false);
+  }, []);
+
+  useEffect(() => {
+    if (!lightboxOpen) return undefined;
+    const { body } = document;
+    const previous = body.style.overflow;
+    body.style.overflow = "hidden";
+    return () => {
+      body.style.overflow = previous;
+    };
+  }, [lightboxOpen]);
+
+  useEffect(() => {
+    const onKeyDown = (event) => {
+      if (!length) return;
+      if (event.key === "ArrowRight") {
+        event.preventDefault();
+        goNext();
+      } else if (event.key === "ArrowLeft") {
+        event.preventDefault();
+        goPrev();
+      } else if (event.key === "Escape" && lightboxOpen) {
+        event.preventDefault();
+        closeLightbox();
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [length, goNext, goPrev, lightboxOpen, closeLightbox]);
+
+  useEffect(() => {
+    if (lightboxOpen) {
+      setLightboxIndex(activeIndex);
+    }
+  }, [lightboxOpen, activeIndex]);
+
+  const handlePointerDown = useCallback((event) => {
+    pointerRef.current = { id: event.pointerId, startX: event.clientX };
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+  }, []);
+
+  const handlePointerUp = useCallback(
+    (event) => {
+      if (pointerRef.current.id !== event.pointerId) return;
+      const delta = event.clientX - pointerRef.current.startX;
+      if (Math.abs(delta) > 40) {
+        if (delta < 0) {
+          goNext();
+        } else {
+          goPrev();
+        }
+      } else {
+        openLightbox(activeIndex);
+      }
+      pointerRef.current = { id: null, startX: 0 };
+      event.currentTarget.releasePointerCapture?.(event.pointerId);
+    },
+    [goNext, goPrev, openLightbox, activeIndex]
+  );
+
+  const handlePointerCancel = useCallback(() => {
+    pointerRef.current = { id: null, startX: 0 };
+  }, []);
+
+  const handleLightboxPointerDown = useCallback((event) => {
+    lightboxPointerRef.current = { id: event.pointerId, startX: event.clientX };
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+  }, []);
+
+  const handleLightboxPointerUp = useCallback(
+    (event) => {
+      if (lightboxPointerRef.current.id !== event.pointerId) return;
+      const delta = event.clientX - lightboxPointerRef.current.startX;
+      if (Math.abs(delta) > 40) {
+        if (delta < 0) {
+          goNext();
+        } else {
+          goPrev();
+        }
+      }
+      lightboxPointerRef.current = { id: null, startX: 0 };
+      event.currentTarget.releasePointerCapture?.(event.pointerId);
+    },
+    [goNext, goPrev]
+  );
+
+  const handleLightboxPointerCancel = useCallback(() => {
+    lightboxPointerRef.current = { id: null, startX: 0 };
+  }, []);
+
+  if (!length) {
+    return (
+      <div className="rounded-[32px] border border-white/15 bg-white/5 p-6 text-center text-sm font-semibold text-white/70">
+        Visual dossier arriving soon.
+      </div>
+    );
+  }
+
+  const activeImage = safeImages[activeIndex] || null;
+  const lightboxImage = safeImages[lightboxIndex] || null;
+
+  return (
+    <div className="space-y-4">
+      <div
+        role="button"
+        tabIndex={0}
+        onKeyDown={(event) => {
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            openLightbox(activeIndex);
+          }
+        }}
+        onPointerDown={handlePointerDown}
+        onPointerUp={handlePointerUp}
+        onPointerCancel={handlePointerCancel}
+        className="group relative aspect-[3/4] w-full cursor-zoom-in overflow-hidden rounded-[32px] border border-white/15 bg-black/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300/70"
+      >
+        {activeImage ? (
+          <img
+            src={activeImage}
+            alt={`${name} dossier illustration ${activeIndex + 1}`}
+            className="h-full w-full select-none object-cover"
+            loading="eager"
+            decoding="async"
+            referrerPolicy="no-referrer"
+            crossOrigin="anonymous"
+            draggable={false}
+          />
+        ) : (
+          <div className="flex h-full items-center justify-center text-sm font-semibold text-white/70">
+            Imagery loading…
+          </div>
+        )}
+        {length > 1 && (
+          <>
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                goPrev();
+              }}
+              onPointerDown={(event) => event.stopPropagation()}
+              onPointerUp={(event) => event.stopPropagation()}
+              className="absolute left-4 top-1/2 -translate-y-1/2 rounded-full border border-white/30 bg-black/60 p-2 text-white transition hover:bg-black/80"
+              aria-label="Show previous image"
+            >
+              <ChevronLeft className="h-5 w-5" aria-hidden="true" />
+            </button>
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                goNext();
+              }}
+              onPointerDown={(event) => event.stopPropagation()}
+              onPointerUp={(event) => event.stopPropagation()}
+              className="absolute right-4 top-1/2 -translate-y-1/2 rounded-full border border-white/30 bg-black/60 p-2 text-white transition hover:bg-black/80"
+              aria-label="Show next image"
+            >
+              <ChevronRight className="h-5 w-5" aria-hidden="true" />
+            </button>
+          </>
+        )}
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 flex items-center justify-between bg-gradient-to-t from-black/85 via-black/40 to-transparent px-5 pb-4 pt-12 text-[11px] font-semibold uppercase tracking-[0.3em] text-white/80">
+          <span>
+            {activeIndex + 1} / {length}
+          </span>
+          <span className="hidden items-center gap-2 text-xs font-semibold text-white/70 sm:flex">
+            <Maximize2 className="h-4 w-4" aria-hidden="true" /> Tap to expand
+          </span>
+        </div>
+      </div>
+      {length > 1 && (
+        <div className="flex gap-3 overflow-x-auto pb-2 [scrollbar-width:thin]">
+          {safeImages.map((image, index) => {
+            const active = index === activeIndex;
+            return (
+              <button
+                key={`${image}-${index}`}
+                type="button"
+                onClick={() => {
+                  setActiveIndex(index);
+                  if (lightboxOpen) setLightboxIndex(index);
+                }}
+                className={`relative h-24 w-24 flex-shrink-0 overflow-hidden rounded-2xl border ${
+                  active
+                    ? "border-amber-300/80 ring-2 ring-amber-200/50"
+                    : "border-white/15 hover:border-white/40"
+                }`}
+                aria-label={`Show image ${index + 1}`}
+              >
+                <img
+                  src={image}
+                  alt={`${name} thumbnail ${index + 1}`}
+                  className="h-full w-full object-cover"
+                  loading={index < 4 ? "eager" : "lazy"}
+                  decoding="async"
+                  referrerPolicy="no-referrer"
+                  crossOrigin="anonymous"
+                  draggable={false}
+                />
+                {active && <span className="absolute inset-0 border-2 border-amber-200/60" aria-hidden="true" />}
+              </button>
+            );
+          })}
+        </div>
+      )}
+      {lightboxOpen && lightboxImage && (
+        <div
+          className="fixed inset-0 z-50 flex flex-col bg-black/90 backdrop-blur-sm"
+          role="dialog"
+          aria-modal="true"
+          onClick={closeLightbox}
+        >
+          <div className="flex items-center justify-between px-6 py-4">
+            <div className="text-xs font-semibold uppercase tracking-[0.35em] text-white/70">{name}</div>
+            <div className="flex items-center gap-3 text-xs font-semibold text-white/80">
+              <span>
+                {lightboxIndex + 1} / {length}
+              </span>
+              <button
+                type="button"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  closeLightbox();
+                }}
+                className="inline-flex items-center gap-2 rounded-full border border-white/30 bg-black/60 px-3 py-1.5 text-white transition hover:bg-black/80"
+              >
+                <X className="h-4 w-4" aria-hidden="true" /> Close
+              </button>
+            </div>
+          </div>
+          <div
+            className="relative flex flex-1 items-center justify-center px-6 pb-10"
+            onClick={(event) => event.stopPropagation()}
+          >
+            {length > 1 && (
+              <button
+                type="button"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  goPrev();
+                }}
+                className="absolute left-10 top-1/2 -translate-y-1/2 rounded-full border border-white/40 bg-black/60 p-3 text-white transition hover:bg-black/80"
+                aria-label="Previous image"
+              >
+                <ChevronLeft className="h-6 w-6" aria-hidden="true" />
+              </button>
+            )}
+            <div
+              className="max-h-full w-full max-w-4xl"
+              onPointerDown={handleLightboxPointerDown}
+              onPointerUp={handleLightboxPointerUp}
+              onPointerCancel={handleLightboxPointerCancel}
+            >
+              <img
+                src={lightboxImage}
+                alt={`${name} gallery image ${lightboxIndex + 1}`}
+                className="max-h-[75vh] w-full select-none rounded-[28px] object-contain"
+                loading="eager"
+                decoding="async"
+                referrerPolicy="no-referrer"
+                crossOrigin="anonymous"
+                draggable={false}
+              />
+            </div>
+            {length > 1 && (
+              <button
+                type="button"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  goNext();
+                }}
+                className="absolute right-10 top-1/2 -translate-y-1/2 rounded-full border border-white/40 bg-black/60 p-3 text-white transition hover:bg-black/80"
+                aria-label="Next image"
+              >
+                <ChevronRight className="h-6 w-6" aria-hidden="true" />
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function CharacterProfilePage({ character, canonicalUrl, related, schemaJson }) {
   if (!character) {
     return null;
   }
   const metaDescription = formatDescription(character);
   const heroImage = character.cover || character.gallery?.[0] || null;
-  const galleryImages = character.gallery?.length ? character.gallery : heroImage ? [heroImage] : [];
+  const galleryImages = useMemo(() => {
+    const pool = [character.cover, ...(character.gallery || [])].filter(Boolean);
+    if (pool.length) {
+      return Array.from(new Set(pool));
+    }
+    return heroImage ? [heroImage] : [];
+  }, [character.cover, character.gallery, heroImage]);
   const alias = character.alias || [];
   const locations = character.locations || [];
   const factions = character.faction || [];
@@ -192,6 +534,11 @@ export default function CharacterProfilePage({ character, canonicalUrl, related,
         </div>
         <main className="mx-auto max-w-5xl px-4 py-16 sm:px-6 lg:px-8">
           <article className="space-y-16">
+            {!!galleryImages.length && (
+              <section>
+                <GalleryCarousel images={galleryImages} name={character.name} />
+              </section>
+            )}
             <section className="grid gap-10 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] lg:items-start">
               <div className="space-y-10">
                 <div>
@@ -275,27 +622,6 @@ export default function CharacterProfilePage({ character, canonicalUrl, related,
               </aside>
             </section>
 
-            {!!galleryImages.length && (
-              <section>
-                <h2 className="text-2xl font-black text-white">Gallery</h2>
-                <div className="mt-6 grid gap-6 sm:grid-cols-2">
-                  {galleryImages.map((image, index) => (
-                    <div key={`${image}-${index}`} className="overflow-hidden rounded-3xl border border-white/15">
-                      <img
-                        src={image}
-                        alt={`${character.name} artwork ${index + 1} from the LoreMaker Universe`}
-                        className="h-full w-full object-cover"
-                        loading={index < 2 ? "lazy" : "lazy"}
-                        referrerPolicy="no-referrer"
-                        crossOrigin="anonymous"
-                        decoding="async"
-                      />
-                    </div>
-                  ))}
-                </div>
-              </section>
-            )}
-
             {!!related.length && (
               <section>
                 <h2 className="text-2xl font-black text-white">Explore more legends</h2>
@@ -349,7 +675,15 @@ async function loadCharacters() {
   } catch (error) {
     console.warn("[character-profile] Falling back to bundled characters", error);
   }
-  return fallbackCharacters.map((character) => sanitizeCharacter(character)).filter(Boolean);
+  return fallbackCharacters
+    .map((character, index) => {
+      const entry = sanitizeCharacter(character);
+      if (entry && typeof entry.sourceIndex !== "number") {
+        entry.sourceIndex = index;
+      }
+      return entry;
+    })
+    .filter(Boolean);
 }
 
 export async function getStaticPaths() {

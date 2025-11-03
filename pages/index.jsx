@@ -69,6 +69,13 @@ function unique(values) {
   return Array.from(new Set(values.filter(Boolean)));
 }
 
+function hasIllustration(character) {
+  if (!character) return false;
+  if (character.cover) return true;
+  if (Array.isArray(character.gallery) && character.gallery.some(Boolean)) return true;
+  return false;
+}
+
 function parseDriveSource(url) {
   if (!url) return null;
   try {
@@ -684,7 +691,7 @@ function HeroDynamicBackground({ pointer, ripples }) {
   );
 }
 
-function RosterSlide({ slide, icon, facetKey, onFacet, onOpenCharacter, limit }) {
+function RosterSlide({ slide, icon, facetKey, onFacet, onOpenCharacter, limit, background }) {
   const payload = slide.data;
   if (!payload?.name) {
     return (
@@ -704,48 +711,61 @@ function RosterSlide({ slide, icon, facetKey, onFacet, onOpenCharacter, limit })
         : `Masters of ${payload.name}`;
 
   return (
-    <div className="grid h-full gap-8 rounded-[32px] border border-white/15 bg-black/40 p-8 text-white lg:grid-cols-[2fr_3fr]">
-      <div className="space-y-4">
-        <div className="flex items-center gap-3 text-xs font-bold tracking-[0.35em] text-white/70">
-          {icon}
-          {slide.label}
+    <div className="relative h-full rounded-[32px] border border-white/15 bg-black/40 text-white">
+      {background && (
+        <div className="absolute inset-0 overflow-hidden rounded-[32px]">
+          <ImageSafe
+            src={background}
+            alt={`${payload.name} highlight backdrop`}
+            fallbackLabel={payload.name}
+            className="h-full w-full object-cover object-[72%_center]"
+          />
+          <div className="absolute inset-0 bg-gradient-to-r from-black/85 via-[#080d22]/75 to-[#050811]/45" />
         </div>
-        <h2 className="text-2xl font-black leading-tight text-balance sm:text-4xl">{payload.name}</h2>
-        <p className="text-sm font-semibold text-white/75">{descriptor}</p>
-        <div className="flex flex-wrap gap-2">
-          <Button
-            type="button"
-            variant="gradient"
-            size="sm"
-            onClick={() => {
-              onFacet?.({ key: facetKey, value: payload.name });
-            }}
-            className="shadow-[0_10px_30px_rgba(250,204,21,0.25)]"
-          >
-            Filter by {payload.name}
-          </Button>
-        </div>
-      </div>
-      <div className="grid gap-3 sm:grid-cols-2">
-        {members.slice(0, limit).map((member) => (
-          <button
-            key={member.id || member.name}
-            type="button"
-            onClick={() => onOpenCharacter?.(member)}
-            className="flex items-center gap-3 rounded-3xl border border-white/15 bg-white/10 p-3 text-left transition hover:bg-white/20"
-          >
-            <Insignia label={member.name} size={40} variant={slide.key === "faction" ? "faction" : "character"} />
-            <div className="flex flex-col text-xs">
-              <span className="text-sm font-black text-white">{member.name}</span>
-              <span className="text-white/70">{member.alias?.[0] || member.shortDesc?.slice(0, 40) || "Open dossier"}</span>
-            </div>
-          </button>
-        ))}
-        {!members.length && (
-          <div className="flex h-32 items-center justify-center rounded-3xl border border-dashed border-white/15 bg-white/5 text-xs font-semibold text-white/60">
-            Awaiting intel on key figures.
+      )}
+      <div className="relative grid h-full gap-8 rounded-[32px] bg-black/40 p-8 backdrop-blur-lg lg:grid-cols-[2fr_3fr]">
+        <div className="space-y-4">
+          <div className="flex items-center gap-3 text-xs font-bold tracking-[0.35em] text-white/70">
+            {icon}
+            {slide.label}
           </div>
-        )}
+          <h2 className="text-2xl font-black leading-tight text-balance sm:text-4xl">{payload.name}</h2>
+          <p className="text-sm font-semibold text-white/75">{descriptor}</p>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              variant="gradient"
+              size="sm"
+              onClick={() => {
+                onFacet?.({ key: facetKey, value: payload.name });
+              }}
+              className="shadow-[0_10px_30px_rgba(250,204,21,0.25)]"
+            >
+              Filter by {payload.name}
+            </Button>
+          </div>
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2">
+          {members.slice(0, limit).map((member) => (
+            <button
+              key={member.id || member.name}
+              type="button"
+              onClick={() => onOpenCharacter?.(member)}
+              className="flex items-center gap-3 rounded-3xl border border-white/15 bg-white/10 p-3 text-left transition hover:bg-white/20"
+            >
+              <Insignia label={member.name} size={40} variant={slide.key === "faction" ? "faction" : "character"} />
+              <div className="flex flex-col text-xs">
+                <span className="text-sm font-black text-white">{member.name}</span>
+                <span className="text-white/70">{member.alias?.[0] || member.shortDesc?.slice(0, 40) || "Open dossier"}</span>
+              </div>
+            </button>
+          ))}
+          {!members.length && (
+            <div className="flex h-32 items-center justify-center rounded-3xl border border-dashed border-white/15 bg-white/5 text-xs font-semibold text-white/60">
+              Awaiting intel on key figures.
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -1077,13 +1097,31 @@ function CharacterCard({ char, onOpen, onFacet, onUseInSim, highlight }) {
   const highlightFacts = quickFacts.slice(0, 2);
   const minimalFilters = quickFilters.slice(0, 3);
   const description = char.shortDesc || char.longDesc || "No description yet.";
-  const heroImage = useMemo(() => {
-    const pool = [char.cover, ...(char.gallery || [])].filter(Boolean);
-    if (!pool.length) return null;
-    const rng = seededRandom(`${char.id || char.name || "card"}|grid`);
-    const index = Math.floor(rng() * pool.length);
-    return pool[index] || pool[0];
-  }, [char.cover, char.gallery, char.id, char.name]);
+  const imagePool = useMemo(() => [char.cover, ...(char.gallery || [])].filter(Boolean), [char.cover, char.gallery]);
+  const poolKey = useMemo(() => JSON.stringify(imagePool), [imagePool]);
+  const [cardImageIndex, setCardImageIndex] = useState(() => (imagePool.length ? 0 : -1));
+  useEffect(() => {
+    if (!imagePool.length) {
+      setCardImageIndex(-1);
+      return;
+    }
+    const raf = typeof window !== "undefined" ? window.requestAnimationFrame : null;
+    let frameId = null;
+    const pickRandom = () => {
+      const next = Math.floor(Math.random() * imagePool.length);
+      setCardImageIndex(next);
+    };
+    if (raf) {
+      frameId = raf(pickRandom);
+      return () => {
+        if (frameId != null && typeof window !== "undefined") {
+          window.cancelAnimationFrame(frameId);
+        }
+      };
+    }
+    pickRandom();
+  }, [imagePool.length, poolKey]);
+  const heroImage = cardImageIndex >= 0 ? imagePool[cardImageIndex] : null;
   const accentLabel = (char.locations || [])[0] || char.era || char.status || "LoreMaker dossier";
   const shortCaption =
     description.length > 150 ? `${description.slice(0, 147).trimEnd()}…` : description;
@@ -3324,6 +3362,14 @@ function HeroSection({
   const [featureImageIndex, setFeatureImageIndex] = useState(0);
   const [featureSequence, setFeatureSequence] = useState([]);
 
+  const backgroundSources = useMemo(() => {
+    const provided = (featured?.backgrounds || []).filter(Boolean);
+    if (provided.length) return provided;
+    const char = featured?.character;
+    if (!char) return [];
+    return [char.cover, ...(char.gallery || [])].filter(Boolean);
+  }, [featured?.backgrounds, featured?.character?.cover, featured?.character?.gallery, featured?.character?.id]);
+
   const tickerNames = useMemo(() => {
     const names = (characterNames || [])
       .map((name) => (typeof name === "string" ? name.trim() : ""))
@@ -3419,28 +3465,32 @@ function HeroSection({
   }, [current?.key, current?.data?.id]);
 
   useEffect(() => {
-    if (current?.key !== "character") {
+    if (!backgroundSources.length) {
       setFeatureSequence([]);
       setFeatureImageIndex(0);
       return undefined;
     }
-    const charData = current?.data;
-    const sources = [charData?.cover, ...(charData?.gallery || [])].filter(Boolean);
-    if (!sources.length) {
-      setFeatureSequence([]);
-      setFeatureImageIndex(0);
-      return undefined;
+    const seed = featured?.character?.id || featured?.character?.name || "character";
+    const rng = seededRandom(`${seed}|feature`);
+    const order = backgroundSources.slice();
+    if (order.length > 1) {
+      order.sort(() => rng() - 0.5);
     }
-    const rng = seededRandom(`${charData.id || charData.name || "character"}|feature`);
-    const order = sources.slice().sort(() => rng() - 0.5);
-    const initialIndex = Math.floor(rng() * order.length);
     setFeatureSequence(order);
+    const initialIndex = order.length > 0 ? Math.floor(rng() * order.length) % order.length : 0;
     setFeatureImageIndex(initialIndex);
+    if (order.length <= 1) {
+      return undefined;
+    }
     const timer = setInterval(() => {
       setFeatureImageIndex((value) => (value + 1) % order.length);
     }, 30000);
     return () => clearInterval(timer);
-  }, [current]);
+  }, [backgroundSources, featured?.character?.id, featured?.character?.name]);
+
+  const backgroundOrder = featureSequence.length ? featureSequence : backgroundSources;
+  const sharedBackground =
+    backgroundOrder.length > 0 ? backgroundOrder[featureImageIndex % backgroundOrder.length] : null;
 
   const goPrev = () => {
     setDirection(-1);
@@ -3465,11 +3515,7 @@ function HeroSection({
       );
     }
     const images = [char.cover, ...(char.gallery || [])].filter(Boolean);
-    const backgroundSources = featureSequence.length ? featureSequence : images;
-    const activeBackground =
-      backgroundSources.length > 0
-        ? backgroundSources[featureImageIndex % backgroundSources.length]
-        : null;
+    const activeBackground = sharedBackground || images[0] || null;
     const topPowers = [...(char.powers || [])]
       .sort((a, b) => (Number(b.level) || 0) - (Number(a.level) || 0))
       .slice(0, 3);
@@ -3825,6 +3871,7 @@ function HeroSection({
             onFacet={onFacet}
             onOpenCharacter={onOpenCharacter}
             limit={isCompact ? 3 : 6}
+            background={sharedBackground}
           />
         );
       case "location":
@@ -3836,6 +3883,7 @@ function HeroSection({
             onFacet={onFacet}
             onOpenCharacter={onOpenCharacter}
             limit={isCompact ? 3 : 6}
+            background={sharedBackground}
           />
         );
       case "power":
@@ -3847,6 +3895,7 @@ function HeroSection({
             onFacet={onFacet}
             onOpenCharacter={onOpenCharacter}
             limit={isCompact ? 3 : 6}
+            background={sharedBackground}
           />
         );
       default:
@@ -4208,8 +4257,23 @@ export default function LoremakerApp({ initialCharacters = [], initialError = nu
     });
   }, [filters, query, combineAND]);
 
+  const originalOrder = useMemo(() => {
+    const map = new Map();
+    data.forEach((char, index) => {
+      if (!char) return;
+      map.set(char.id, index);
+    });
+    return map;
+  }, [data]);
+
   const sorted = useMemo(() => {
     const arr = [...filtered];
+    const orderOf = (char) => {
+      if (typeof char?.sourceIndex === "number") return char.sourceIndex;
+      const fallback = originalOrder.get(char?.id);
+      if (typeof fallback === "number") return fallback;
+      return originalOrder.size + 1;
+    };
     switch (sortMode) {
       case "random":
         return arr.sort(() => Math.random() - 0.5);
@@ -4224,9 +4288,14 @@ export default function LoremakerApp({ initialCharacters = [], initialError = nu
       case "least":
         return arr.sort((a, b) => scoreCharacter(a) - scoreCharacter(b));
       default:
-        return arr;
+        return arr.sort((a, b) => {
+          const aHas = hasIllustration(a) ? 1 : 0;
+          const bHas = hasIllustration(b) ? 1 : 0;
+          if (bHas !== aHas) return bHas - aHas;
+          return orderOf(a) - orderOf(b);
+        });
     }
-  }, [filtered, sortMode]);
+  }, [filtered, sortMode, originalOrder]);
 
   useEffect(() => {
     sortedRef.current = sorted;
