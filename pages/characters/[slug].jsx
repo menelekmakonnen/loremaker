@@ -845,7 +845,7 @@ export default function CharacterProfilePage({ character, canonicalUrl, related,
         <main className="mx-auto max-w-7xl space-y-20 px-4 py-16 sm:px-6 lg:px-8">
           <section className="grid gap-10 lg:grid-cols-12">
             <article className="rounded-3xl border border-white/12 bg-white/5 p-8 shadow-[0_30px_120px_rgba(7,10,25,0.45)] backdrop-blur-xl lg:col-span-5">
-              <h2 className="text-2xl font-black text-white">The legend so far</h2>
+              <h2 className="text-2xl font-black text-white">Story so far</h2>
               <p className="mt-2 text-sm font-semibold text-white/70">
                 Catch up on {character.name}'s journey before diving deeper.
               </p>
@@ -856,7 +856,7 @@ export default function CharacterProfilePage({ character, canonicalUrl, related,
               </div>
             </article>
             <article className="rounded-3xl border border-white/12 bg-white/5 p-8 backdrop-blur-xl lg:col-span-7 lg:col-start-6">
-              <h2 className="text-2xl font-black text-white">Profile at a glance</h2>
+              <h2 className="text-2xl font-black text-white">Identity &amp; allegiances</h2>
               <p className="mt-2 text-sm font-semibold text-white/70">
                 Essential identifiers, allegiances, and touchpoints.
               </p>
@@ -886,7 +886,7 @@ export default function CharacterProfilePage({ character, canonicalUrl, related,
             </article>
             {!!tags.length && (
               <article className="rounded-3xl border border-white/12 bg-white/5 p-8 backdrop-blur-xl lg:col-span-5">
-                <h3 className="text-xl font-black text-white">Motifs &amp; themes</h3>
+                <h3 className="text-xl font-black text-white">Motifs &amp; Themes</h3>
                 <p className="mt-2 text-sm font-semibold text-white/70">
                   Recurring symbols and resonant ideas that define this legend.
                 </p>
@@ -906,7 +906,7 @@ export default function CharacterProfilePage({ character, canonicalUrl, related,
             )}
             {!!powers.length && (
               <article className="rounded-3xl border border-white/12 bg-white/5 p-8 backdrop-blur-xl lg:col-span-7 lg:col-start-6">
-                <h2 className="text-xl font-black text-white">Signature abilities</h2>
+                <h2 className="text-xl font-black text-white">Power index</h2>
                 <p className="mt-2 text-sm font-semibold text-white/70">
                   How {character.name} channels their gifts across the universe.
                 </p>
@@ -934,10 +934,10 @@ export default function CharacterProfilePage({ character, canonicalUrl, related,
             {!!allyGroups.length && (
               <article className="space-y-4 rounded-3xl border border-white/12 bg-white/5 p-6 backdrop-blur-xl lg:col-span-5">
                 <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.35em] text-white/70">
-                  <Crown className="h-4 w-4 text-amber-200" aria-hidden="true" /> Allies &amp; enclaves
+                  <Crown className="h-4 w-4 text-amber-200" aria-hidden="true" /> Allies &amp; Enclaves
                 </div>
                 <p className="text-sm font-semibold text-white/70">
-                  The trusted circles who stand with {character.name}.
+                  Meet the trusted circles who stand with {character.name}.
                 </p>
                 <div className="space-y-3">
                   {allyGroups.map((group) => (
@@ -948,7 +948,7 @@ export default function CharacterProfilePage({ character, canonicalUrl, related,
                           {group.characters.length} dossier{group.characters.length === 1 ? "" : "s"}
                         </span>
                       </div>
-                      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
+                      <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-4 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6">
                         {group.characters.map((entry) => (
                           <Link
                             key={entry.slug}
@@ -965,15 +965,15 @@ export default function CharacterProfilePage({ character, canonicalUrl, related,
                                 loading="lazy"
                               />
                             </div>
-                            <div className="mt-2 space-y-0.5 text-left">
-                              <p className="text-[12px] font-bold text-white">{entry.name}</p>
+                            <div className="mt-1.5 space-y-0.5 text-left">
+                              <p className="text-[11px] font-bold text-white">{entry.name}</p>
                               {(entry.alignment || entry.status) && (
                                 <p className="text-[9px] font-semibold uppercase tracking-[0.3em] text-white/55">
                                   {[entry.alignment, entry.status].filter(Boolean).join(" • ")}
                                 </p>
                               )}
                             </div>
-                            <span className="mt-2 inline-flex items-center gap-1 text-[10px] font-semibold text-amber-200">
+                            <span className="mt-1 inline-flex items-center gap-1 text-[10px] font-semibold text-amber-200">
                               View dossier
                               <ArrowUpRight className="h-3 w-3" aria-hidden="true" />
                             </span>
@@ -1047,7 +1047,7 @@ export default function CharacterProfilePage({ character, canonicalUrl, related,
                           {group.characters.length} dossier{group.characters.length === 1 ? "" : "s"}
                         </span>
                       </div>
-                      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
+                      <div className="grid gap-1.5 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6">
                         {group.characters.map((entry) => (
                           <Link
                             key={entry.slug}
@@ -1064,7 +1064,7 @@ export default function CharacterProfilePage({ character, canonicalUrl, related,
                               />
                             </div>
                             <div className="mt-2 space-y-0.5">
-                              <p className="text-sm font-bold text-white">{entry.name}</p>
+                              <p className="text-[12px] font-bold text-white">{entry.name}</p>
                               {(entry.alignment || entry.status) && (
                                 <p className="text-[9px] font-semibold uppercase tracking-[0.35em] text-white/55">
                                   {[entry.alignment, entry.status].filter(Boolean).join(" • ")}

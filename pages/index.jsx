@@ -212,8 +212,14 @@ function getCharacterValues(character, key) {
     case "gender":
     case "alignment":
     case "status":
-    case "era":
-      return normaliseArray(character[key]);
+    case "era": {
+      const eraValues = [];
+      if (character.era) eraValues.push(character.era);
+      if (Array.isArray(character.eraTags)) {
+        eraValues.push(...character.eraTags);
+      }
+      return normaliseArray(eraValues);
+    }
     case "locations":
       return normaliseArray(character.locations);
     case "faction":
@@ -2304,7 +2310,18 @@ function SidebarFilters({ data, filters, setFilters, combineAND, setCombineAND, 
   const alignments = useMemo(() => uniq(data.map((item) => item.alignment || "")), [data]);
   const locations = useMemo(() => uniq(data.flatMap((item) => item.locations || [])), [data]);
   const factions = useMemo(() => uniq(data.flatMap((item) => item.faction || [])), [data]);
-  const eras = useMemo(() => uniq(data.map((item) => item.era || "")), [data]);
+  const eras = useMemo(
+    () =>
+      uniq(
+        data.flatMap((item) => {
+          const values = [];
+          if (item.era) values.push(item.era);
+          if (Array.isArray(item.eraTags)) values.push(...item.eraTags);
+          return values;
+        })
+      ),
+    [data]
+  );
   const tags = useMemo(() => uniq(data.flatMap((item) => item.tags || [])), [data]);
   const statuses = useMemo(() => uniq(data.map((item) => item.status || "")), [data]);
   const stories = useMemo(() => uniq(data.flatMap((item) => item.stories || [])), [data]);
@@ -2624,7 +2641,7 @@ function ToolsBar({
   useIsomorphicLayoutEffect(() => {
     if (!heroEl) return undefined;
     const height = barHeight || lastKnownHeight || 0;
-    heroEl.style.setProperty("--toolbar-offset", `${Math.ceil(height + 210)}px`);
+    heroEl.style.setProperty("--toolbar-offset", `${Math.ceil(height + 260)}px`);
     return () => {
       heroEl.style.removeProperty("--toolbar-offset");
     };
@@ -3121,6 +3138,7 @@ function HeroSection({
   const [pointer, setPointer] = useState({ x: 50, y: 50 });
   const [ripples, setRipples] = useState([]);
   const rippleTimers = useRef(new Map());
+  const slidePointer = useRef(null);
   const slides = useMemo(() => {
     const base = [
       { key: "intro", label: "Menelek Makonnen Presents", data: { title: "The Loremaker Universe", blurb: "Author Menelek Makonnen opens the living universe — an ever-growing nexus of characters, factions, and cosmic forces awaiting your exploration." } },
@@ -3233,6 +3251,18 @@ function HeroSection({
     return () => clearTimeout(timer);
   }, [slides.length]);
 
+  useEffect(() => {
+    if (slides.length <= 1) return undefined;
+    const interval = setInterval(() => {
+      setDirection(1);
+      setIndex((prev) => {
+        if (slides.length <= 0) return prev;
+        return (prev + 1) % slides.length;
+      });
+    }, 60000);
+    return () => clearInterval(interval);
+  }, [slides.length]);
+
   const current = slides[index] || slides[0];
   const peekActive = initialPeek && current?.key === "character";
 
@@ -3291,17 +3321,69 @@ function HeroSection({
   const sharedBackground =
     backgroundOrder.length > 0 ? backgroundOrder[featureImageIndex % backgroundOrder.length] : null;
 
-  const goPrev = () => {
+  const goPrev = useCallback(() => {
+    if (slides.length <= 1) return;
     setDirection(-1);
     setIndex((prev) => (prev - 1 + slides.length) % slides.length);
-  };
+  }, [slides.length]);
 
-  const goNext = () => {
+  const goNext = useCallback(() => {
+    if (slides.length <= 1) return;
     setDirection(1);
     setIndex((prev) => (prev + 1) % slides.length);
-  };
+  }, [slides.length]);
 
   const activeTickerName = tickerNames[tickerIndex % Math.max(tickerNames.length, 1)] || "Lore";
+
+  const handleSlidePointerDown = useCallback((event) => {
+    if (event.pointerType === "mouse" && event.button !== 0) return;
+    if (event.target?.closest?.('[data-hero-control]')) return;
+    slidePointer.current = {
+      id: event.pointerId,
+      x: event.clientX,
+      y: event.clientY,
+      container: event.currentTarget,
+    };
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+  }, []);
+
+  const handleSlidePointerUp = useCallback(
+    (event) => {
+      const start = slidePointer.current;
+      if (!start || start.id !== event.pointerId) return;
+      slidePointer.current = null;
+      safeReleasePointerCapture(start.container, event.pointerId);
+      if (event.target?.closest?.('[data-hero-control]')) return;
+      const dx = event.clientX - start.x;
+      const dy = event.clientY - start.y;
+      if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 56) {
+        if (dx < 0) {
+          goNext();
+        } else {
+          goPrev();
+        }
+      }
+    },
+    [goNext, goPrev]
+  );
+
+  const handleSlidePointerCancel = useCallback(() => {
+    if (!slidePointer.current) return;
+    const start = slidePointer.current;
+    slidePointer.current = null;
+    safeReleasePointerCapture(start.container, start.id);
+  }, []);
+
+  const handleSlidePointerLeave = useCallback(
+    (event) => {
+      const start = slidePointer.current;
+      if (!start) return;
+      if (event.pointerId && start.id && event.pointerId !== start.id) return;
+      slidePointer.current = null;
+      safeReleasePointerCapture(start.container, start.id);
+    },
+    []
+  );
 
   const renderCharacter = (slide) => {
     const char = slide.data;
@@ -3656,6 +3738,7 @@ function HeroSection({
   };
 
   const renderSlide = (slide) => {
+    if (!slide) return null;
     switch (slide.key) {
       case "intro":
         return renderIntro(slide);
@@ -3833,9 +3916,13 @@ function HeroSection({
           <div className="flex flex-1 items-center">
             <div
               className={cx(
-                "relative w-full overflow-hidden rounded-[36px] border border-white/15 bg-black/60 shadow-[0_40px_120px_rgba(12,9,32,0.55)]",
+                "relative w-full overflow-hidden rounded-[36px] border border-white/15 bg-black/60 shadow-[0_40px_120px_rgba(12,9,32,0.55)] touch-pan-y",
                 heroHeightClass
               )}
+              onPointerDown={handleSlidePointerDown}
+              onPointerUp={handleSlidePointerUp}
+              onPointerLeave={handleSlidePointerLeave}
+              onPointerCancel={handleSlidePointerCancel}
             >
               {slides.length > 1 && (
                 <>
@@ -3845,6 +3932,7 @@ function HeroSection({
                     className="absolute left-0 top-1/2 z-30 flex h-10 w-10 items-center justify-center rounded-full border border-white/35 bg-black/70 text-white shadow-lg transition hover:bg-black/90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-300 sm:h-12 sm:w-12"
                     style={{ transform: "translate(-130%, -50%)" }}
                     aria-label="Previous highlight"
+                    data-hero-control="true"
                   >
                     <ChevronLeft className="h-5 w-5 sm:h-6 sm:w-6" />
                   </button>
@@ -3854,6 +3942,7 @@ function HeroSection({
                     className="absolute right-0 top-1/2 z-30 flex h-10 w-10 items-center justify-center rounded-full border border-white/35 bg-black/70 text-white shadow-lg transition hover:bg-black/90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-300 sm:h-12 sm:w-12"
                     style={{ transform: "translate(130%, -50%)" }}
                     aria-label="Next highlight"
+                    data-hero-control="true"
                   >
                     <ChevronRight className="h-5 w-5 sm:h-6 sm:w-6" />
                   </button>
@@ -3915,6 +4004,7 @@ export default function LoremakerApp({ initialCharacters = [], initialError = nu
   const [transferNotices, setTransferNotices] = useState([]);
   const sortedRef = useRef([]);
   const processedArenaRef = useRef(null);
+  const archiveRef = useRef(null);
   const currentYear = useMemo(() => new Date().getFullYear(), []);
   const slugify = useCallback(
     (value) =>
@@ -4081,6 +4171,58 @@ export default function LoremakerApp({ initialCharacters = [], initialError = nu
     delete nextQuery.prefilter;
     router.replace({ pathname: router.pathname, query: nextQuery }, undefined, { shallow: true });
   }, [router, router?.isReady, router?.query?.prefilter]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return undefined;
+    let detach = null;
+    let cancelled = false;
+
+    const setup = () => {
+      const hero = document.getElementById("hero-showcase");
+      const archive = archiveRef.current;
+      if (!hero || !archive) {
+        if (!cancelled) {
+          requestAnimationFrame(setup);
+        }
+        return;
+      }
+
+      const heroWheel = (event) => {
+        if (event.deltaY <= 4) return;
+        const heroRect = hero.getBoundingClientRect();
+        const archiveTop = archive.getBoundingClientRect().top + window.scrollY - 24;
+        const heroBottom = heroRect.bottom + window.scrollY;
+        if (window.scrollY + 12 >= heroBottom) return;
+        event.preventDefault();
+        window.scrollTo({ top: archiveTop, behavior: "smooth" });
+      };
+
+      const archiveWheel = (event) => {
+        if (event.deltaY >= -4) return;
+        const archiveTop = archive.getBoundingClientRect().top + window.scrollY;
+        if (window.scrollY > archiveTop + 16) return;
+        const heroTop = hero.getBoundingClientRect().top + window.scrollY;
+        event.preventDefault();
+        window.scrollTo({ top: heroTop, behavior: "smooth" });
+      };
+
+      hero.addEventListener("wheel", heroWheel, { passive: false });
+      archive.addEventListener("wheel", archiveWheel, { passive: false });
+      detach = () => {
+        hero.removeEventListener("wheel", heroWheel);
+        archive.removeEventListener("wheel", archiveWheel);
+      };
+    };
+
+    setup();
+
+    return () => {
+      cancelled = true;
+      if (typeof detach === "function") {
+        detach();
+      }
+    };
+  }, []);
 
   const onUseInSim = useCallback((character, rect) => {
     if (!character) return;
@@ -4417,7 +4559,11 @@ export default function LoremakerApp({ initialCharacters = [], initialError = nu
   }, [sorted, openCharacter]);
 
   const scrollToCharacters = useCallback(() => {
-    document.getElementById("characters-grid")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    if (typeof window === "undefined") return;
+    const target = document.getElementById("characters-grid") || archiveRef.current;
+    if (!target) return;
+    const top = target.getBoundingClientRect().top + window.scrollY - 24;
+    window.scrollTo({ top, behavior: "smooth" });
   }, []);
 
   return (
@@ -4498,7 +4644,7 @@ export default function LoremakerApp({ initialCharacters = [], initialError = nu
           filteredCount={filtered.length}
           hasActiveFilters={hasActiveFilters}
         />
-        <div className="mx-auto max-w-7xl space-y-8 px-3 pt-4 sm:px-4">
+        <div ref={archiveRef} className="mx-auto max-w-7xl space-y-8 px-3 pt-4 sm:px-4">
           {loading && (
             <div className="rounded-3xl border border-white/15 bg-white/5 px-6 py-4 text-sm font-semibold text-white/80">
               Synchronising the universe…
