@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Head from "next/head";
 import Link from "next/link";
-import { ChevronLeft, ChevronRight, Maximize2, X } from "lucide-react";
+import { Atom, ChevronLeft, ChevronRight, Crown, MapPin, Maximize2, Sparkles, Swords, X, ArrowUpRight } from "lucide-react";
 import fallbackCharacters from "../../data/fallback-characters.json";
 import {
   fetchCharactersFromSheets,
@@ -105,14 +105,66 @@ function buildRelated(characters, currentId) {
     }));
 }
 
+function uniqueBySlug(characters) {
+  const seen = new Set();
+  const result = [];
+  for (const entry of characters) {
+    const slug = characterSlug(entry);
+    if (!slug || seen.has(slug)) continue;
+    seen.add(slug);
+    result.push(entry);
+  }
+  return result;
+}
+
+function buildConnections(characters, current) {
+  if (!current) {
+    return { factions: [], locations: [], powers: [] };
+  }
+  const others = (characters || []).filter((entry) => entry && entry.id && entry.id !== current.id);
+  const limit = 8;
+
+  const hydrate = (list) =>
+    list.map((entry) => ({
+      name: entry.name,
+      slug: characterSlug(entry),
+      cover: entry.cover || entry.gallery?.[0] || null,
+      alignment: entry.alignment || null,
+      status: entry.status || null,
+    }));
+
+  const fromValues = (values, predicate) =>
+    (values || [])
+      .filter(Boolean)
+      .map((value) => {
+        const matches = uniqueBySlug(
+          others.filter((entry) => predicate(entry, value))
+        ).slice(0, limit);
+        if (!matches.length) return null;
+        return {
+          label: value,
+          characters: hydrate(matches),
+        };
+      })
+      .filter(Boolean);
+
+  const powerNames = (current.powers || []).map((power) => power?.name).filter(Boolean);
+
+  return {
+    factions: fromValues(current.faction || [], (entry, faction) => (entry.faction || []).includes(faction)),
+    locations: fromValues(current.locations || [], (entry, location) => (entry.locations || []).includes(location)),
+    powers: fromValues(powerNames, (entry, power) => (entry.powers || []).some((p) => p?.name === power)),
+  };
+}
+
 function GalleryCarousel({ images = [], name = "LoreMaker legend" }) {
   const safeImages = useMemo(() => images.filter(Boolean), [images]);
   const length = safeImages.length;
   const [activeIndex, setActiveIndex] = useState(0);
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [lightboxIndex, setLightboxIndex] = useState(0);
-  const pointerRef = useRef({ id: null, startX: 0, startY: 0, lastX: 0, moved: false });
-  const lightboxPointerRef = useRef({ id: null, startX: 0, startY: 0, lastX: 0, moved: false });
+  const pointerRef = useRef({ id: null, startX: 0, startY: 0, lastX: 0, moved: false, container: null, origin: null });
+  const lightboxPointerRef = useRef({ id: null, startX: 0, startY: 0, lastX: 0, moved: false, container: null, origin: null });
   const altText = useMemo(() => `${name} | Loremaker Universe | Menelek Makonnen`, [name]);
 
   useEffect(() => {
@@ -192,12 +244,15 @@ function GalleryCarousel({ images = [], name = "LoreMaker legend" }) {
 
   const handlePointerDown = useCallback((event) => {
     if (event.pointerType === "mouse" && event.button !== 0) return;
+    if (event.target?.closest?.('[data-gallery-control]')) return;
     pointerRef.current = {
       id: event.pointerId,
       startX: event.clientX,
       startY: event.clientY,
       lastX: event.clientX,
       moved: false,
+      container: event.currentTarget,
+      origin: event.target,
     };
     event.currentTarget.setPointerCapture?.(event.pointerId);
   }, []);
@@ -232,8 +287,11 @@ function GalleryCarousel({ images = [], name = "LoreMaker legend" }) {
       const totalX = event.clientX - current.startX;
       const totalY = event.clientY - current.startY;
       const swiped = Math.abs(totalX) > 40 && Math.abs(totalX) > Math.abs(totalY);
-      event.currentTarget.releasePointerCapture?.(event.pointerId);
-      pointerRef.current = { id: null, startX: 0, startY: 0, lastX: 0, moved: false };
+      current.container?.releasePointerCapture?.(event.pointerId);
+      pointerRef.current = { id: null, startX: 0, startY: 0, lastX: 0, moved: false, container: null, origin: null };
+      if (current.origin?.closest?.('[data-gallery-control]')) {
+        return;
+      }
       if (!swiped && !current.moved) {
         openLightbox(activeIndex);
       }
@@ -242,17 +300,22 @@ function GalleryCarousel({ images = [], name = "LoreMaker legend" }) {
   );
 
   const handlePointerCancel = useCallback(() => {
-    pointerRef.current = { id: null, startX: 0, startY: 0, lastX: 0, moved: false };
+    const current = pointerRef.current;
+    current.container?.releasePointerCapture?.(current.id);
+    pointerRef.current = { id: null, startX: 0, startY: 0, lastX: 0, moved: false, container: null, origin: null };
   }, []);
 
   const handleLightboxPointerDown = useCallback((event) => {
     if (event.pointerType === "mouse" && event.button !== 0) return;
+    if (event.target?.closest?.('[data-gallery-control]')) return;
     lightboxPointerRef.current = {
       id: event.pointerId,
       startX: event.clientX,
       startY: event.clientY,
       lastX: event.clientX,
       moved: false,
+      container: event.currentTarget,
+      origin: event.target,
     };
     event.currentTarget.setPointerCapture?.(event.pointerId);
   }, []);
@@ -283,12 +346,14 @@ function GalleryCarousel({ images = [], name = "LoreMaker legend" }) {
   const handleLightboxPointerUp = useCallback((event) => {
     const current = lightboxPointerRef.current;
     if (!current || current.id !== event.pointerId) return;
-    lightboxPointerRef.current = { id: null, startX: 0, startY: 0, lastX: 0, moved: false };
-    event.currentTarget.releasePointerCapture?.(event.pointerId);
+    current.container?.releasePointerCapture?.(event.pointerId);
+    lightboxPointerRef.current = { id: null, startX: 0, startY: 0, lastX: 0, moved: false, container: null, origin: null };
   }, []);
 
   const handleLightboxPointerCancel = useCallback(() => {
-    lightboxPointerRef.current = { id: null, startX: 0, startY: 0, lastX: 0, moved: false };
+    const current = lightboxPointerRef.current;
+    current.container?.releasePointerCapture?.(current.id);
+    lightboxPointerRef.current = { id: null, startX: 0, startY: 0, lastX: 0, moved: false, container: null, origin: null };
   }, []);
 
   if (!length) {
@@ -347,6 +412,7 @@ function GalleryCarousel({ images = [], name = "LoreMaker legend" }) {
               onPointerUp={(event) => event.stopPropagation()}
               className="absolute left-4 top-1/2 -translate-y-1/2 rounded-full border border-white/30 bg-black/60 p-2 text-white transition hover:bg-black/80"
               aria-label="Show previous image"
+              data-gallery-control
             >
               <ChevronLeft className="h-5 w-5" aria-hidden="true" />
             </button>
@@ -360,6 +426,7 @@ function GalleryCarousel({ images = [], name = "LoreMaker legend" }) {
               onPointerUp={(event) => event.stopPropagation()}
               className="absolute right-4 top-1/2 -translate-y-1/2 rounded-full border border-white/30 bg-black/60 p-2 text-white transition hover:bg-black/80"
               aria-label="Show next image"
+              data-gallery-control
             >
               <ChevronRight className="h-5 w-5" aria-hidden="true" />
             </button>
@@ -392,6 +459,7 @@ function GalleryCarousel({ images = [], name = "LoreMaker legend" }) {
                     : "border-white/15 hover:border-white/40"
                 }`}
                 aria-label={`Show image ${index + 1}`}
+                data-gallery-control
               >
                 <img
                   src={image}
@@ -422,14 +490,15 @@ function GalleryCarousel({ images = [], name = "LoreMaker legend" }) {
               <span>
                 {lightboxIndex + 1} / {length}
               </span>
-              <button
-                type="button"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  closeLightbox();
-                }}
-                className="inline-flex items-center gap-2 rounded-full border border-white/30 bg-black/60 px-3 py-1.5 text-white transition hover:bg-black/80"
-              >
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                closeLightbox();
+              }}
+              className="inline-flex items-center gap-2 rounded-full border border-white/30 bg-black/60 px-3 py-1.5 text-white transition hover:bg-black/80"
+              data-gallery-control
+            >
                 <X className="h-4 w-4" aria-hidden="true" /> Close
               </button>
             </div>
@@ -447,6 +516,7 @@ function GalleryCarousel({ images = [], name = "LoreMaker legend" }) {
                 }}
                 className="absolute left-10 top-1/2 -translate-y-1/2 rounded-full border border-white/40 bg-black/60 p-3 text-white transition hover:bg-black/80"
                 aria-label="Previous image"
+                data-gallery-control
               >
                 <ChevronLeft className="h-6 w-6" aria-hidden="true" />
               </button>
@@ -478,6 +548,7 @@ function GalleryCarousel({ images = [], name = "LoreMaker legend" }) {
                 }}
                 className="absolute right-10 top-1/2 -translate-y-1/2 rounded-full border border-white/40 bg-black/60 p-3 text-white transition hover:bg-black/80"
                 aria-label="Next image"
+                data-gallery-control
               >
                 <ChevronRight className="h-6 w-6" aria-hidden="true" />
               </button>
@@ -503,6 +574,7 @@ function GalleryCarousel({ images = [], name = "LoreMaker legend" }) {
                           : "border-white/15 hover:border-white/40"
                       }`}
                       aria-label={`View image ${index + 1}`}
+                      data-gallery-control
                     >
                       <img
                         src={image}
@@ -527,7 +599,7 @@ function GalleryCarousel({ images = [], name = "LoreMaker legend" }) {
   );
 }
 
-export default function CharacterProfilePage({ character, canonicalUrl, related, schemaJson }) {
+export default function CharacterProfilePage({ character, canonicalUrl, related, schemaJson, connections }) {
   if (!character) {
     return null;
   }
@@ -546,6 +618,61 @@ export default function CharacterProfilePage({ character, canonicalUrl, related,
   const stories = character.stories || [];
   const tags = character.tags || [];
   const powers = character.powers || [];
+  const heroRotationImages = useMemo(() => {
+    if (galleryImages.length) return galleryImages;
+    return heroImage ? [heroImage] : [];
+  }, [galleryImages, heroImage]);
+  const [heroIndex, setHeroIndex] = useState(() =>
+    heroRotationImages.length ? Math.floor(Math.random() * heroRotationImages.length) : 0
+  );
+  useEffect(() => {
+    if (!heroRotationImages.length) {
+      setHeroIndex(0);
+      return;
+    }
+    setHeroIndex(Math.floor(Math.random() * heroRotationImages.length));
+  }, [heroRotationImages.length]);
+  useEffect(() => {
+    if (heroRotationImages.length < 2) return undefined;
+    const id = setInterval(
+      () => setHeroIndex((value) => (value + 1) % heroRotationImages.length),
+      30000
+    );
+    return () => clearInterval(id);
+  }, [heroRotationImages.length]);
+  const activeHeroImage =
+    heroRotationImages.length > 0
+      ? heroRotationImages[heroIndex % heroRotationImages.length]
+      : heroImage;
+  const highlightFacts = [
+    character.alignment && { label: "Alignment", value: character.alignment },
+    character.status && { label: "Status", value: character.status },
+    character.era && { label: "Era", value: character.era },
+  ].filter(Boolean);
+  const dossierEntries = [
+    locations.length && { label: "Strongholds", value: locations.join(", ") },
+    factions.length && { label: "Alliances", value: factions.join(", ") },
+    character.firstAppearance && { label: "First appearance", value: character.firstAppearance },
+    character.gender && { label: "Identity", value: character.gender },
+    alias.length && { label: "Also known as", value: alias.join(", ") },
+  ].filter(Boolean);
+  const storyParagraphs = useMemo(() => {
+    const source = character.longDesc || character.shortDesc || "";
+    const segments = source
+      .split(/\n+/)
+      .map((segment) => segment.trim())
+      .filter(Boolean);
+    if (!segments.length) {
+      return ["More dossiers arriving soon."];
+    }
+    return segments;
+  }, [character.longDesc, character.shortDesc]);
+  const safeConnections = connections || { factions: [], locations: [], powers: [] };
+  const connectionSections = [
+    { title: "Allies & enclaves", icon: Crown, groups: safeConnections.factions || [] },
+    { title: "World footprint", icon: MapPin, groups: safeConnections.locations || [] },
+    { title: "Power constellation", icon: Atom, groups: safeConnections.powers || [] },
+  ].filter((section) => section.groups && section.groups.length);
 
   return (
     <>
@@ -566,11 +693,11 @@ export default function CharacterProfilePage({ character, canonicalUrl, related,
         {schemaJson && <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: schemaJson }} />}
       </Head>
       <div className="min-h-screen bg-[#050813] text-white">
-        <div className="relative overflow-hidden border-b border-white/10 bg-black/40">
-          {heroImage && (
+        <section className="relative isolate overflow-hidden border-b border-white/10">
+          {activeHeroImage ? (
             <div className="absolute inset-0">
               <img
-                src={heroImage}
+                src={activeHeroImage}
                 alt={`${character.name} | Loremaker Universe | Menelek Makonnen`}
                 className="h-full w-full object-cover object-[68%_center]"
                 loading="eager"
@@ -578,177 +705,266 @@ export default function CharacterProfilePage({ character, canonicalUrl, related,
                 crossOrigin="anonymous"
                 decoding="async"
               />
-              <div className="absolute inset-0 bg-gradient-to-r from-[#050813] via-[#050813]/80 to-[#050813]/40" />
+              <div className="absolute inset-0 bg-gradient-to-r from-[#050813] via-[#050813]/85 to-[#050813]/35" />
+              <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(253,230,138,0.25),transparent_55%)]" />
             </div>
+          ) : (
+            <div className="absolute inset-0 bg-gradient-to-br from-[#040617] via-[#050813] to-[#0d122d]" />
           )}
-          <header className="relative mx-auto flex max-w-6xl flex-col gap-8 px-4 py-16 lg:flex-row lg:items-end lg:gap-16">
-            <div className="flex-1 space-y-6">
-              <nav className="text-xs font-semibold uppercase tracking-[0.3em] text-white/70">
-                <Link href="/" className="hover:text-white/90">
-                  Loremaker Universe
-                </Link>
-                <span className="mx-3 text-white/40">/</span>
-                <span className="text-white/90">Codex</span>
-              </nav>
-              <div className="space-y-3">
-                <h1 className="text-4xl font-black leading-tight tracking-tight sm:text-5xl lg:text-6xl">
-                  {character.name}
-                </h1>
-                {alias.length > 0 && (
-                  <p className="text-lg font-semibold text-white/75">Also known as {alias.join(", ")}</p>
+          <div className="relative z-10 mx-auto max-w-7xl px-4 pb-24 pt-20 sm:px-6 lg:px-8">
+            <div className="flex flex-col gap-12 lg:grid lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] lg:items-end">
+              <div className="space-y-8">
+                <nav className="flex items-center gap-3 text-xs font-semibold uppercase tracking-[0.35em] text-white/70">
+                  <Link href="/" className="transition hover:text-white">
+                    Loremaker Universe
+                  </Link>
+                  <span className="inline-block h-1 w-1 rounded-full bg-white/50" aria-hidden="true" />
+                  <span className="text-white/80">Codex dossier</span>
+                </nav>
+                <div className="space-y-4">
+                  <span className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-4 py-1 text-[11px] font-semibold uppercase tracking-[0.4em] text-white/75">
+                    <Sparkles className="h-4 w-4 text-amber-200" aria-hidden="true" />
+                    Featured legend
+                  </span>
+                  <h1 className="text-4xl font-black leading-tight tracking-tight text-balance sm:text-5xl lg:text-6xl">
+                    {character.name}
+                  </h1>
+                  {alias.length > 0 && (
+                    <p className="text-lg font-semibold text-white/75">Also known as {alias.join(", ")}</p>
+                  )}
+                </div>
+                {highlightFacts.length > 0 && (
+                  <div className="flex flex-wrap gap-3 text-xs font-semibold uppercase tracking-[0.28em] text-white/80">
+                    {highlightFacts.map((fact) => (
+                      <span
+                        key={fact.label}
+                        className="rounded-full border border-white/20 bg-white/10 px-4 py-1"
+                      >
+                        {fact.label}: {fact.value}
+                      </span>
+                    ))}
+                  </div>
                 )}
+                <p className="max-w-2xl text-base font-semibold text-white/85 lg:text-lg">{metaDescription}</p>
+                <div className="flex flex-wrap gap-3">
+                  <Link
+                    href="/#characters-grid"
+                    className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-5 py-2 text-sm font-semibold text-white/85 transition hover:border-white/40 hover:bg-white/20"
+                  >
+                    ← Back to codex
+                  </Link>
+                  <Link
+                    href="/#arena-anchor"
+                    className="inline-flex items-center gap-2 rounded-full border border-amber-300/60 bg-amber-300/15 px-5 py-2 text-sm font-semibold text-amber-100 transition hover:bg-amber-300/25"
+                  >
+                    <Swords className="h-4 w-4" aria-hidden="true" />
+                    Launch battle arena
+                  </Link>
+                </div>
               </div>
-              <div className="flex flex-wrap gap-3 text-xs font-semibold uppercase tracking-[0.25em] text-white/70">
-                {character.alignment && <span className="rounded-full bg-white/10 px-4 py-1">{character.alignment}</span>}
-                {character.status && <span className="rounded-full bg-white/10 px-4 py-1">{character.status}</span>}
-                {character.era && <span className="rounded-full bg-white/10 px-4 py-1">Era: {character.era}</span>}
-              </div>
-              <p className="max-w-2xl text-base font-semibold text-white/80 lg:text-lg">{metaDescription}</p>
-              <div className="flex flex-wrap gap-3">
-                <Link
-                  href="/#characters-grid"
-                  className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-4 py-2 text-xs font-semibold text-white/80 transition hover:border-white/40 hover:text-white"
-                >
-                  ← Back to archive
-                </Link>
-                <Link
-                  href="/#arena"
-                  className="inline-flex items-center gap-2 rounded-full border border-amber-300/60 bg-amber-300/20 px-4 py-2 text-xs font-semibold text-amber-200 transition hover:bg-amber-300/30"
-                >
-                  Challenge in the arena
-                </Link>
+              <div className="w-full max-w-md lg:ml-auto">
+                <GalleryCarousel images={galleryImages} name={character.name} />
               </div>
             </div>
-          </header>
-        </div>
-        <main className="mx-auto max-w-5xl px-4 py-16 sm:px-6 lg:px-8">
-          <article className="space-y-16">
-            {!!galleryImages.length && (
-              <section>
-                <GalleryCarousel images={galleryImages} name={character.name} />
-              </section>
-            )}
-            <section className="grid gap-10 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] lg:items-start">
-              <div className="space-y-10">
-                <div>
-                  <h2 className="text-2xl font-black text-white">Lore overview</h2>
-                  <p className="mt-4 text-base leading-relaxed text-white/80">
-                    {character.longDesc || character.shortDesc || "More dossiers arriving soon."}
-                  </p>
-                </div>
-                {!!stories.length && (
-                  <div>
-                    <h2 className="text-2xl font-black text-white">Key appearances</h2>
-                    <ul className="mt-4 list-disc space-y-2 pl-6 text-white/80">
-                      {stories.map((story) => (
-                        <li key={story} className="text-sm font-semibold sm:text-base">
-                          {story}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-                {!!tags.length && (
-                  <div>
-                    <h2 className="text-2xl font-black text-white">Traits &amp; themes</h2>
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      {tags.map((tag) => (
-                        <span key={tag} className="rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs font-semibold text-white/75">
-                          {tag}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-              <aside className="space-y-6 rounded-3xl border border-white/15 bg-white/5 p-6 backdrop-blur-xl">
-                <h2 className="text-xl font-black text-white">Profile dossier</h2>
-                <dl className="space-y-3 text-sm text-white/80">
-                  {locations.length > 0 && (
-                    <div>
-                      <dt className="font-semibold uppercase tracking-[0.25em] text-white/60">Strongholds</dt>
-                      <dd className="mt-1 font-semibold">{locations.join(", ")}</dd>
-                    </div>
-                  )}
-                  {factions.length > 0 && (
-                    <div>
-                      <dt className="font-semibold uppercase tracking-[0.25em] text-white/60">Alliances</dt>
-                      <dd className="mt-1 font-semibold">{factions.join(", ")}</dd>
-                    </div>
-                  )}
-                  {character.firstAppearance && (
-                    <div>
-                      <dt className="font-semibold uppercase tracking-[0.25em] text-white/60">First appearance</dt>
-                      <dd className="mt-1 font-semibold">{character.firstAppearance}</dd>
-                    </div>
-                  )}
-                  {character.gender && (
-                    <div>
-                      <dt className="font-semibold uppercase tracking-[0.25em] text-white/60">Identity</dt>
-                      <dd className="mt-1 font-semibold">{character.gender}</dd>
-                    </div>
-                  )}
-                  {!!alias.length && (
-                    <div>
-                      <dt className="font-semibold uppercase tracking-[0.25em] text-white/60">Aliases</dt>
-                      <dd className="mt-1 font-semibold">{alias.join(", ")}</dd>
-                    </div>
-                  )}
-                </dl>
-                {!!powers.length && (
-                  <div>
-                    <h3 className="text-lg font-black text-white">Top powers</h3>
-                    <ul className="mt-3 space-y-2">
-                      {powers.map((power) => (
-                        <li key={power.name} className="flex items-center justify-between rounded-2xl border border-white/15 bg-white/10 px-3 py-2">
-                          <span className="text-sm font-semibold text-white/85">{power.name}</span>
-                          <span className="text-xs font-bold text-amber-200">{power.level}/10</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-              </aside>
-            </section>
-
-            {!!related.length && (
-              <section>
-                <h2 className="text-2xl font-black text-white">Explore more legends</h2>
-                <div className="mt-6 grid gap-4 sm:grid-cols-2">
-                  {related.map((item) => (
-                    <Link
-                      key={item.slug}
-                      href={`/characters/${item.slug}`}
-                      className="group flex flex-col justify-between rounded-3xl border border-white/12 bg-white/8 p-5 backdrop-blur-xl transition hover:border-amber-300/60 hover:bg-white/10"
-                    >
-                      <div className="space-y-3">
-                        <div className="aspect-[4/5] w-full overflow-hidden rounded-2xl border border-white/10 bg-black/40">
-                          {item.cover ? (
-                            <img
-                              src={item.cover}
-                              alt={`${item.name} | Loremaker Universe | Menelek Makonnen`}
-                              className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
-                              loading="lazy"
-                              referrerPolicy="no-referrer"
-                              crossOrigin="anonymous"
-                              decoding="async"
-                            />
-                          ) : (
-                            <div className="flex h-full items-center justify-center text-sm font-bold text-white/60">No imagery yet</div>
-                          )}
-                        </div>
-                        <h3 className="text-xl font-black text-white">{item.name}</h3>
-                        {item.shortDesc && <p className="text-sm font-semibold text-white/70">{item.shortDesc}</p>}
-                      </div>
-                      <span className="mt-4 inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.3em] text-amber-200">
-                        View dossier →
-                      </span>
-                    </Link>
+          </div>
+        </section>
+        <main className="mx-auto max-w-7xl space-y-20 px-4 py-16 sm:px-6 lg:px-8">
+          <section className="grid gap-12 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+            <div className="space-y-8">
+              <div className="rounded-3xl border border-white/12 bg-white/5 p-8 shadow-[0_30px_120px_rgba(7,10,25,0.45)] backdrop-blur-xl">
+                <h2 className="text-2xl font-black text-white">Chronicle</h2>
+                <div className="mt-6 space-y-4 text-base leading-relaxed text-white/80">
+                  {storyParagraphs.map((paragraph, index) => (
+                    <p key={index}>{paragraph}</p>
                   ))}
                 </div>
-              </section>
-            )}
-          </article>
+              </div>
+              {!!stories.length && (
+                <div className="rounded-3xl border border-white/12 bg-white/5 p-8 backdrop-blur-xl">
+                  <h3 className="text-xl font-black text-white">Key appearances</h3>
+                  <ul className="mt-4 space-y-3 text-sm font-semibold text-white/75">
+                    {stories.map((story) => (
+                      <li key={story} className="flex items-start gap-3">
+                        <Sparkles className="mt-1 h-4 w-4 text-amber-200" aria-hidden="true" />
+                        <span>{story}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {!!tags.length && (
+                <div className="rounded-3xl border border-white/12 bg-white/5 p-8 backdrop-blur-xl">
+                  <h3 className="text-xl font-black text-white">Motifs &amp; themes</h3>
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    {tags.map((tag) => (
+                      <span
+                        key={tag}
+                        className="rounded-full border border-white/20 bg-white/10 px-3 py-1 text-xs font-semibold text-white/75"
+                      >
+                        {tag}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+            <div className="space-y-8">
+              <div className="rounded-3xl border border-white/12 bg-white/5 p-8 backdrop-blur-xl">
+                <h2 className="text-xl font-black text-white">Legend dossier</h2>
+                <dl className="mt-6 grid gap-6 sm:grid-cols-2">
+                  {dossierEntries.map((entry) => (
+                    <div key={entry.label} className="space-y-2">
+                      <dt className="text-xs font-semibold uppercase tracking-[0.3em] text-white/60">{entry.label}</dt>
+                      <dd className="text-sm font-semibold text-white/85">{entry.value}</dd>
+                    </div>
+                  ))}
+                </dl>
+              </div>
+              {!!powers.length && (
+                <div className="rounded-3xl border border-white/12 bg-white/5 p-8 backdrop-blur-xl">
+                  <h2 className="text-xl font-black text-white">Power index</h2>
+                  <div className="mt-6 space-y-4">
+                    {powers.map((power) => {
+                      const normalized = Math.max(0, Math.min(10, Number(power.level) || 0));
+                      return (
+                        <div key={power.name} className="space-y-2">
+                          <div className="flex items-center justify-between text-sm font-semibold text-white/80">
+                            <span>{power.name}</span>
+                            <span className="text-amber-200">{normalized}/10</span>
+                          </div>
+                          <div className="h-2 rounded-full bg-white/10">
+                            <div
+                              className="h-full rounded-full bg-gradient-to-r from-amber-300 via-fuchsia-300 to-indigo-300"
+                              style={{ width: `${(normalized / 10) * 100}%` }}
+                            />
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+          </section>
+          {connectionSections.length > 0 && (
+            <section className="space-y-8">
+              <div>
+                <h2 className="text-2xl font-black text-white">Connected legends</h2>
+                <p className="mt-2 max-w-2xl text-sm font-semibold text-white/70">
+                  Explore the allies, rivals, and territories intertwined with {character.name}.
+                </p>
+              </div>
+              {connectionSections.map((section) => (
+                <div key={section.title} className="space-y-4">
+                  <div className="flex items-center gap-3 text-xs font-semibold uppercase tracking-[0.3em] text-white/70">
+                    <section.icon className="h-4 w-4 text-amber-200" aria-hidden="true" />
+                    {section.title}
+                  </div>
+                  {section.groups.map((group) => (
+                    <div
+                      key={group.label}
+                      className="space-y-4 rounded-3xl border border-white/12 bg-white/5 p-6 backdrop-blur-xl"
+                    >
+                      <div className="flex items-center justify-between gap-3">
+                        <h3 className="text-lg font-black text-white">{group.label}</h3>
+                        <span className="text-[10px] font-semibold uppercase tracking-[0.4em] text-white/50">
+                          {group.characters.length} dossier{group.characters.length === 1 ? "" : "s"}
+                        </span>
+                      </div>
+                      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                        {group.characters.map((entry) => (
+                          <Link
+                            key={entry.slug}
+                            href={`/characters/${entry.slug}`}
+                            className="group relative overflow-hidden rounded-2xl border border-white/10 bg-black/40 p-4 shadow-[0_24px_80px_rgba(7,10,25,0.45)] transition hover:border-amber-300/60 hover:shadow-[0_32px_120px_rgba(16,24,40,0.55)]"
+                          >
+                            <div className="aspect-square w-full overflow-hidden rounded-xl border border-white/10 bg-white/5">
+                              {entry.cover ? (
+                                <img
+                                  src={entry.cover}
+                                  alt={`${entry.name} | Loremaker Universe | Menelek Makonnen`}
+                                  className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
+                                  loading="lazy"
+                                  referrerPolicy="no-referrer"
+                                  crossOrigin="anonymous"
+                                  decoding="async"
+                                />
+                              ) : (
+                                <div className="flex h-full items-center justify-center text-[11px] font-semibold text-white/60">
+                                  Visual dossier pending
+                                </div>
+                              )}
+                            </div>
+                            <div className="mt-4 space-y-1">
+                              <p className="text-sm font-bold text-white">{entry.name}</p>
+                              {(entry.alignment || entry.status) && (
+                                <p className="text-[11px] font-semibold uppercase tracking-[0.3em] text-white/55">
+                                  {[entry.alignment, entry.status].filter(Boolean).join(" • ")}
+                                </p>
+                              )}
+                            </div>
+                            <span className="mt-3 inline-flex items-center gap-1 text-xs font-semibold text-amber-200">
+                              View dossier
+                              <ArrowUpRight className="h-3.5 w-3.5" aria-hidden="true" />
+                            </span>
+                          </Link>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ))}
+            </section>
+          )}
+          {!!related.length && (
+            <section className="space-y-6">
+              <div className="flex items-center justify-between gap-3">
+                <h2 className="text-2xl font-black text-white">Discover more legends</h2>
+                <Link
+                  href="/"
+                  className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.3em] text-white/60 transition hover:text-white"
+                >
+                  Return to codex
+                  <ArrowUpRight className="h-3 w-3" aria-hidden="true" />
+                </Link>
+              </div>
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                {related.map((item) => (
+                  <Link
+                    key={item.slug}
+                    href={`/characters/${item.slug}`}
+                    className="group overflow-hidden rounded-2xl border border-white/12 bg-white/5 p-4 shadow-[0_24px_80px_rgba(7,10,25,0.35)] transition hover:border-amber-300/60 hover:shadow-[0_28px_110px_rgba(16,24,40,0.5)]"
+                  >
+                    <div className="aspect-[4/5] w-full overflow-hidden rounded-xl border border-white/10 bg-black/40">
+                      {item.cover ? (
+                        <img
+                          src={item.cover}
+                          alt={`${item.name} | Loremaker Universe | Menelek Makonnen`}
+                          className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
+                          loading="lazy"
+                          referrerPolicy="no-referrer"
+                          crossOrigin="anonymous"
+                          decoding="async"
+                        />
+                      ) : (
+                        <div className="flex h-full items-center justify-center text-[11px] font-semibold text-white/60">
+                          Visual dossier pending
+                        </div>
+                      )}
+                    </div>
+                    <div className="mt-4 space-y-1">
+                      <p className="text-lg font-bold text-white">{item.name}</p>
+                      {item.shortDesc && <p className="text-sm font-semibold text-white/70">{item.shortDesc}</p>}
+                    </div>
+                    <span className="mt-3 inline-flex items-center gap-1 text-xs font-semibold text-amber-200">
+                      View dossier
+                      <ArrowUpRight className="h-3.5 w-3.5" aria-hidden="true" />
+                    </span>
+                  </Link>
+                ))}
+              </div>
+            </section>
+          )}
         </main>
       </div>
     </>
@@ -799,6 +1015,7 @@ export async function getStaticProps({ params }) {
   const canonicalUrl = `${DEFAULT_SITE_URL}/characters/${characterSlug(character)}`;
   const related = buildRelated(characters, character.id);
   const schemaJson = buildSchema(character, canonicalUrl);
+  const connections = buildConnections(characters, character);
 
   return {
     props: {
@@ -806,6 +1023,7 @@ export async function getStaticProps({ params }) {
       canonicalUrl,
       related,
       schemaJson,
+      connections,
     },
     revalidate: 600,
   };

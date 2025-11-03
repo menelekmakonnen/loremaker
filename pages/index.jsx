@@ -1104,29 +1104,19 @@ function CharacterCard({ char, onOpen, onFacet, onUseInSim, highlight }) {
   const description = char.shortDesc || char.longDesc || "No description yet.";
   const imagePool = useMemo(() => [char.cover, ...(char.gallery || [])].filter(Boolean), [char.cover, char.gallery]);
   const poolKey = useMemo(() => JSON.stringify(imagePool), [imagePool]);
-  const [cardImageIndex, setCardImageIndex] = useState(() => (imagePool.length ? 0 : -1));
+  const [baseImageIndex, setBaseImageIndex] = useState(() => (imagePool.length ? Math.floor(Math.random() * imagePool.length) : -1));
+  const [hoverImageIndex, setHoverImageIndex] = useState(null);
   useEffect(() => {
     if (!imagePool.length) {
-      setCardImageIndex(-1);
+      setBaseImageIndex(-1);
+      setHoverImageIndex(null);
       return;
     }
-    const raf = typeof window !== "undefined" ? window.requestAnimationFrame : null;
-    let frameId = null;
-    const pickRandom = () => {
-      const next = Math.floor(Math.random() * imagePool.length);
-      setCardImageIndex(next);
-    };
-    if (raf) {
-      frameId = raf(pickRandom);
-      return () => {
-        if (frameId != null && typeof window !== "undefined") {
-          window.cancelAnimationFrame(frameId);
-        }
-      };
-    }
-    pickRandom();
-  }, [imagePool.length, poolKey]);
-  const heroImage = cardImageIndex >= 0 ? imagePool[cardImageIndex] : null;
+    setBaseImageIndex(Math.floor(Math.random() * imagePool.length));
+    setHoverImageIndex(null);
+  }, [poolKey, imagePool.length]);
+  const heroImageIndex = hoverImageIndex ?? baseImageIndex;
+  const heroImage = heroImageIndex >= 0 ? imagePool[heroImageIndex] : null;
   const accentLabel = (char.locations || [])[0] || char.era || char.status || "LoreMaker dossier";
   const shortCaption =
     description.length > 150 ? `${description.slice(0, 147).trimEnd()}…` : description;
@@ -1134,6 +1124,23 @@ function CharacterCard({ char, onOpen, onFacet, onUseInSim, highlight }) {
   const statusMeta = statusVisual(char.status);
   const alignmentLabel = char.alignment || "Unaligned";
   const openProfile = () => onOpen(char);
+  const handleHoverIn = useCallback(() => {
+    if (imagePool.length < 2) return;
+    setHoverImageIndex(() => {
+      let next = Math.floor(Math.random() * imagePool.length);
+      if (imagePool.length > 1) {
+        let guard = 0;
+        while (next === baseImageIndex && guard < 6) {
+          next = Math.floor(Math.random() * imagePool.length);
+          guard += 1;
+        }
+      }
+      return next;
+    });
+  }, [imagePool.length, imagePool, baseImageIndex]);
+  const handleHoverOut = useCallback(() => {
+    setHoverImageIndex(null);
+  }, []);
   const handleProfileKey = (event) => {
     if (event.key === "Enter" || event.key === " ") {
       event.preventDefault();
@@ -1159,6 +1166,11 @@ function CharacterCard({ char, onOpen, onFacet, onUseInSim, highlight }) {
             tabIndex={0}
             onClick={openProfile}
             onKeyDown={handleProfileKey}
+            onMouseEnter={handleHoverIn}
+            onMouseLeave={handleHoverOut}
+            onPointerLeave={handleHoverOut}
+            onFocus={handleHoverIn}
+            onBlur={handleHoverOut}
             className="group relative block"
           >
             <div
@@ -1295,11 +1307,13 @@ function Gallery({ images, cover, name }) {
 
   const handlePointerDown = useCallback((event) => {
     if (event.pointerType === "mouse" && event.button !== 0) return;
+    if (event.target?.closest?.('[data-gallery-control]')) return;
     pointerStart.current = {
       x: event.clientX,
       y: event.clientY,
       pointerId: event.pointerId,
-      target: event.currentTarget,
+      origin: event.target,
+      container: event.currentTarget,
     };
     event.currentTarget.setPointerCapture?.(event.pointerId);
   }, []);
@@ -1309,8 +1323,9 @@ function Gallery({ images, cover, name }) {
       if (!pointerStart.current) return;
       const start = pointerStart.current;
       if (start.pointerId !== event.pointerId) return;
-      start.target?.releasePointerCapture?.(event.pointerId);
+      start.container?.releasePointerCapture?.(event.pointerId);
       pointerStart.current = null;
+      if (start.origin?.closest?.('[data-gallery-control]')) return;
       const dx = event.clientX - start.x;
       const dy = event.clientY - start.y;
       if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 40) {
@@ -1328,7 +1343,7 @@ function Gallery({ images, cover, name }) {
     if (!pointerStart.current) return;
     const start = pointerStart.current;
     if (event?.pointerId && start.pointerId && event.pointerId !== start.pointerId) return;
-    start.target?.releasePointerCapture?.(start.pointerId);
+    start.container?.releasePointerCapture?.(start.pointerId);
     pointerStart.current = null;
   }, []);
 
@@ -1367,6 +1382,7 @@ function Gallery({ images, cover, name }) {
           onClick={openLightbox}
           className="absolute inset-0 z-20 flex items-end justify-end bg-gradient-to-t from-black/45 via-black/10 to-transparent p-5 opacity-0 transition focus-visible:outline focus-visible:ring-2 focus-visible:ring-amber-300 group-hover:opacity-100"
           aria-label="Open full-size gallery"
+          data-gallery-control
         >
           <span className="rounded-full border border-white/30 bg-black/60 px-3 py-1 text-[11px] font-semibold text-white/80 shadow-lg">
             Tap to expand
@@ -1379,6 +1395,7 @@ function Gallery({ images, cover, name }) {
               className="absolute left-4 top-1/2 z-30 -translate-y-1/2 rounded-full bg-black/60 p-2 text-white opacity-0 transition focus-visible:outline focus-visible:ring-2 focus-visible:ring-amber-300 group-hover:opacity-100"
               onClick={goPrevious}
               aria-label="Previous"
+              data-gallery-control
             >
               <ChevronLeft size={16} />
             </button>
@@ -1387,6 +1404,7 @@ function Gallery({ images, cover, name }) {
               className="absolute right-4 top-1/2 z-30 -translate-y-1/2 rounded-full bg-black/60 p-2 text-white opacity-0 transition focus-visible:outline focus-visible:ring-2 focus-visible:ring-amber-300 group-hover:opacity-100"
               onClick={goNext}
               aria-label="Next"
+              data-gallery-control
             >
               <ChevronRight size={16} />
             </button>
@@ -1414,6 +1432,7 @@ function Gallery({ images, cover, name }) {
               type="button"
               onClick={closeLightbox}
               className="absolute right-6 top-6 inline-flex items-center gap-2 rounded-full border border-white/20 bg-black/60 px-4 py-2 text-sm font-semibold text-white shadow-lg transition hover:bg-black/80 focus-visible:outline focus-visible:ring-2 focus-visible:ring-amber-300"
+              data-gallery-control
             >
               <X size={16} /> Close
             </button>
@@ -1432,6 +1451,7 @@ function Gallery({ images, cover, name }) {
                   onClick={goPrevious}
                   className="hidden rounded-full border border-white/20 bg-black/60 p-3 text-white shadow-lg transition hover:bg-black/80 focus-visible:outline focus-visible:ring-2 focus-visible:ring-amber-300 sm:inline-flex"
                   aria-label="Previous image"
+                  data-gallery-control
                 >
                   <ChevronLeft size={18} />
                 </button>
@@ -1456,24 +1476,36 @@ function Gallery({ images, cover, name }) {
                   onClick={goNext}
                   className="hidden rounded-full border border-white/20 bg-black/60 p-3 text-white shadow-lg transition hover:bg-black/80 focus-visible:outline focus-visible:ring-2 focus-visible:ring-amber-300 sm:inline-flex"
                   aria-label="Next image"
+                  data-gallery-control
                 >
                   <ChevronRight size={18} />
                 </button>
               )}
             </div>
             {sources.length > 1 && (
-              <div className="mt-6 flex gap-2">
+              <div className="mt-6 flex gap-2 overflow-x-auto pb-1 [scrollbar-width:thin]">
                 {sources.map((src, idx) => (
                   <button
                     key={src + idx}
                     type="button"
                     onClick={() => setIndex(idx)}
                     className={cx(
-                      "h-2.5 w-8 rounded-full transition",
-                      idx === index ? "bg-white" : "bg-white/30 hover:bg-white/60"
+                      "relative h-16 w-16 flex-shrink-0 overflow-hidden rounded-xl border",
+                      idx === index
+                        ? "border-amber-300/80 ring-2 ring-amber-200/60"
+                        : "border-white/15 hover:border-white/40"
                     )}
                     aria-label={`View image ${idx + 1}`}
-                  />
+                    data-gallery-control
+                  >
+                    <ImageSafe
+                      src={src}
+                      alt={characterAltText(name)}
+                      fallbackLabel={name}
+                      className="h-full w-full object-cover"
+                    />
+                    {idx === index && <span className="absolute inset-0 border-2 border-amber-200/60" aria-hidden="true" />}
+                  </button>
                 ))}
               </div>
             )}
@@ -1649,6 +1681,18 @@ function CharacterModal({ open, onClose, char, onFacet, onUseInSim, onNavigate }
                 <div className="rounded-2xl border border-white/15 bg-white/8 p-4">
                   <div className="text-xs font-bold tracking-wide text-white/70">Status</div>
                   <div className="text-base font-extrabold">{char.status}</div>
+                </div>
+              )}
+              {char.slug && (
+                <div className="rounded-2xl border border-white/15 bg-white/8 p-4">
+                  <div className="text-xs font-bold tracking-wide text-white/70">Full profile</div>
+                  <Link
+                    href={`/characters/${char.slug}`}
+                    className="mt-2 inline-flex items-center gap-2 text-sm font-semibold text-amber-200 transition hover:text-amber-100"
+                  >
+                    Dive into dossier
+                    <ArrowUpRight size={14} aria-hidden="true" />
+                  </Link>
                 </div>
               )}
               {char.firstAppearance && (
@@ -4280,8 +4324,16 @@ export default function LoremakerApp({ initialCharacters = [], initialError = nu
       return originalOrder.size + 1;
     };
     switch (sortMode) {
-      case "random":
-        return arr.sort(() => Math.random() - 0.5);
+      case "random": {
+        const shuffle = (list) =>
+          list
+            .map((item) => ({ item, score: Math.random() }))
+            .sort((a, b) => a.score - b.score)
+            .map(({ item }) => item);
+        const illustrated = arr.filter((char) => hasIllustration(char));
+        const textOnly = arr.filter((char) => !hasIllustration(char));
+        return [...shuffle(illustrated), ...shuffle(textOnly)];
+      }
       case "faction":
         return arr.sort((a, b) => String(a.faction?.[0] || "").localeCompare(String(b.faction?.[0] || "")));
       case "az":
