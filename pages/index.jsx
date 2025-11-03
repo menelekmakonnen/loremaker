@@ -69,6 +69,11 @@ function unique(values) {
   return Array.from(new Set(values.filter(Boolean)));
 }
 
+function characterAltText(name) {
+  const label = name && String(name).trim().length ? String(name).trim() : "LoreMaker Legend";
+  return `${label} | Loremaker Universe | Menelek Makonnen`;
+}
+
 function hasIllustration(character) {
   if (!character) return false;
   if (character.cover) return true;
@@ -716,7 +721,7 @@ function RosterSlide({ slide, icon, facetKey, onFacet, onOpenCharacter, limit, b
         <div className="absolute inset-0 overflow-hidden rounded-[32px]">
           <ImageSafe
             src={background}
-            alt={`${payload.name} highlight backdrop`}
+            alt={characterAltText(payload.name)}
             fallbackLabel={payload.name}
             className="h-full w-full object-cover object-[72%_center]"
           />
@@ -1164,7 +1169,7 @@ function CharacterCard({ char, onOpen, onFacet, onUseInSim, highlight }) {
             >
               <ImageSafe
                 src={heroImage}
-                alt={`${char.name} from the LoreMaker Universe`}
+                alt={characterAltText(char.name)}
                 fallbackLabel={char.name}
                 className="h-full w-full object-cover transition duration-700 ease-out group-hover:scale-105"
               />
@@ -1342,7 +1347,7 @@ function Gallery({ images, cover, name }) {
   return (
     <>
       <div
-        className="group relative overflow-hidden rounded-[32px] border border-white/12 bg-black/40 shadow-[0_24px_80px_rgba(8,10,20,0.45)]"
+        className="group relative overflow-hidden rounded-[32px] border border-white/12 bg-black/40 shadow-[0_24px_80px_rgba(8,10,20,0.45)] touch-pan-y"
         data-gallery-root
         onPointerDown={handlePointerDown}
         onPointerUp={handlePointerUp}
@@ -1352,7 +1357,7 @@ function Gallery({ images, cover, name }) {
         <div className="aspect-[3/4] w-full">
           <ImageSafe
             src={activeSrc}
-            alt={`${name} gallery ${index + 1}`}
+            alt={characterAltText(name)}
             fallbackLabel={name}
             className="h-full w-full object-cover"
           />
@@ -1413,7 +1418,7 @@ function Gallery({ images, cover, name }) {
               <X size={16} /> Close
             </button>
             <div
-              className="flex max-h-[80vh] w-full max-w-4xl items-center justify-center gap-4"
+              className="flex max-h-[80vh] w-full max-w-4xl items-center justify-center gap-4 touch-pan-y"
               onClick={(event) => event.stopPropagation()}
               onPointerDown={handlePointerDown}
               onPointerUp={handlePointerUp}
@@ -1434,7 +1439,7 @@ function Gallery({ images, cover, name }) {
               <div className="relative flex-1">
                 <ImageSafe
                   src={activeSrc}
-                  alt={`${name} full image ${index + 1}`}
+                  alt={characterAltText(name)}
                   fallbackLabel={name}
                   className="mx-auto max-h-[70vh] w-auto max-w-full rounded-[32px] border border-white/20 object-contain shadow-[0_40px_140px_rgba(0,0,0,0.6)]"
                 />
@@ -2019,7 +2024,7 @@ function ArenaCard({ char, position, onRelease, onOpen, health, isWinner, showX,
       <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:gap-4">
         <ImageSafe
           src={char.cover || char.gallery?.[0]}
-          alt={`${char.name} portrait from the LoreMaker Universe`}
+          alt={characterAltText(char.name)}
           fallbackLabel={char.name}
           className="hidden h-24 w-24 rounded-2xl border border-slate-700 object-cover sm:block sm:h-32 sm:w-32"
         />
@@ -3567,7 +3572,7 @@ function HeroSection({
               >
                 <ImageSafe
                   src={activeBackground}
-                  alt={`${char.name} spotlight`}
+                  alt={characterAltText(char.name)}
                   fallbackLabel={char.name}
                   className="h-full w-full object-cover object-[72%_center]"
                 />
@@ -3658,7 +3663,7 @@ function HeroSection({
             >
               <ImageSafe
                 src={activeBackground}
-                alt={`${char.name} backdrop`}
+                alt={characterAltText(char.name)}
                 fallbackLabel={char.name}
                 className="h-full w-full object-cover object-[74%_center] lg:object-[68%_center]"
               />

@@ -1,5 +1,11 @@
 import fallbackCharacters from "../data/fallback-characters.json";
-import { fetchCharactersFromSheets, characterSlug, fillDailyPowers, normaliseArray } from "../lib/characters";
+import {
+  fetchCharactersFromSheets,
+  characterSlug,
+  ensureUniqueSlugs,
+  fillDailyPowers,
+  normaliseArray,
+} from "../lib/characters";
 
 const DEFAULT_SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL || "https://loremaker.app").replace(/\/$/, "");
 
@@ -64,12 +70,12 @@ export default function RssFeed() {
 }
 
 export async function getServerSideProps({ res }) {
-  let characters = fallbackCharacters.map((entry) => fillDailyPowers(entry));
+  let characters = ensureUniqueSlugs(fallbackCharacters.map((entry) => fillDailyPowers(entry)));
 
   try {
     const fetched = await fetchCharactersFromSheets();
     if (Array.isArray(fetched) && fetched.length) {
-      characters = fetched.map((entry) => fillDailyPowers(entry));
+      characters = ensureUniqueSlugs(fetched.map((entry) => fillDailyPowers(entry)));
     }
   } catch (error) {
     console.warn("[rss] Falling back to bundled characters", error);

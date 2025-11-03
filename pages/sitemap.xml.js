@@ -1,5 +1,5 @@
 import fallbackCharacters from "../data/fallback-characters.json";
-import { fetchCharactersFromSheets, characterSlug } from "../lib/characters";
+import { fetchCharactersFromSheets, characterSlug, ensureUniqueSlugs } from "../lib/characters";
 
 const DEFAULT_SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL || "https://loremaker.app").replace(/\/$/, "");
 
@@ -57,12 +57,12 @@ export default function Sitemap() {
 }
 
 export async function getServerSideProps({ res }) {
-  let characters = fallbackCharacters;
+  let characters = ensureUniqueSlugs(fallbackCharacters.slice());
 
   try {
     const fetched = await fetchCharactersFromSheets();
     if (Array.isArray(fetched) && fetched.length) {
-      characters = fetched;
+      characters = ensureUniqueSlugs(fetched.slice());
     }
   } catch (error) {
     console.warn("[sitemap] Falling back to bundled characters", error);

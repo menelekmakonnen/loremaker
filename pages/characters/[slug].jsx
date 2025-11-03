@@ -8,6 +8,7 @@ import {
   fillDailyPowers,
   characterSlug,
   normaliseArray,
+  ensureUniqueSlugs,
   seededRandom,
 } from "../../lib/characters";
 
@@ -110,8 +111,9 @@ function GalleryCarousel({ images = [], name = "LoreMaker legend" }) {
   const [activeIndex, setActiveIndex] = useState(0);
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [lightboxIndex, setLightboxIndex] = useState(0);
-  const pointerRef = useRef({ id: null, startX: 0 });
-  const lightboxPointerRef = useRef({ id: null, startX: 0 });
+  const pointerRef = useRef({ id: null, startX: 0, startY: 0, lastX: 0, moved: false });
+  const lightboxPointerRef = useRef({ id: null, startX: 0, startY: 0, lastX: 0, moved: false });
+  const altText = useMemo(() => `${name} | Loremaker Universe | Menelek Makonnen`, [name]);
 
   useEffect(() => {
     if (!length) {
@@ -189,57 +191,104 @@ function GalleryCarousel({ images = [], name = "LoreMaker legend" }) {
   }, [lightboxOpen, activeIndex]);
 
   const handlePointerDown = useCallback((event) => {
-    pointerRef.current = { id: event.pointerId, startX: event.clientX };
+    if (event.pointerType === "mouse" && event.button !== 0) return;
+    pointerRef.current = {
+      id: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      lastX: event.clientX,
+      moved: false,
+    };
     event.currentTarget.setPointerCapture?.(event.pointerId);
   }, []);
 
-  const handlePointerUp = useCallback(
+  const handlePointerMove = useCallback(
     (event) => {
-      if (pointerRef.current.id !== event.pointerId) return;
-      const delta = event.clientX - pointerRef.current.startX;
-      if (Math.abs(delta) > 40) {
-        if (delta < 0) {
-          goNext();
-        } else {
-          goPrev();
-        }
-      } else {
-        openLightbox(activeIndex);
-      }
-      pointerRef.current = { id: null, startX: 0 };
-      event.currentTarget.releasePointerCapture?.(event.pointerId);
-    },
-    [goNext, goPrev, openLightbox, activeIndex]
-  );
-
-  const handlePointerCancel = useCallback(() => {
-    pointerRef.current = { id: null, startX: 0 };
-  }, []);
-
-  const handleLightboxPointerDown = useCallback((event) => {
-    lightboxPointerRef.current = { id: event.pointerId, startX: event.clientX };
-    event.currentTarget.setPointerCapture?.(event.pointerId);
-  }, []);
-
-  const handleLightboxPointerUp = useCallback(
-    (event) => {
-      if (lightboxPointerRef.current.id !== event.pointerId) return;
-      const delta = event.clientX - lightboxPointerRef.current.startX;
-      if (Math.abs(delta) > 40) {
-        if (delta < 0) {
+      const current = pointerRef.current;
+      if (!current || current.id !== event.pointerId) return;
+      const deltaX = event.clientX - current.lastX;
+      const totalX = event.clientX - current.startX;
+      const totalY = event.clientY - current.startY;
+      if (Math.abs(totalX) > Math.abs(totalY) && Math.abs(deltaX) > 24) {
+        pointerRef.current = {
+          ...current,
+          lastX: event.clientX,
+          moved: true,
+        };
+        if (deltaX < 0) {
           goNext();
         } else {
           goPrev();
         }
       }
-      lightboxPointerRef.current = { id: null, startX: 0 };
-      event.currentTarget.releasePointerCapture?.(event.pointerId);
     },
     [goNext, goPrev]
   );
 
+  const handlePointerUp = useCallback(
+    (event) => {
+      const current = pointerRef.current;
+      if (!current || current.id !== event.pointerId) return;
+      const totalX = event.clientX - current.startX;
+      const totalY = event.clientY - current.startY;
+      const swiped = Math.abs(totalX) > 40 && Math.abs(totalX) > Math.abs(totalY);
+      event.currentTarget.releasePointerCapture?.(event.pointerId);
+      pointerRef.current = { id: null, startX: 0, startY: 0, lastX: 0, moved: false };
+      if (!swiped && !current.moved) {
+        openLightbox(activeIndex);
+      }
+    },
+    [openLightbox, activeIndex]
+  );
+
+  const handlePointerCancel = useCallback(() => {
+    pointerRef.current = { id: null, startX: 0, startY: 0, lastX: 0, moved: false };
+  }, []);
+
+  const handleLightboxPointerDown = useCallback((event) => {
+    if (event.pointerType === "mouse" && event.button !== 0) return;
+    lightboxPointerRef.current = {
+      id: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      lastX: event.clientX,
+      moved: false,
+    };
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+  }, []);
+
+  const handleLightboxPointerMove = useCallback(
+    (event) => {
+      const current = lightboxPointerRef.current;
+      if (!current || current.id !== event.pointerId) return;
+      const deltaX = event.clientX - current.lastX;
+      const totalX = event.clientX - current.startX;
+      const totalY = event.clientY - current.startY;
+      if (Math.abs(totalX) > Math.abs(totalY) && Math.abs(deltaX) > 24) {
+        lightboxPointerRef.current = {
+          ...current,
+          lastX: event.clientX,
+          moved: true,
+        };
+        if (deltaX < 0) {
+          goNext();
+        } else {
+          goPrev();
+        }
+      }
+    },
+    [goNext, goPrev]
+  );
+
+  const handleLightboxPointerUp = useCallback((event) => {
+    const current = lightboxPointerRef.current;
+    if (!current || current.id !== event.pointerId) return;
+    lightboxPointerRef.current = { id: null, startX: 0, startY: 0, lastX: 0, moved: false };
+    event.currentTarget.releasePointerCapture?.(event.pointerId);
+  }, []);
+
   const handleLightboxPointerCancel = useCallback(() => {
-    lightboxPointerRef.current = { id: null, startX: 0 };
+    lightboxPointerRef.current = { id: null, startX: 0, startY: 0, lastX: 0, moved: false };
   }, []);
 
   if (!length) {
@@ -265,14 +314,15 @@ function GalleryCarousel({ images = [], name = "LoreMaker legend" }) {
           }
         }}
         onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
         onPointerCancel={handlePointerCancel}
-        className="group relative aspect-[3/4] w-full cursor-zoom-in overflow-hidden rounded-[32px] border border-white/15 bg-black/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300/70"
+        className="group relative aspect-[3/4] w-full cursor-zoom-in overflow-hidden rounded-[32px] border border-white/15 bg-black/50 touch-pan-y focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300/70"
       >
         {activeImage ? (
           <img
             src={activeImage}
-            alt={`${name} dossier illustration ${activeIndex + 1}`}
+            alt={altText}
             className="h-full w-full select-none object-cover"
             loading="eager"
             decoding="async"
@@ -345,7 +395,7 @@ function GalleryCarousel({ images = [], name = "LoreMaker legend" }) {
               >
                 <img
                   src={image}
-                  alt={`${name} thumbnail ${index + 1}`}
+                  alt={altText}
                   className="h-full w-full object-cover"
                   loading={index < 4 ? "eager" : "lazy"}
                   decoding="async"
@@ -385,7 +435,7 @@ function GalleryCarousel({ images = [], name = "LoreMaker legend" }) {
             </div>
           </div>
           <div
-            className="relative flex flex-1 items-center justify-center px-6 pb-10"
+            className="relative flex flex-1 items-center justify-center px-6 pb-6"
             onClick={(event) => event.stopPropagation()}
           >
             {length > 1 && (
@@ -402,14 +452,15 @@ function GalleryCarousel({ images = [], name = "LoreMaker legend" }) {
               </button>
             )}
             <div
-              className="max-h-full w-full max-w-4xl"
+              className="max-h-full w-full max-w-4xl touch-pan-y"
               onPointerDown={handleLightboxPointerDown}
+              onPointerMove={handleLightboxPointerMove}
               onPointerUp={handleLightboxPointerUp}
               onPointerCancel={handleLightboxPointerCancel}
             >
               <img
                 src={lightboxImage}
-                alt={`${name} gallery image ${lightboxIndex + 1}`}
+                alt={altText}
                 className="max-h-[75vh] w-full select-none rounded-[28px] object-contain"
                 loading="eager"
                 decoding="async"
@@ -432,6 +483,44 @@ function GalleryCarousel({ images = [], name = "LoreMaker legend" }) {
               </button>
             )}
           </div>
+          {length > 1 && (
+            <div className="w-full max-w-5xl self-center overflow-x-auto px-6 pb-8 [scrollbar-width:thin]">
+              <div className="flex gap-3">
+                {safeImages.map((image, index) => {
+                  const active = index === lightboxIndex;
+                  return (
+                    <button
+                      key={`${image}-lightbox-${index}`}
+                      type="button"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        setLightboxIndex(index);
+                        setActiveIndex(index);
+                      }}
+                      className={`relative h-20 w-20 flex-shrink-0 overflow-hidden rounded-2xl border ${
+                        active
+                          ? "border-amber-300/80 ring-2 ring-amber-200/60"
+                          : "border-white/15 hover:border-white/40"
+                      }`}
+                      aria-label={`View image ${index + 1}`}
+                    >
+                      <img
+                        src={image}
+                        alt={altText}
+                        className="h-full w-full object-cover"
+                        loading={index < 6 ? "eager" : "lazy"}
+                        decoding="async"
+                        referrerPolicy="no-referrer"
+                        crossOrigin="anonymous"
+                        draggable={false}
+                      />
+                      {active && <span className="absolute inset-0 border-2 border-amber-200/60" aria-hidden="true" />}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -482,7 +571,7 @@ export default function CharacterProfilePage({ character, canonicalUrl, related,
             <div className="absolute inset-0">
               <img
                 src={heroImage}
-                alt={`${character.name} portrait from the LoreMaker Universe`}
+                alt={`${character.name} | Loremaker Universe | Menelek Makonnen`}
                 className="h-full w-full object-cover object-[68%_center]"
                 loading="eager"
                 referrerPolicy="no-referrer"
@@ -637,7 +726,7 @@ export default function CharacterProfilePage({ character, canonicalUrl, related,
                           {item.cover ? (
                             <img
                               src={item.cover}
-                              alt={`${item.name} portrait from the LoreMaker Universe`}
+                              alt={`${item.name} | Loremaker Universe | Menelek Makonnen`}
                               className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
                               loading="lazy"
                               referrerPolicy="no-referrer"
@@ -670,20 +759,20 @@ async function loadCharacters() {
   try {
     const fetched = await fetchCharactersFromSheets();
     if (Array.isArray(fetched) && fetched.length) {
-      return fetched.map((character) => sanitizeCharacter(character));
+      return ensureUniqueSlugs(fetched.map((character) => sanitizeCharacter(character)));
     }
   } catch (error) {
     console.warn("[character-profile] Falling back to bundled characters", error);
   }
-  return fallbackCharacters
-    .map((character, index) => {
+  return ensureUniqueSlugs(
+    fallbackCharacters.map((character, index) => {
       const entry = sanitizeCharacter(character);
       if (entry && typeof entry.sourceIndex !== "number") {
         entry.sourceIndex = index;
       }
       return entry;
     })
-    .filter(Boolean);
+  ).filter(Boolean);
 }
 
 export async function getStaticPaths() {
