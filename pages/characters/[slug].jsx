@@ -175,7 +175,7 @@ function buildConnections(characters, current) {
   };
 }
 
-function GalleryCarousel({ images = [], name = "LoreMaker legend" }) {
+function GalleryCarousel({ images = [], name = "LoreMaker legend", onActiveChange }) {
   const safeImages = useMemo(() => images.filter(Boolean), [images]);
   const length = safeImages.length;
   const [activeIndex, setActiveIndex] = useState(0);
@@ -203,6 +203,12 @@ function GalleryCarousel({ images = [], name = "LoreMaker legend" }) {
       return next;
     });
   }, [length, lightboxOpen]);
+
+  useEffect(() => {
+    if (typeof onActiveChange !== "function") return;
+    const current = safeImages[activeIndex] || safeImages[0] || null;
+    onActiveChange(current);
+  }, [activeIndex, safeImages, onActiveChange]);
 
   const goPrev = useCallback(() => {
     if (!length) return;
@@ -632,42 +638,32 @@ export default function CharacterProfilePage({ character, canonicalUrl, related,
   const stories = character.stories || [];
   const tags = character.tags || [];
   const powers = character.powers || [];
-  const heroRotationImages = useMemo(() => {
-    if (galleryImages.length) return galleryImages;
-    return heroImage ? [heroImage] : [];
-  }, [galleryImages, heroImage]);
-  const [heroIndex, setHeroIndex] = useState(() =>
-    heroRotationImages.length ? Math.floor(Math.random() * heroRotationImages.length) : 0
-  );
+  const [heroBackdrop, setHeroBackdrop] = useState(() => {
+    if (!heroImage) return null;
+    return imageCandidates(heroImage)[0] || heroImage;
+  });
+
   useEffect(() => {
-    if (!heroRotationImages.length) {
-      setHeroIndex(0);
+    if (!heroImage) {
+      setHeroBackdrop(null);
       return;
     }
-    setHeroIndex(Math.floor(Math.random() * heroRotationImages.length));
-  }, [heroRotationImages.length]);
-  useEffect(() => {
-    if (heroRotationImages.length < 2) return undefined;
-    const id = setInterval(
-      () => setHeroIndex((value) => (value + 1) % heroRotationImages.length),
-      30000
-    );
-    return () => clearInterval(id);
-  }, [heroRotationImages.length]);
-  const activeHeroImage =
-    heroRotationImages.length > 0
-      ? heroRotationImages[heroIndex % heroRotationImages.length]
-      : heroImage;
-  const heroBackdrop = useMemo(() => imageCandidates(activeHeroImage)[0] || activeHeroImage, [activeHeroImage]);
+    setHeroBackdrop(imageCandidates(heroImage)[0] || heroImage);
+  }, [heroImage]);
+
+  const updateHeroBackdrop = useCallback((nextImage) => {
+    if (!nextImage) return;
+    setHeroBackdrop(imageCandidates(nextImage)[0] || nextImage);
+  }, []);
   const highlightFacts = [
     character.alignment && { label: "Alignment", value: character.alignment },
     character.status && { label: "Status", value: character.status },
     character.era && { label: "Era", value: character.era },
   ].filter(Boolean);
   const dossierEntries = [
-    locations.length && { label: "Strongholds", value: locations.join(", ") },
-    factions.length && { label: "Alliances", value: factions.join(", ") },
-    character.firstAppearance && { label: "First appearance", value: character.firstAppearance },
+    locations.length && { label: "Home bases", value: locations.join(", ") },
+    factions.length && { label: "Allied groups", value: factions.join(", ") },
+    character.firstAppearance && { label: "First seen", value: character.firstAppearance },
     character.gender && { label: "Identity", value: character.gender },
     alias.length && { label: "Also known as", value: alias.join(", ") },
   ].filter(Boolean);
@@ -789,7 +785,11 @@ export default function CharacterProfilePage({ character, canonicalUrl, related,
                 </div>
               </div>
               <div className="w-full max-w-md lg:ml-auto">
-                <GalleryCarousel images={galleryImages} name={character.name} />
+                <GalleryCarousel
+                  images={galleryImages}
+                  name={character.name}
+                  onActiveChange={updateHeroBackdrop}
+                />
               </div>
             </div>
           </div>
@@ -797,7 +797,7 @@ export default function CharacterProfilePage({ character, canonicalUrl, related,
         <main className="mx-auto max-w-7xl space-y-20 px-4 py-16 sm:px-6 lg:px-8">
           <section className="grid gap-10 lg:auto-rows-max lg:grid-cols-2 lg:items-start">
             <div className="order-1 rounded-3xl border border-white/12 bg-white/5 p-8 shadow-[0_30px_120px_rgba(7,10,25,0.45)] backdrop-blur-xl lg:order-1 lg:col-start-1">
-              <h2 className="text-2xl font-black text-white">Chronicle</h2>
+              <h2 className="text-2xl font-black text-white">Story so far</h2>
               <div className="mt-6 space-y-4 text-base leading-relaxed text-white/80">
                 {storyParagraphs.map((paragraph, index) => (
                   <p key={index}>{paragraph}</p>
@@ -805,32 +805,19 @@ export default function CharacterProfilePage({ character, canonicalUrl, related,
               </div>
             </div>
             <div className="order-2 rounded-3xl border border-white/12 bg-white/5 p-8 backdrop-blur-xl lg:order-2 lg:col-start-2">
-              <h2 className="text-xl font-black text-white">Legend dossier</h2>
+              <h2 className="text-2xl font-black text-white">Profile at a glance</h2>
               <dl className="mt-6 grid gap-6 sm:grid-cols-2">
                 {dossierEntries.map((entry) => (
                   <div key={entry.label} className="space-y-2">
-                    <dt className="text-xs font-semibold uppercase tracking-[0.3em] text-white/60">{entry.label}</dt>
+                    <dt className="text-[11px] font-semibold uppercase tracking-[0.28em] text-white/60">{entry.label}</dt>
                     <dd className="text-sm font-semibold text-white/85">{entry.value}</dd>
                   </div>
                 ))}
               </dl>
             </div>
-            {!!stories.length && (
-              <div className="order-3 rounded-3xl border border-white/12 bg-white/5 p-8 backdrop-blur-xl lg:order-3 lg:col-start-1">
-                <h3 className="text-xl font-black text-white">Key appearances</h3>
-                <ul className="mt-4 space-y-3 text-sm font-semibold text-white/75">
-                  {stories.map((story) => (
-                    <li key={story} className="flex items-start gap-3">
-                      <Sparkles className="mt-1 h-4 w-4 text-amber-200" aria-hidden="true" />
-                      <span>{story}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
             {!!powers.length && (
-              <div className="order-4 rounded-3xl border border-white/12 bg-white/5 p-8 backdrop-blur-xl lg:order-4 lg:col-start-2">
-                <h2 className="text-xl font-black text-white">Power index</h2>
+              <div className="order-3 rounded-3xl border border-white/12 bg-white/5 p-8 backdrop-blur-xl lg:order-3 lg:col-start-2">
+                <h2 className="text-xl font-black text-white">Signature abilities</h2>
                 <div className="mt-6 space-y-4">
                   {powers.map((power) => {
                     const normalized = Math.max(0, Math.min(10, Number(power.level) || 0));
@@ -852,8 +839,21 @@ export default function CharacterProfilePage({ character, canonicalUrl, related,
                 </div>
               </div>
             )}
+            {!!stories.length && (
+              <div className="order-4 rounded-3xl border border-white/12 bg-white/5 p-8 backdrop-blur-xl lg:order-4 lg:col-start-2">
+                <h3 className="text-xl font-black text-white">Key appearances</h3>
+                <ul className="mt-4 space-y-3 text-sm font-semibold text-white/75">
+                  {stories.map((story) => (
+                    <li key={story} className="flex items-start gap-3">
+                      <Sparkles className="mt-1 h-4 w-4 text-amber-200" aria-hidden="true" />
+                      <span>{story}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
             {!!tags.length && (
-              <div className="order-6 rounded-3xl border border-white/12 bg-white/5 p-8 backdrop-blur-xl lg:order-5 lg:col-start-1">
+              <div className="order-5 rounded-3xl border border-white/12 bg-white/5 p-8 backdrop-blur-xl lg:order-5 lg:col-start-1">
                 <h3 className="text-xl font-black text-white">Motifs &amp; themes</h3>
                 <div className="mt-4 flex flex-wrap gap-2">
                   {tags.map((tag) => (
@@ -868,20 +868,20 @@ export default function CharacterProfilePage({ character, canonicalUrl, related,
               </div>
             )}
             {!!allyGroups.length && (
-              <div className="order-5 space-y-5 rounded-3xl border border-white/12 bg-white/5 p-6 backdrop-blur-xl lg:order-6 lg:col-start-1">
+              <div className="order-6 space-y-4 rounded-3xl border border-white/12 bg-white/5 p-6 backdrop-blur-xl lg:order-6 lg:col-start-1">
                 <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.35em] text-white/70">
                   <Crown className="h-4 w-4 text-amber-200" aria-hidden="true" /> Allies &amp; enclaves
                 </div>
-                <div className="space-y-4">
+                <div className="space-y-3">
                   {allyGroups.map((group) => (
-                    <div key={group.label} className="space-y-3 rounded-2xl border border-white/12 bg-black/35 p-4">
-                      <div className="flex items-center justify-between text-xs font-bold text-white">
+                    <div key={group.label} className="space-y-3 rounded-2xl border border-white/12 bg-black/35 p-3">
+                      <div className="flex items-center justify-between text-[11px] font-bold text-white">
                         <span>{group.label}</span>
                         <span className="text-[9px] font-semibold uppercase tracking-[0.35em] text-white/50">
                           {group.characters.length} dossiers
                         </span>
                       </div>
-                      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
                         {group.characters.map((entry) => (
                           <Link
                             key={entry.slug}

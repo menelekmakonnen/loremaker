@@ -71,6 +71,18 @@ function unique(values) {
   return Array.from(new Set(values.filter(Boolean)));
 }
 
+function normaliseSearchText(value) {
+  if (value == null) return "";
+  return value
+    .toString()
+    .toLowerCase()
+    .normalize("NFKD")
+    .replace(/\p{Diacritic}+/gu, "")
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 function hasIllustration(character) {
   if (!character) return false;
   if (character.cover) return true;
@@ -208,14 +220,11 @@ function getCharacterValues(character, key) {
 }
 
 function matchesFilters(character, filters = {}, combineAND = false, query = "") {
-  const terms = query
-    .toLowerCase()
-    .split(/\s+/)
-    .map((term) => term.trim())
-    .filter(Boolean);
+  const normalizedQuery = normaliseSearchText(query);
+  const terms = normalizedQuery.split(" ").filter(Boolean);
 
-  if (terms.length) {
-    const searchable = [
+  if (normalizedQuery) {
+    const searchableParts = [
       character.id,
       character.name,
       character.gender,
@@ -227,16 +236,18 @@ function matchesFilters(character, filters = {}, combineAND = false, query = "")
       (character.faction || []).join(" "),
       (character.tags || []).join(" "),
       (character.stories || []).join(" "),
-      (character.powers || []).map((power) => power.name).join(" "),
+      (character.powers || []).map((power) => power?.name).join(" "),
       character.shortDesc,
       character.longDesc,
     ]
-      .filter(Boolean)
-      .join(" \n ")
-      .toLowerCase();
+      .map(normaliseSearchText)
+      .filter(Boolean);
 
-    const queryMatch = terms.every((term) => searchable.includes(term));
-    if (!queryMatch) {
+    const haystack = searchableParts.join(" ");
+    const tokens = new Set(haystack.split(" "));
+    const matchesAll = terms.every((term) => haystack.includes(term) || tokens.has(term));
+    const directNameMatch = searchableParts.some((part) => part.includes(normalizedQuery));
+    if (!matchesAll && !directNameMatch) {
       return false;
     }
   }
@@ -2999,13 +3010,13 @@ function ToolsBar({
     );
   } else if (mountEl) {
     renderedToolbar = createPortal(
-      <div className="pointer-events-none px-4 pt-6 pb-10 sm:px-8 lg:px-16 xl:px-20 2xl:px-24">
+      <div className="pointer-events-none px-4 pt-4 pb-6 sm:px-8 lg:px-16 xl:px-20 2xl:px-24">
         <div className="pointer-events-auto">{renderToolbar()}</div>
       </div>,
       mountEl
     );
   } else {
-    renderedToolbar = <div className="mx-auto max-w-7xl px-3 pt-6 sm:px-4">{renderToolbar()}</div>;
+    renderedToolbar = <div className="mx-auto max-w-7xl px-3 pt-4 sm:px-4">{renderToolbar()}</div>;
   }
 
   const hiddenActivator = displayMode === "hidden" ? (
@@ -3028,194 +3039,6 @@ function ToolsBar({
       {hiddenActivator}
       <div style={{ height: placeholderHeight }} aria-hidden="true" />
     </>
-  );
-}
-
-
-function QuickFilterRail({ data, onFacet, onSortModeChange, sortMode, onOpenFilters }) {
-  const [open, setOpen] = useState(false);
-  const quickSorts = [
-    { value: "default", label: "Featured" },
-    { value: "az", label: "A-Z" },
-    { value: "faction", label: "By Faction" },
-    { value: "most", label: "Most Powerful" },
-  ];
-
-  const topCollections = useMemo(() => {
-    const tally = (getter) => {
-      const counts = new Map();
-      data.forEach((item) => {
-        getter(item).forEach((value) => {
-          if (!value) return;
-          const entry = counts.get(value) || { count: 0 };
-          entry.count += 1;
-          counts.set(value, entry);
-        });
-      });
-      return Array.from(counts.entries())
-        .map(([value, meta]) => ({ value, count: meta.count }))
-        .sort((a, b) => b.count - a.count);
-    };
-
-    const locations = tally((item) => item.locations || []).slice(0, 6);
-    const factions = tally((item) => item.faction || []).slice(0, 6);
-    const eras = tally((item) => {
-      const values = new Set();
-      if (item.era) values.add(item.era);
-      (item.eraTags || []).forEach((value) => value && values.add(value));
-      return Array.from(values);
-    }).slice(0, 6);
-
-    const powerMap = new Map();
-    data.forEach((item) => {
-      (item.powers || []).forEach((power) => {
-        if (!power?.name) return;
-        const entry = powerMap.get(power.name) || { count: 0, total: 0 };
-        entry.count += 1;
-        entry.total += Number(power.level) || 0;
-        powerMap.set(power.name, entry);
-      });
-    });
-    const powers = Array.from(powerMap.entries())
-      .map(([name, meta]) => ({
-        value: name,
-        count: meta.count,
-        avg: meta.count ? meta.total / meta.count : 0,
-      }))
-      .sort((a, b) => {
-        if (b.avg === a.avg) return b.count - a.count;
-        return b.avg - a.avg;
-      })
-      .slice(0, 8);
-
-    return { locations, factions, powers, eras };
-  }, [data]);
-
-  const renderChip = (item, key) => (
-    <button
-      key={`${key}-${item.value}`}
-      type="button"
-      onClick={() => onFacet({ key, value: item.value })}
-      className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/8 px-3 py-1.5 text-xs font-semibold text-white transition hover:border-amber-200/70 hover:bg-amber-200/15"
-    >
-      <span>{item.value}</span>
-      <span className="text-[11px] text-white/60">{item.count}</span>
-    </button>
-  );
-
-  if (!open) {
-    return (
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        className="group flex w-full items-center justify-between rounded-full border border-white/15 bg-white/5 px-4 py-1.5 text-[10px] font-semibold uppercase tracking-[0.45em] text-white/70 transition hover:border-white/40 hover:bg-white/10"
-        aria-expanded="false"
-      >
-        <span className="flex items-center gap-2 text-white/80">
-          <Sparkles className="h-4 w-4 text-amber-200" aria-hidden="true" /> Discover quickly
-        </span>
-        <ChevronDown className="h-4 w-4 text-white/60 transition group-hover:text-white" aria-hidden="true" />
-      </button>
-    );
-  }
-
-  return (
-    <Card className="border border-white/15 bg-white/5 backdrop-blur-2xl">
-      <CardContent className="space-y-6">
-        <div
-          className="flex flex-wrap cursor-pointer select-none items-center justify-between gap-3"
-          role="button"
-          tabIndex={0}
-          onClick={() => setOpen(false)}
-          onKeyDown={(event) => {
-            if (event.key === "Enter" || event.key === " ") {
-              event.preventDefault();
-              setOpen(false);
-            }
-          }}
-        >
-          <div className="flex items-center gap-2 text-sm font-semibold text-white/80">
-            <Sparkles className="h-4 w-4 text-amber-200" aria-hidden="true" /> Discover quickly
-          </div>
-          <div className="flex items-center gap-2">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={(event) => {
-                event.stopPropagation();
-                onOpenFilters();
-              }}
-              className="px-3 text-xs font-semibold text-white/70 hover:text-white"
-            >
-              Open full filters
-            </Button>
-            <Button
-              variant="subtle"
-              size="sm"
-              onClick={(event) => {
-                event.stopPropagation();
-                setOpen(false);
-              }}
-              className="px-3 text-xs font-semibold text-white/80"
-              aria-label="Collapse quick filters"
-            >
-              <ChevronUp className="h-4 w-4" aria-hidden="true" />
-            </Button>
-          </div>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          {quickSorts.map((item) => (
-            <button
-              key={item.value}
-              type="button"
-              onClick={() => onSortModeChange(item.value)}
-              className={cx(
-                "rounded-full border px-4 py-1.5 text-xs font-semibold transition",
-                sortMode === item.value
-                  ? "border-amber-200/80 bg-amber-200/20 text-white"
-                  : "border-white/20 bg-white/5 text-white/75 hover:border-white/40 hover:bg-white/10"
-              )}
-            >
-              {item.label}
-            </button>
-          ))}
-        </div>
-        {!!topCollections.eras.length && (
-          <div className="space-y-2">
-            <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-white/60">
-              <Clock className="h-4 w-4 text-amber-200" aria-hidden="true" /> Eras
-            </div>
-            <div className="flex flex-wrap gap-2">{topCollections.eras.map((item) => renderChip(item, "era"))}</div>
-          </div>
-        )}
-        {!!topCollections.factions.length && (
-          <div className="space-y-2">
-            <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-white/60">
-              <ShieldCheck className="h-4 w-4 text-amber-200" /> Factions
-            </div>
-            <div className="flex flex-wrap gap-2">{topCollections.factions.map((item) => renderChip(item, "faction"))}</div>
-          </div>
-        )}
-        {!!topCollections.locations.length && (
-          <div className="space-y-2">
-            <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-white/60">
-              <MapPin className="h-4 w-4 text-amber-200" /> Locations
-            </div>
-            <div className="flex flex-wrap gap-2">{topCollections.locations.map((item) => renderChip(item, "locations"))}</div>
-          </div>
-        )}
-        {!!topCollections.powers.length && (
-          <div className="space-y-2">
-            <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-white/60">
-              <Atom className="h-4 w-4 text-amber-200" /> Top powers
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {topCollections.powers.map((item) => renderChip(item, "powers"))}
-            </div>
-          </div>
-        )}
-      </CardContent>
-    </Card>
   );
 }
 
@@ -3276,8 +3099,13 @@ function HeroSection({
     ];
     return base.filter((slide) => slide.key === "intro" || slide.data);
   }, [featured?.character, featured?.faction, featured?.location, featured?.power]);
-  const [index, setIndex] = useState(0);
+  const defaultSlideIndex = useMemo(() => {
+    const characterIndex = slides.findIndex((slide) => slide.key === "character");
+    return characterIndex >= 0 ? characterIndex : 0;
+  }, [slides]);
+  const [index, setIndex] = useState(defaultSlideIndex);
   const [direction, setDirection] = useState(1);
+  const [initialPeek, setInitialPeek] = useState(false);
   const autoPlayed = useRef(false);
   const [snippetIndex, setSnippetIndex] = useState(0);
   const [tickerIndex, setTickerIndex] = useState(0);
@@ -3346,9 +3174,10 @@ function HeroSection({
   );
 
   useEffect(() => {
-    setIndex(0);
+    setIndex(defaultSlideIndex);
     autoPlayed.current = false;
-  }, [featured?.character?.id, featured?.faction?.name, featured?.location?.name, featured?.power?.name]);
+    setInitialPeek(true);
+  }, [defaultSlideIndex]);
 
   useEffect(() => {
     setTickerIndex(0);
@@ -3373,6 +3202,22 @@ function HeroSection({
   }, [slides.length]);
 
   const current = slides[index] || slides[0];
+  const peekActive = initialPeek && current?.key === "character";
+
+  useEffect(() => {
+    if (!initialPeek) return undefined;
+    const target = slides[defaultSlideIndex];
+    if (!target || target.key !== "character") {
+      setInitialPeek(false);
+      return undefined;
+    }
+    if (index !== defaultSlideIndex) {
+      setInitialPeek(false);
+      return undefined;
+    }
+    const timer = setTimeout(() => setInitialPeek(false), 1600);
+    return () => clearTimeout(timer);
+  }, [initialPeek, slides, defaultSlideIndex, index]);
 
   useEffect(() => {
     if (current?.key !== "character") {
@@ -3842,7 +3687,7 @@ function HeroSection({
       <div className="absolute inset-x-0 top-0 h-32 bg-gradient-to-b from-black/50 to-transparent" />
       <div className="absolute -left-24 bottom-0 h-72 w-72 rounded-full bg-amber-400/15 blur-3xl" />
       <div className="absolute -right-20 -top-10 h-72 w-72 rounded-full bg-fuchsia-500/15 blur-3xl" />
-      <div className="relative z-10 mx-auto flex min-h-screen w-full max-w-none flex-col px-4 pb-[var(--toolbar-offset,7rem)] pt-10 sm:px-8 lg:px-16 xl:px-20 2xl:px-24">
+      <div className="relative z-10 mx-auto flex min-h-screen w-full max-w-[min(92rem,calc(100vw-2rem))] flex-col px-4 pb-[var(--toolbar-offset,9rem)] pt-10 sm:px-8 lg:px-16 xl:px-20 2xl:px-24">
         <header
           id="lore-header"
           className="flex flex-wrap items-center justify-between gap-4 rounded-[28px] border border-white/30 bg-black/60 px-5 py-2 backdrop-blur-3xl shadow-[0_20px_60px_rgba(8,10,26,0.55)]"
@@ -3965,7 +3810,8 @@ function HeroSection({
                   <button
                     type="button"
                     onClick={goPrev}
-                    className="absolute left-3 top-1/2 z-20 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full border border-white/40 bg-black/70 text-white shadow-lg transition hover:bg-black/90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-300 sm:h-12 sm:w-12"
+                    className="absolute left-0 top-1/2 z-30 flex h-10 w-10 items-center justify-center rounded-full border border-white/35 bg-black/70 text-white shadow-lg transition hover:bg-black/90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-300 sm:h-12 sm:w-12"
+                    style={{ transform: "translate(-130%, -50%)" }}
                     aria-label="Previous highlight"
                   >
                     <ChevronLeft className="h-5 w-5 sm:h-6 sm:w-6" />
@@ -3973,7 +3819,8 @@ function HeroSection({
                   <button
                     type="button"
                     onClick={goNext}
-                    className="absolute right-3 top-1/2 z-20 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full border border-white/40 bg-black/70 text-white shadow-lg transition hover:bg-black/90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-300 sm:h-12 sm:w-12"
+                    className="absolute right-0 top-1/2 z-30 flex h-10 w-10 items-center justify-center rounded-full border border-white/35 bg-black/70 text-white shadow-lg transition hover:bg-black/90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-300 sm:h-12 sm:w-12"
+                    style={{ transform: "translate(130%, -50%)" }}
                     aria-label="Next highlight"
                   >
                     <ChevronRight className="h-5 w-5 sm:h-6 sm:w-6" />
@@ -3984,10 +3831,10 @@ function HeroSection({
                 <motion.div
                   key={current?.key}
                   custom={direction}
-                  initial={{ opacity: 0, x: direction > 0 ? 140 : -140 }}
-                  animate={{ opacity: 1, x: 0 }}
+                  initial={peekActive ? { opacity: 1, x: 0 } : { opacity: 0, x: direction > 0 ? 140 : -140 }}
+                  animate={peekActive ? { opacity: 1, x: [28, 0] } : { opacity: 1, x: 0 }}
                   exit={{ opacity: 0, x: direction > 0 ? -140 : 140 }}
-                  transition={{ duration: 0.85, ease: "easeInOut" }}
+                  transition={{ duration: peekActive ? 1.2 : 0.85, ease: "easeInOut" }}
                   className="relative h-full"
                 >
                   {renderSlide(current)}
@@ -4011,7 +3858,7 @@ function HeroSection({
       </div>
       <div
         id="hero-toolbar-mount"
-        className="pointer-events-none absolute inset-x-0 bottom-0 z-30 px-4 pb-16 sm:px-8 lg:px-16 xl:px-20 2xl:px-24"
+        className="pointer-events-none absolute inset-x-0 bottom-0 z-30 px-4 pb-20 sm:px-8 lg:px-16 xl:px-20 2xl:px-24"
       />
     </section>
   );
@@ -4317,6 +4164,25 @@ export default function LoremakerApp({ initialCharacters = [], initialError = nu
       setCurrentCharacter(latest);
     }
   }, [openModal, currentCharacter, closeCharacter]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return undefined;
+    const handleKeyScroll = (event) => {
+      if (event.defaultPrevented) return;
+      if (openModal) return;
+      const target = event.target;
+      if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable)) {
+        return;
+      }
+      if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+        event.preventDefault();
+        const delta = window.innerHeight * 0.85;
+        window.scrollBy({ top: event.key === "ArrowDown" ? delta : -delta, behavior: "smooth" });
+      }
+    };
+    window.addEventListener("keydown", handleKeyScroll);
+    return () => window.removeEventListener("keydown", handleKeyScroll);
+  }, [openModal]);
   const schemaJson = useMemo(() => {
     const clean = (value) => {
       if (Array.isArray(value)) {
@@ -4505,7 +4371,7 @@ export default function LoremakerApp({ initialCharacters = [], initialError = nu
           filteredCount={filtered.length}
           hasActiveFilters={hasActiveFilters}
         />
-        <div className="mx-auto max-w-7xl space-y-10 px-3 pt-6 sm:px-4">
+        <div className="mx-auto max-w-7xl space-y-8 px-3 pt-4 sm:px-4">
           {loading && (
             <div className="rounded-3xl border border-white/15 bg-white/5 px-6 py-4 text-sm font-semibold text-white/80">
               Synchronising the universe…
@@ -4527,16 +4393,6 @@ export default function LoremakerApp({ initialCharacters = [], initialError = nu
                 onClose={closeArena}
               />
             </div>
-          )}
-
-          {!showArena && (
-            <QuickFilterRail
-              data={sorted}
-              onFacet={handleFacet}
-              onSortModeChange={setSortMode}
-              sortMode={sortMode}
-              onOpenFilters={() => setFiltersOpen(true)}
-            />
           )}
 
           <section className="flex flex-wrap items-center justify-between gap-3">
