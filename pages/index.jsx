@@ -48,7 +48,7 @@ import {
   publicCharactersError,
   seededRandom,
 } from "../lib/characters";
-import ImageSafe, { characterAltText } from "../components/image-safe";
+import ImageSafe, { characterAltText, Insignia } from "../components/image-safe";
 
 /**
  * Ultra interactive Loremaker experience

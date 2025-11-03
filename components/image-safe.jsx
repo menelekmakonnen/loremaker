@@ -76,7 +76,7 @@ export function imageCandidates(src) {
   return unique([trimmed]);
 }
 
-function Insignia({ label, size = 48 }) {
+export function Insignia({ label, size = 48 }) {
   const fallback = label || "Lore";
   const initials = fallback
     .split(/\s+/)
