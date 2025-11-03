@@ -1,5 +1,5 @@
 import fallbackCharacters from "../data/fallback-characters.json";
-import { fetchCharactersFromSheets } from "../lib/characters";
+import { fetchCharactersFromSheets, characterSlug } from "../lib/characters";
 
 const DEFAULT_SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL || "https://loremaker.app").replace(/\/$/, "");
 
@@ -37,7 +37,7 @@ function buildSitemap(characters, siteUrl) {
 
   characters.forEach((character) => {
     if (!character || !character.name) return;
-    const slug = character.id || slugify(character.name);
+    const slug = characterSlug(character) || character.id || slugify(character.name);
     if (!slug) return;
     urls.push(
       buildUrlNode({

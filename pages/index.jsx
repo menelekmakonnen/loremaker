@@ -8,6 +8,7 @@ import React, {
   useLayoutEffect,
 } from "react";
 import Head from "next/head";
+import Link from "next/link";
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion, useMotionValue, useSpring, useTransform } from "framer-motion";
 import {
@@ -17,6 +18,7 @@ import {
   ArrowDown,
   ArrowUp,
   ArrowRight,
+  ArrowUpRight,
   ChevronLeft,
   ChevronRight,
   ChevronUp,
@@ -708,7 +710,7 @@ function RosterSlide({ slide, icon, facetKey, onFacet, onOpenCharacter, limit })
           {icon}
           {slide.label}
         </div>
-        <h3 className="text-2xl font-black leading-tight text-balance sm:text-4xl">{payload.name}</h3>
+        <h2 className="text-2xl font-black leading-tight text-balance sm:text-4xl">{payload.name}</h2>
         <p className="text-sm font-semibold text-white/75">{descriptor}</p>
         <div className="flex flex-wrap gap-2">
           <Button
@@ -1124,13 +1126,13 @@ function CharacterCard({ char, onOpen, onFacet, onUseInSim, highlight }) {
             >
               <ImageSafe
                 src={heroImage}
-                alt={char.name}
+                alt={`${char.name} from the LoreMaker Universe`}
                 fallbackLabel={char.name}
                 className="h-full w-full object-cover transition duration-700 ease-out group-hover:scale-105"
               />
               <div className="absolute inset-x-0 bottom-0 flex flex-col gap-1 bg-gradient-to-t from-black/90 via-black/35 to-transparent p-4">
                 <div className="text-xs font-semibold text-white/80">{accentLabel}</div>
-                <h3 className="text-lg font-black leading-tight text-white">{char.name}</h3>
+                <h2 className="text-lg font-black leading-tight text-white">{char.name}</h2>
                 {primaryAlias && (
                   <span className="text-[11px] font-semibold text-white/65">{primaryAlias}</span>
                 )}
@@ -1189,7 +1191,7 @@ function CharacterCard({ char, onOpen, onFacet, onUseInSim, highlight }) {
               </span>
             )}
           </div>
-          <div className="mt-4 flex justify-end">
+          <div className="mt-4 flex flex-wrap justify-between gap-2">
             <Button
               variant="ghost"
               size="sm"
@@ -1199,7 +1201,20 @@ function CharacterCard({ char, onOpen, onFacet, onUseInSim, highlight }) {
               }}
               className="px-4 text-xs font-semibold text-white/70 transition hover:text-white"
             >
-              View Profile
+              Quick view
+              <ArrowRight size={14} />
+            </Button>
+            <Button
+              as={Link}
+              href={`/characters/${char.slug}`}
+              variant="subtle"
+              size="sm"
+              onClick={(event) => event.stopPropagation()}
+              className="px-4 text-xs font-semibold"
+              aria-label={`Open the full profile for ${char.name}`}
+            >
+              Full profile
+              <ArrowUpRight size={14} />
             </Button>
           </div>
         </div>
@@ -1966,7 +1981,7 @@ function ArenaCard({ char, position, onRelease, onOpen, health, isWinner, showX,
       <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:gap-4">
         <ImageSafe
           src={char.cover || char.gallery?.[0]}
-          alt={char.name}
+          alt={`${char.name} portrait from the LoreMaker Universe`}
           fallbackLabel={char.name}
           className="hidden h-24 w-24 rounded-2xl border border-slate-700 object-cover sm:block sm:h-32 sm:w-32"
         />
@@ -3535,20 +3550,33 @@ function HeroSection({
                 <Atom className="h-4 w-4" aria-hidden="true" /> {topPowers[0].name} • {topPowers[0].level}/10
               </div>
             )}
-            <Button
-              type="button"
-              variant="gradient"
-              size="sm"
-              onClick={(event) => {
-                event.stopPropagation();
-                openProfile();
-              }}
-              aria-label={dossierAria}
-              className="mt-2 inline-flex items-center gap-2 rounded-full px-5 py-2 text-sm font-semibold shadow-[0_18px_48px_rgba(253,230,138,0.35)]"
-            >
-              Dive into the dossier
-              <ArrowRight className="h-4 w-4" aria-hidden="true" />
-            </Button>
+            <div className="mt-2 flex flex-wrap gap-3">
+              <Button
+                type="button"
+                variant="gradient"
+                size="sm"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  openProfile();
+                }}
+                aria-label={dossierAria}
+                className="inline-flex items-center gap-2 rounded-full px-5 py-2 text-sm font-semibold shadow-[0_18px_48px_rgba(253,230,138,0.35)]"
+              >
+                Quick view
+                <ArrowRight className="h-4 w-4" aria-hidden="true" />
+              </Button>
+              <Button
+                as={Link}
+                href={`/characters/${char.slug}`}
+                variant="subtle"
+                size="sm"
+                onClick={(event) => event.stopPropagation()}
+                className="inline-flex items-center gap-2 rounded-full px-5 py-2 text-sm font-semibold"
+              >
+                Full profile
+                <ArrowUpRight className="h-4 w-4" aria-hidden="true" />
+              </Button>
+            </div>
           </div>
           {!activeBackground && (
             <div className="relative z-10 mt-6 rounded-2xl border border-dashed border-white/30 bg-black/60 px-4 py-4 text-center text-xs font-semibold text-white/70">
@@ -3639,7 +3667,7 @@ function HeroSection({
               </div>
             </div>
           )}
-          <div>
+          <div className="flex flex-wrap gap-3">
             <Button
               type="button"
               variant="gradient"
@@ -3651,8 +3679,19 @@ function HeroSection({
               aria-label={dossierAria}
               className="inline-flex items-center gap-3 rounded-full px-6 py-3 text-sm font-semibold shadow-[0_18px_48px_rgba(253,230,138,0.35)]"
             >
-              Dive into the dossier
+              Quick view
               <ArrowRight className="h-4 w-4" aria-hidden="true" />
+            </Button>
+            <Button
+              as={Link}
+              href={`/characters/${char.slug}`}
+              variant="subtle"
+              size="md"
+              onClick={(event) => event.stopPropagation()}
+              className="inline-flex items-center gap-3 rounded-full px-6 py-3 text-sm font-semibold"
+            >
+              Full profile
+              <ArrowUpRight className="h-4 w-4" aria-hidden="true" />
             </Button>
           </div>
         </div>
@@ -3840,7 +3879,7 @@ function HeroSection({
           <div className="flex items-center gap-3">
             <LoreShield onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })} />
             <div className="flex flex-col gap-1 text-xs font-semibold text-white/80 sm:text-sm">
-              <span className="hidden sm:inline">Pulse of the Loremaker</span>
+              <span className="hidden sm:inline">Loremaker Universe</span>
               <div className="flex flex-wrap items-center gap-2">
                 <button
                   type="button"
@@ -4286,7 +4325,7 @@ export default function LoremakerApp({ initialCharacters = [], initialError = nu
     const characters = data
       .slice(0, limit)
       .map((char) => {
-        const slug = char.id || slugify(char.name);
+        const slug = char.slug || char.id || slugify(char.name);
         const url = `${siteUrl}/characters/${slug}`;
         const alias = Array.isArray(char.alias) ? char.alias.filter(Boolean) : [];
         const factions = (char.faction || []).filter(Boolean);
@@ -4359,20 +4398,26 @@ export default function LoremakerApp({ initialCharacters = [], initialError = nu
   return (
     <>
       <Head>
-        <title>LoreMaker Universe Codex | Menelek Makonnen</title>
+        <title>LoreMaker Universe: Superheroes & Fantasy Characters Codex | Menelek Makonnen</title>
         <meta name="description" content={metaDescription} />
         {keywordList && <meta name="keywords" content={keywordList} />}
         <meta name="author" content="Menelek Makonnen" />
         <meta name="robots" content="index,follow" />
         <link rel="canonical" href={siteUrl} />
         <meta property="og:type" content="website" />
-        <meta property="og:title" content="LoreMaker Universe Codex | Menelek Makonnen" />
+        <meta
+          property="og:title"
+          content="LoreMaker Universe: Superheroes & Fantasy Characters Codex | Menelek Makonnen"
+        />
         <meta property="og:description" content={metaDescription} />
         <meta property="og:url" content={siteUrl} />
         {previewImage && <meta property="og:image" content={previewImage} />}
         <meta property="og:site_name" content="LoreMaker Universe" />
         <meta name="twitter:card" content="summary_large_image" />
-        <meta name="twitter:title" content="LoreMaker Universe Codex | Menelek Makonnen" />
+        <meta
+          name="twitter:title"
+          content="LoreMaker Universe: Superheroes & Fantasy Characters Codex | Menelek Makonnen"
+        />
         <meta name="twitter:description" content={metaDescription} />
         {previewImage && <meta name="twitter:image" content={previewImage} />}
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: schemaJson }} />
