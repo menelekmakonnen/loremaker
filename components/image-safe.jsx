@@ -56,12 +56,17 @@ function driveImageCandidates(url) {
   const resourceSuffix = resourceKey ? `?resourcekey=${encodeURIComponent(resourceKey)}` : "";
 
   return unique([
+    `https://lh3.googleusercontent.com/d/${id}=w1400-h1400-no`,
+    resourceKey ? `https://lh3.googleusercontent.com/d/${id}=w1400-h1400-no${resourceSuffix}` : null,
     `https://lh3.googleusercontent.com/d/${id}=w2000-h2000-no`,
     resourceKey ? `https://lh3.googleusercontent.com/d/${id}=w2000-h2000-no${resourceSuffix}` : null,
+    `https://lh3.googleusercontent.com/d/${id}=s1600`,
+    resourceKey ? `https://lh3.googleusercontent.com/d/${id}=s1600${resourceSuffix}` : null,
     `https://lh3.googleusercontent.com/d/${id}=s2048`,
     resourceKey ? `https://lh3.googleusercontent.com/d/${id}=s2048${resourceSuffix}` : null,
     `https://drive.googleusercontent.com/uc?export=view&id=${id}${resourceQuery}`,
     `https://drive.google.com/uc?export=view&id=${id}${resourceQuery}`,
+    `https://drive.google.com/thumbnail?id=${id}&sz=w1600${resourceQuery}`,
     `https://drive.google.com/thumbnail?id=${id}&sz=w2000${resourceQuery}`,
     url,
   ]);

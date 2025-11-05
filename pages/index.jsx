@@ -3195,6 +3195,8 @@ function HeroSection({
 }) {
   const isCompact = useMediaQuery("(max-width: 640px)");
   const heroRef = useRef(null);
+  const visibilityRef = useRef(true);
+  const [heroVisible, setHeroVisible] = useState(true);
   const [pointer, setPointer] = useState({ x: 50, y: 50 });
   const [ripples, setRipples] = useState([]);
   const rippleTimers = useRef(new Map());
@@ -3233,6 +3235,7 @@ function HeroSection({
   const scheduleAutoAdvance = useCallback(() => {
     clearAutoAdvance();
     if (slides.length <= 1) return;
+    if (!visibilityRef.current || (typeof document !== "undefined" && document.hidden)) return;
     autoAdvanceRef.current = setInterval(() => {
       setDirection(1);
       setIndex((prev) => {
@@ -3265,6 +3268,10 @@ function HeroSection({
     rippleTimers.current.forEach((timeout) => clearTimeout(timeout));
     rippleTimers.current.clear();
   }, []);
+
+  useEffect(() => {
+    visibilityRef.current = heroVisible;
+  }, [heroVisible]);
 
   const updatePointerFromEvent = useCallback((event) => {
     const rect = heroRef.current?.getBoundingClientRect();
@@ -3306,6 +3313,40 @@ function HeroSection({
     },
     [registerRipple, updatePointerFromEvent]
   );
+
+  useEffect(() => {
+    if (typeof window === "undefined") return undefined;
+    const node = heroRef.current;
+    if (!node) return undefined;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        const isVisible = !!entry?.isIntersecting;
+        visibilityRef.current = isVisible;
+        setHeroVisible(isVisible);
+        if (!isVisible) {
+          clearAutoAdvance();
+        } else {
+          scheduleAutoAdvance();
+        }
+      },
+      { threshold: 0.25 }
+    );
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [clearAutoAdvance, scheduleAutoAdvance]);
+
+  useEffect(() => {
+    if (typeof document === "undefined") return undefined;
+    const handleVisibility = () => {
+      if (document.hidden) {
+        clearAutoAdvance();
+      } else if (visibilityRef.current) {
+        scheduleAutoAdvance();
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => document.removeEventListener("visibilitychange", handleVisibility);
+  }, [clearAutoAdvance, scheduleAutoAdvance]);
 
   useEffect(() => {
     setIndex(defaultSlideIndex);
@@ -3361,7 +3402,7 @@ function HeroSection({
   }, [initialPeek, slides, defaultSlideIndex, index]);
 
   useEffect(() => {
-    if (current?.key !== "character") {
+    if (current?.key !== "character" || !heroVisible) {
       setSnippetIndex(0);
       return undefined;
     }
@@ -3370,13 +3411,13 @@ function HeroSection({
       setSnippetIndex((value) => value + 1);
     }, 4200);
     return () => clearInterval(timer);
-  }, [current?.key, current?.data?.id]);
+  }, [current?.key, current?.data?.id, heroVisible]);
 
   useEffect(() => {
     if (!backgroundSources.length) {
       setFeatureSequence([]);
       setFeatureImageIndex(0);
-      return undefined;
+      return;
     }
     const seed = featured?.character?.id || featured?.character?.name || "character";
     const rng = seededRandom(`${seed}|feature`);
@@ -3387,18 +3428,21 @@ function HeroSection({
     setFeatureSequence(order);
     const initialIndex = order.length > 0 ? Math.floor(rng() * order.length) % order.length : 0;
     setFeatureImageIndex(initialIndex);
-    if (order.length <= 1) {
-      return undefined;
-    }
+  }, [backgroundSources, featured?.character?.id, featured?.character?.name]);
+
+  useEffect(() => {
+    if (featureSequence.length <= 1 || !heroVisible) return undefined;
     const timer = setInterval(() => {
-      setFeatureImageIndex((value) => (value + 1) % order.length);
+      setFeatureImageIndex((value) => (value + 1) % featureSequence.length);
     }, 30000);
     return () => clearInterval(timer);
-  }, [backgroundSources, featured?.character?.id, featured?.character?.name]);
+  }, [featureSequence.length, heroVisible]);
 
   const backgroundOrder = featureSequence.length ? featureSequence : backgroundSources;
   const sharedBackground =
     backgroundOrder.length > 0 ? backgroundOrder[featureImageIndex % backgroundOrder.length] : null;
+
+  const heroBackdropKey = sharedBackground ? `${featureImageIndex}-${sharedBackground}` : null;
 
   const goPrev = useCallback(() => {
     if (slides.length <= 1) return;
@@ -3415,6 +3459,23 @@ function HeroSection({
   }, [slides.length, scheduleAutoAdvance]);
 
   const activeTickerName = tickerNames[tickerIndex % Math.max(tickerNames.length, 1)] || "Lore";
+
+  const randomizeTicker = useCallback(() => {
+    if (!tickerNames.length) return;
+    setTickerIndex((prev) => {
+      if (tickerNames.length <= 1) return prev;
+      let next = prev;
+      let guard = 0;
+      while (next === prev && guard < 6) {
+        next = Math.floor(Math.random() * tickerNames.length);
+        guard += 1;
+      }
+      if (next === prev) {
+        return (prev + 1) % tickerNames.length;
+      }
+      return next;
+    });
+  }, [tickerNames]);
 
   const handleSlidePointerDown = useCallback(
     (event) => {
@@ -3750,7 +3811,11 @@ function HeroSection({
     };
     const handleArena = (event) => {
       event.stopPropagation();
-      onOpenArena?.();
+      if (showArena) {
+        onToggleArena?.();
+      } else {
+        onOpenArena?.();
+      }
     };
     if (isCompact) {
       return (
@@ -3777,7 +3842,7 @@ function HeroSection({
               data-hero-control="true"
               className="self-start"
             >
-              Open Battle Arena
+              {showArena ? "Close Battle Arena" : "Open Battle Arena"}
             </Button>
           </div>
         </div>
@@ -3806,8 +3871,14 @@ function HeroSection({
               >
                 Discover the Universe
               </Button>
-              <Button variant="subtle" size="lg" onClick={handleArena} className="bg-white/10" data-hero-control="true">
-                Open Battle Arena
+              <Button
+                variant="subtle"
+                size="lg"
+                onClick={handleArena}
+                className="bg-white/10"
+                data-hero-control="true"
+              >
+                {showArena ? "Close Battle Arena" : "Open Battle Arena"}
               </Button>
             </div>
           </div>
@@ -3845,13 +3916,21 @@ function HeroSection({
                   />
                 </motion.div>
               ))}
-              <motion.span
-                className="absolute inset-0 flex items-center justify-center text-sm font-black text-white"
+              <motion.button
+                type="button"
+                className="absolute inset-0 flex cursor-pointer items-center justify-center text-sm font-black text-white focus:outline-none"
                 animate={{ opacity: [0.6, 1, 0.6] }}
                 transition={{ duration: 12, repeat: Infinity, ease: "easeInOut" }}
+                whileTap={{ scale: 0.94 }}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  randomizeTicker();
+                }}
+                data-hero-control="true"
+                aria-label="Show another featured legend"
               >
                 {activeTickerName}
-              </motion.span>
+              </motion.button>
             </div>
           </div>
         </div>
@@ -3918,6 +3997,29 @@ function HeroSection({
       onPointerDown={handlePointerDown}
       className="relative flex min-h-screen w-full flex-col overflow-hidden bg-[#080c21]/95 shadow-[0_40px_160px_rgba(8,10,28,0.7)]"
     >
+      <AnimatePresence mode="wait">
+        {heroBackdropKey ? (
+          <motion.div
+            key={heroBackdropKey}
+            className="absolute inset-0 -z-20 overflow-hidden"
+            initial={{ opacity: 0.35 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 1.1, ease: "easeInOut" }}
+            aria-hidden="true"
+          >
+            <ImageSafe
+              src={sharedBackground}
+              alt=""
+              loading="eager"
+              decoding="async"
+              className="h-full w-full object-cover object-[70%_center]"
+              aria-hidden="true"
+            />
+            <div className="absolute inset-0 bg-gradient-to-b from-black/85 via-[#060b1f]/72 to-[#03050c]/85" />
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
       <HeroDynamicBackground pointer={pointer} ripples={ripples} />
       <HeroHalo />
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.18),transparent_55%)]" />
