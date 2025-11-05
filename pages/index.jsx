@@ -27,7 +27,6 @@ import {
   MapPin,
   Layers,
   Atom,
-  Clock,
   Library,
   Crown,
   Swords,
@@ -41,7 +40,6 @@ import {
   computeFeatured,
   normaliseArray,
   fetchCharactersFromSheets,
-  todayKey,
   publicCharactersError,
   seededRandom,
 } from "../lib/characters";
@@ -180,8 +178,18 @@ function Button({ variant = "solid", size = "md", className = "", children, as: 
   );
 }
 
-function Card({ className = "", children }) {
-  return <div className={cx("rounded-3xl border border-white/12 bg-white/8 backdrop-blur-2xl shadow-[0_25px_80px_rgba(8,8,20,0.55)]", className)}>{children}</div>;
+function Card({ className = "", children, ...props }) {
+  return (
+    <div
+      className={cx(
+        "rounded-3xl border border-white/12 bg-white/8 backdrop-blur-2xl shadow-[0_25px_80px_rgba(8,8,20,0.55)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300",
+        className
+      )}
+      {...props}
+    >
+      {children}
+    </div>
+  );
 }
 const CardHeader = ({ className = "", children }) => <div className={cx("p-5", className)}>{children}</div>;
 const CardContent = ({ className = "", children }) => <div className={cx("p-5", className)}>{children}</div>;
@@ -1093,7 +1101,8 @@ function CharacterCard({ char, onOpen, onFacet, onUseInSim, highlight }) {
   const openProfile = () => onOpen(char);
   const slug = char.id || slugifyId(char.name);
   const profileHref = `/characters/${slug}`;
-  const handleProfileKey = (event) => {
+  const handleCardKey = (event) => {
+    if (event.defaultPrevented) return;
     if (event.key === "Enter" || event.key === " ") {
       event.preventDefault();
       openProfile();
@@ -1111,15 +1120,13 @@ function CharacterCard({ char, onOpen, onFacet, onUseInSim, highlight }) {
           "flex h-full flex-col overflow-hidden bg-black/45 backdrop-blur-3xl",
           highlight ? "ring-2 ring-amber-300" : "ring-1 ring-inset ring-white/15"
         )}
+        onClick={openProfile}
+        onKeyDown={handleCardKey}
+        role="button"
+        tabIndex={0}
       >
         <div className="relative">
-          <div
-            role="button"
-            tabIndex={0}
-            onClick={openProfile}
-            onKeyDown={handleProfileKey}
-            className="group relative block"
-          >
+          <div className="group relative block">
             <div
               className={cx(
                 "relative aspect-[4/5] overflow-hidden rounded-[28px] border border-white/15",
@@ -1169,7 +1176,7 @@ function CharacterCard({ char, onOpen, onFacet, onUseInSim, highlight }) {
           </button>
         </div>
         <div className="flex flex-1 flex-col justify-between px-4 pb-4 pt-3 text-white/80">
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center justify-between gap-2">
             <span className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-3 py-1 text-[11px] font-semibold text-white">
               <span>{alignmentLabel}</span>
               {statusMeta && (
@@ -1179,6 +1186,16 @@ function CharacterCard({ char, onOpen, onFacet, onUseInSim, highlight }) {
                 </span>
               )}
             </span>
+            <Button
+              as={Link}
+              href={profileHref}
+              onClick={(event) => event.stopPropagation()}
+              variant="subtle"
+              size="sm"
+              className="flex-none justify-center bg-white/15 text-white hover:bg-white/25"
+            >
+              Full Profile
+            </Button>
           </div>
           <p className="mt-3 text-sm font-semibold leading-relaxed text-white/75">{shortCaption}</p>
           <div className="mt-4 flex flex-wrap gap-2">
@@ -1200,29 +1217,6 @@ function CharacterCard({ char, onOpen, onFacet, onUseInSim, highlight }) {
                 {highlightFacts.join(" • ")}
               </span>
             )}
-          </div>
-          <div className="mt-4 flex flex-wrap justify-between gap-2">
-            <Button
-              as={Link}
-              href={profileHref}
-              onClick={(event) => event.stopPropagation()}
-              variant="subtle"
-              size="sm"
-              className="flex-1 justify-center bg-white/15 text-white hover:bg-white/25"
-            >
-              View lore profile
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={(event) => {
-                event.stopPropagation();
-                openProfile();
-              }}
-              className="flex-1 px-4 text-xs font-semibold text-white/70 transition hover:text-white"
-            >
-              Quick dossier
-            </Button>
           </div>
         </div>
       </Card>
@@ -1321,6 +1315,7 @@ function CharacterModal({ open, onClose, char, onFacet, onUseInSim }) {
     };
   }, [open, onClose]);
   if (!open || !char) return null;
+  const profileHref = `/characters/${char.id || slugifyId(char.name)}`;
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby={titleId}>
       <Aurora className="opacity-70" />
@@ -1336,10 +1331,9 @@ function CharacterModal({ open, onClose, char, onFacet, onUseInSim }) {
               <div id={titleId} className="text-3xl font-black drop-shadow-[0_2px_8px_rgba(0,0,0,0.6)]">
                 {char.name}
               </div>
-              {char.era && <div className="text-[11px] font-extrabold tracking-[0.3em] text-white/70">{char.era}</div>}
             </div>
           </div>
-          <div className="flex justify-center">
+          <div className="flex flex-wrap items-center justify-center gap-3">
             <Button
               variant="gradient"
               size="sm"
@@ -1349,6 +1343,17 @@ function CharacterModal({ open, onClose, char, onFacet, onUseInSim }) {
             >
               <Swords size={16} />
               <span>Battle Arena</span>
+            </Button>
+            <Button
+              as={Link}
+              href={profileHref}
+              onClick={onClose}
+              variant="subtle"
+              size="sm"
+              className="flex items-center gap-2 px-5 py-2 text-xs font-semibold text-white/80 hover:text-white sm:text-sm"
+            >
+              <ArrowRight size={16} />
+              <span>Full Profile</span>
             </Button>
           </div>
           <div className="flex justify-end gap-2 sm:gap-3">
@@ -1637,7 +1642,7 @@ function ArenaCard({ char, position, onRelease, onOpen, health, isWinner, showX 
   if (!char) {
     return (
       <div className="flex min-h-[280px] items-center justify-center rounded-3xl border-2 border-dashed border-slate-500/60 bg-slate-900/40 p-6 text-center text-sm font-bold text-slate-400">
-        Choose combatant {position}
+        Tap the crossed swords on a character card or use Random Duel to prepare combatant {position}.
       </div>
     );
   }
@@ -1708,7 +1713,7 @@ function ArenaCard({ char, position, onRelease, onOpen, health, isWinner, showX 
         </motion.div>
       )}
       <div className="flex flex-wrap items-center justify-between gap-2 text-[9px] sm:text-xs">
-        <Badge className="bg-slate-800/80 px-3 py-1 text-[9px] tracking-[0.3em] text-slate-200">Combatant {position}</Badge>
+        <Badge className="bg-slate-800/80 px-3 py-1 text-[9px] tracking-[0.3em] text-slate-200">{char.name}</Badge>
         <div className="flex items-center gap-2">
           <Button
             variant="ghost"
@@ -1864,7 +1869,7 @@ const swordVariants = {
   explode: { rotate: [0, -15, 15, 0], scale: [1, 1.2, 0.9, 1], filter: "drop-shadow(0 0 45px rgba(255,196,12,1))" },
 };
 
-function BattleArena({ characters, slots, setSlots, onOpenCharacter, pulseKey }) {
+function BattleArena({ characters, slots, setSlots, onOpenCharacter, pulseKey, onClose }) {
   const left = characters.find((item) => item.id === slots.left) || null;
   const right = characters.find((item) => item.id === slots.right) || null;
   const [battleState, setBattleState] = useState("idle");
@@ -1899,9 +1904,34 @@ function BattleArena({ characters, slots, setSlots, onOpenCharacter, pulseKey })
 
   const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
+  const pickRandomCombatant = (excludeIds = []) => {
+    const pool = characters.filter((item) => item && !excludeIds.includes(item.id));
+    if (!pool.length) return null;
+    return pool[Math.floor(Math.random() * pool.length)];
+  };
+
   const runBattle = async () => {
-    if (!left || !right || left.id === right.id) return;
-    const computed = computeBattleTimeline(left, right);
+    let fighterA = left;
+    let fighterB = right;
+    if (!fighterA) {
+      fighterA = pickRandomCombatant(fighterB ? [fighterB.id] : []);
+    }
+    if (!fighterB) {
+      fighterB = pickRandomCombatant(fighterA ? [fighterA.id] : []);
+    }
+    if (!fighterA || !fighterB) return;
+    if (fighterA.id === fighterB.id) {
+      const alternate = pickRandomCombatant([fighterA.id]);
+      if (alternate) {
+        fighterB = alternate;
+      } else {
+        return;
+      }
+    }
+    if (fighterA.id !== left?.id || fighterB.id !== right?.id) {
+      setSlots({ left: fighterA.id, right: fighterB.id });
+    }
+    const computed = computeBattleTimeline(fighterA, fighterB);
     setBattleState("charging");
     setResult(null);
     setTimeline([]);
@@ -2003,9 +2033,14 @@ function BattleArena({ characters, slots, setSlots, onOpenCharacter, pulseKey })
                 <Button variant="outline" size="sm" onClick={runRandom} className="text-[10px] sm:text-[11px]">
                   Random Duel
                 </Button>
-                <Button variant="destructive" size="sm" onClick={reset} className="text-[10px] sm:text-[11px]">
+                <Button variant="dark" size="sm" onClick={reset} className="text-[10px] sm:text-[11px]">
                   Reset Arena
                 </Button>
+                {onClose && (
+                  <Button variant="destructive" size="sm" onClick={onClose} className="text-[10px] sm:text-[11px]">
+                    Close Arena
+                  </Button>
+                )}
                 <span className="text-[10px] font-semibold tracking-[0.3em] text-slate-400">
                   Tap combatants to view dossiers
                 </span>
@@ -2481,16 +2516,18 @@ function ToolsBar({
               <Filter className="h-4 w-4" aria-hidden="true" />
               <span className="text-xs font-semibold sm:text-sm">Filters</span>
             </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={onClearFilters}
-              className="flex-none"
-              aria-label="Clear filters"
-            >
-              <X size={14} aria-hidden="true" />
-              <span className="text-xs font-semibold sm:text-sm">Clear</span>
-            </Button>
+            {hasActiveFilters && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={onClearFilters}
+                className="flex-none"
+                aria-label="Clear filters"
+              >
+                <X size={14} aria-hidden="true" />
+                <span className="text-xs font-semibold sm:text-sm">Clear</span>
+              </Button>
+            )}
             <div className="flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1.5 text-xs font-semibold text-white/85">
               <Users className="h-3.5 w-3.5 text-amber-200" aria-hidden="true" />
               <span>{countLabel}</span>
@@ -2629,16 +2666,18 @@ function ToolsBar({
                     <Filter className="h-4 w-4" aria-hidden="true" />
                     <span className="text-xs font-semibold sm:text-sm">Filters</span>
                   </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={onClearFilters}
-                    className="flex-none"
-                    aria-label="Clear filters"
-                  >
-                    <X size={14} aria-hidden="true" />
-                    <span className="text-xs font-semibold sm:text-sm">Clear</span>
-                  </Button>
+                  {hasActiveFilters && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={onClearFilters}
+                      className="flex-none"
+                      aria-label="Clear filters"
+                    >
+                      <X size={14} aria-hidden="true" />
+                      <span className="text-xs font-semibold sm:text-sm">Clear</span>
+                    </Button>
+                  )}
                   <div className="flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1.5 text-xs font-semibold text-white/85">
                     <Users className="h-3.5 w-3.5 text-amber-200" aria-hidden="true" />
                     <span>{countLabel}</span>
@@ -2910,6 +2949,7 @@ function HeroSection({
   onOpenCharacter,
   onFacet,
   onToggleArena,
+  onOpenArena,
   onSync,
   showArena,
   characterNames = [],
@@ -2939,9 +2979,10 @@ function HeroSection({
   }, [featured?.character, featured?.faction, featured?.location, featured?.power]);
   const [index, setIndex] = useState(0);
   const [direction, setDirection] = useState(1);
-  const autoPlayed = useRef(false);
   const [snippetIndex, setSnippetIndex] = useState(0);
   const [tickerIndex, setTickerIndex] = useState(0);
+  const autoTimerRef = useRef(null);
+  const swipeRef = useRef({ pointerId: null, startX: 0, startTime: 0 });
 
   const tickerNames = useMemo(() => {
     const names = (characterNames || [])
@@ -2996,10 +3037,30 @@ function HeroSection({
     [registerRipple, updatePointerFromEvent]
   );
 
+  const clearAutoPlay = useCallback(() => {
+    if (autoTimerRef.current) {
+      clearTimeout(autoTimerRef.current);
+      autoTimerRef.current = null;
+    }
+  }, []);
+
+  const scheduleAutoPlay = useCallback(() => {
+    clearAutoPlay();
+    if (slides.length <= 1) return;
+    autoTimerRef.current = setTimeout(() => {
+      setDirection(1);
+      setIndex((prev) => (prev + 1) % slides.length);
+    }, 6000);
+  }, [clearAutoPlay, slides.length]);
+
+  const resetAutoPlay = useCallback(() => {
+    scheduleAutoPlay();
+  }, [scheduleAutoPlay]);
+
   useEffect(() => {
     setIndex(0);
-    autoPlayed.current = false;
-  }, [featured?.character?.id, featured?.faction?.name, featured?.location?.name, featured?.power?.name]);
+    scheduleAutoPlay();
+  }, [featured?.character?.id, featured?.faction?.name, featured?.location?.name, featured?.power?.name, scheduleAutoPlay]);
 
   useEffect(() => {
     setTickerIndex(0);
@@ -3014,14 +3075,9 @@ function HeroSection({
   }, [tickerNames]);
 
   useEffect(() => {
-    if (slides.length <= 1 || autoPlayed.current) return undefined;
-    const timer = setTimeout(() => {
-      setDirection(1);
-      setIndex((prev) => (prev + 1) % slides.length);
-      autoPlayed.current = true;
-    }, 3600);
-    return () => clearTimeout(timer);
-  }, [slides.length]);
+    scheduleAutoPlay();
+    return clearAutoPlay;
+  }, [scheduleAutoPlay, clearAutoPlay, index, slides.length]);
 
   const current = slides[index] || slides[0];
 
@@ -3037,26 +3093,87 @@ function HeroSection({
     return () => clearInterval(timer);
   }, [current?.key, current?.data?.id]);
 
-  const goPrev = () => {
+  const goPrev = useCallback(() => {
+    if (!slides.length) return;
     setDirection(-1);
     setIndex((prev) => (prev - 1 + slides.length) % slides.length);
-  };
+  }, [slides.length]);
 
-  const goNext = () => {
+  const goNext = useCallback(() => {
+    if (!slides.length) return;
     setDirection(1);
     setIndex((prev) => (prev + 1) % slides.length);
-  };
+  }, [slides.length]);
+
+  const handlePrev = useCallback(() => {
+    goPrev();
+    resetAutoPlay();
+  }, [goPrev, resetAutoPlay]);
+
+  const handleNext = useCallback(() => {
+    goNext();
+    resetAutoPlay();
+  }, [goNext, resetAutoPlay]);
+
+  const handleSlidePointerDown = useCallback(
+    (event) => {
+      if (event.pointerType !== "touch") return;
+      clearAutoPlay();
+      swipeRef.current = { pointerId: event.pointerId, startX: event.clientX, startTime: Date.now() };
+      event.currentTarget.setPointerCapture?.(event.pointerId);
+    },
+    [clearAutoPlay]
+  );
+
+  const handleSlidePointerUp = useCallback(
+    (event) => {
+      const state = swipeRef.current;
+      if (!state || state.pointerId !== event.pointerId) {
+        resetAutoPlay();
+        return;
+      }
+      const deltaX = event.clientX - state.startX;
+      const elapsed = Date.now() - state.startTime;
+      swipeRef.current = { pointerId: null, startX: 0, startTime: 0 };
+      event.currentTarget.releasePointerCapture?.(event.pointerId);
+      if (Math.abs(deltaX) > 40 && elapsed < 900) {
+        if (deltaX > 0) {
+          goPrev();
+        } else {
+          goNext();
+        }
+      }
+      resetAutoPlay();
+    },
+    [goPrev, goNext, resetAutoPlay]
+  );
+
+  const handleSlidePointerCancel = useCallback(() => {
+    swipeRef.current = { pointerId: null, startX: 0, startTime: 0 };
+    resetAutoPlay();
+  }, [resetAutoPlay]);
 
   const activeTickerName = tickerNames[tickerIndex % Math.max(tickerNames.length, 1)] || "Lore";
 
   const renderCharacter = (slide) => {
     const char = slide.data;
     if (!char) {
+      const fallback = featured?.character;
       return (
-        <div className="flex h-full flex-col justify-center gap-4 rounded-[32px] border border-white/15 bg-black/50 p-8 text-white">
+        <button
+          type="button"
+          onClick={() => {
+            if (fallback) {
+              onOpenCharacter?.(fallback);
+              resetAutoPlay();
+            }
+          }}
+          className="flex h-full flex-col justify-center gap-4 rounded-[32px] border border-white/15 bg-black/50 p-8 text-left text-white transition hover:bg-black/60"
+        >
           <div className="text-xs font-bold tracking-[0.35em] text-white/60">Featured Character</div>
           <p className="text-base font-semibold text-white/70 sm:text-lg">Loading today’s legend…</p>
-        </div>
+          <span className="text-sm font-semibold text-white/60">Tap again when the hero arrives to open their dossier.</span>
+        </button>
       );
     }
     const images = [char.cover, ...(char.gallery || [])].filter(Boolean);
@@ -3073,7 +3190,10 @@ function HeroSection({
       topPowers[0] ? `Known for ${topPowers[0].name}` : null,
     ].filter(Boolean);
     const activeSnippet = snippets.length ? snippets[snippetIndex % snippets.length] : null;
-    const openProfile = () => onOpenCharacter?.(char);
+    const openProfile = () => {
+      onOpenCharacter?.(char);
+      resetAutoPlay();
+    };
     const handleFacetClick = (event, payload) => {
       event.stopPropagation();
       if (payload?.value) onFacet?.(payload);
@@ -3225,14 +3345,30 @@ function HeroSection({
             <h1 className="text-2xl font-black leading-snug text-balance">{title}</h1>
             <p className="text-sm font-semibold text-white/75">{blurb}</p>
           </div>
-          <Button
-            variant="gradient"
-            size="md"
-            onClick={onScrollToCharacters}
-            className="self-start shadow-[0_18px_48px_rgba(253,230,138,0.35)]"
-          >
-            Discover the Universe
-          </Button>
+          <div className="flex flex-wrap gap-3">
+            <Button
+              variant="gradient"
+              size="md"
+              onClick={() => {
+                onScrollToCharacters?.();
+                resetAutoPlay();
+              }}
+              className="shadow-[0_18px_48px_rgba(253,230,138,0.35)]"
+            >
+              Discover the Universe
+            </Button>
+            <Button
+              variant="outline"
+              size="md"
+              onClick={() => {
+                onOpenArena?.();
+                resetAutoPlay();
+              }}
+              className="border-white/40 bg-white/10 text-white transition hover:bg-white/20"
+            >
+              Open Battle Arena
+            </Button>
+          </div>
         </div>
       );
     }
@@ -3253,10 +3389,24 @@ function HeroSection({
               <Button
                 variant="gradient"
                 size="lg"
-                onClick={onScrollToCharacters}
+                onClick={() => {
+                  onScrollToCharacters?.();
+                  resetAutoPlay();
+                }}
                 className="shadow-[0_18px_48px_rgba(253,230,138,0.35)]"
               >
                 Discover the Universe
+              </Button>
+              <Button
+                variant="outline"
+                size="lg"
+                onClick={() => {
+                  onOpenArena?.();
+                  resetAutoPlay();
+                }}
+                className="border-white/40 bg-white/10 text-white transition hover:bg-white/20"
+              >
+                Open Battle Arena
               </Button>
             </div>
             <div className="flex flex-wrap gap-2 text-[11px] font-semibold tracking-[0.35em] text-white/70 sm:text-xs">
@@ -3357,7 +3507,13 @@ function HeroSection({
     }
   };
 
-  const heroHeightClass = isCompact ? "h-[360px]" : "h-[520px] lg:h-[560px]";
+  const heroHeightClass = isCompact ? "min-h-[360px]" : "min-h-[520px] lg:min-h-[580px]";
+  const slideVariants = {
+    enter: (dir) => ({ opacity: 0, x: dir > 0 ? "100%" : "-100%" }),
+    center: { opacity: 1, x: 0 },
+    exit: (dir) => ({ opacity: 0, x: dir > 0 ? "-100%" : "100%" }),
+  };
+  const slideTransition = { duration: 0.75, ease: "easeInOut" };
 
   return (
     <section
@@ -3374,10 +3530,10 @@ function HeroSection({
       <div className="absolute inset-x-0 top-0 h-32 bg-gradient-to-b from-black/50 to-transparent" />
       <div className="absolute -left-24 bottom-0 h-72 w-72 rounded-full bg-amber-400/15 blur-3xl" />
       <div className="absolute -right-20 -top-10 h-72 w-72 rounded-full bg-fuchsia-500/15 blur-3xl" />
-      <div className="relative z-10 mx-auto flex min-h-screen w-full max-w-[124rem] flex-col px-5 pb-[var(--toolbar-offset,7rem)] pt-10 sm:px-10 lg:px-20">
+      <div className="relative z-10 flex min-h-screen w-full flex-col px-5 pb-[var(--toolbar-offset,7rem)] pt-8 sm:px-10 sm:pt-10 lg:px-16">
         <header
           id="lore-header"
-          className="flex flex-wrap items-center justify-between gap-4 rounded-[28px] border border-white/30 bg-black/60 px-5 py-2 backdrop-blur-3xl shadow-[0_20px_60px_rgba(8,10,26,0.55)]"
+          className="flex w-full flex-wrap items-center justify-between gap-4 rounded-[28px] border border-white/30 bg-black/60 px-6 py-2 backdrop-blur-3xl shadow-[0_20px_60px_rgba(8,10,26,0.55)]"
         >
           <div className="flex items-center gap-3">
             <LoreShield onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })} />
@@ -3475,28 +3631,23 @@ function HeroSection({
             </Button>
           </div>
         </header>
-        <div className="mt-10 flex flex-1 flex-col gap-10 sm:mt-14">
-          <div className="flex flex-col gap-3 text-sm font-semibold tracking-[0.18em] text-white/70 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-center gap-2 text-white">
-              <Clock size={12} /> {todayKey()} • Daily lore sequence
-            </div>
-            <div className="flex items-center gap-2 text-white/70">
-              <Sparkles className="hidden h-4 w-4 sm:inline" />
-              <span className="text-xs sm:text-sm">Curated highlights from across the cosmos</span>
-            </div>
-          </div>
-          <div className="flex flex-1 items-center">
+        <div className="mt-8 flex flex-1 flex-col sm:mt-12">
+          <div className="flex flex-1">
             <div
               className={cx(
-                "relative w-full overflow-hidden rounded-[36px] border border-white/15 bg-black/60 shadow-[0_40px_120px_rgba(12,9,32,0.55)]",
+                "relative flex w-full flex-col overflow-hidden bg-black/60 shadow-[0_40px_120px_rgba(12,9,32,0.55)]",
                 heroHeightClass
               )}
+              onPointerDown={handleSlidePointerDown}
+              onPointerUp={handleSlidePointerUp}
+              onPointerCancel={handleSlidePointerCancel}
+              onPointerLeave={handleSlidePointerCancel}
             >
               {slides.length > 1 && (
                 <>
                   <button
                     type="button"
-                    onClick={goPrev}
+                    onClick={handlePrev}
                     className="absolute left-3 top-1/2 z-20 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full border border-white/40 bg-black/70 text-white shadow-lg transition hover:bg-black/90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-300 sm:h-12 sm:w-12"
                     aria-label="Previous highlight"
                   >
@@ -3504,11 +3655,27 @@ function HeroSection({
                   </button>
                   <button
                     type="button"
-                    onClick={goNext}
+                    onClick={handleNext}
                     className="absolute right-3 top-1/2 z-20 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full border border-white/40 bg-black/70 text-white shadow-lg transition hover:bg-black/90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-300 sm:h-12 sm:w-12"
                     aria-label="Next highlight"
                   >
                     <ChevronRight className="h-5 w-5 sm:h-6 sm:w-6" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handlePrev}
+                    className="absolute inset-y-0 left-0 z-10 w-14 cursor-pointer bg-gradient-to-r from-black/40 via-black/5 to-transparent text-transparent transition hover:from-black/60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-300 sm:w-16"
+                    aria-label="Previous slide"
+                  >
+                    <span className="sr-only">Previous slide</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleNext}
+                    className="absolute inset-y-0 right-0 z-10 w-14 cursor-pointer bg-gradient-to-l from-black/40 via-black/5 to-transparent text-transparent transition hover:from-black/60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-300 sm:w-16"
+                    aria-label="Next slide"
+                  >
+                    <span className="sr-only">Next slide</span>
                   </button>
                 </>
               )}
@@ -3516,34 +3683,23 @@ function HeroSection({
                 <motion.div
                   key={current?.key}
                   custom={direction}
-                  initial={{ opacity: 0, x: direction > 0 ? 140 : -140 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: direction > 0 ? -140 : 140 }}
-                  transition={{ duration: 0.85, ease: "easeInOut" }}
-                  className="relative h-full"
+                  variants={slideVariants}
+                  initial="enter"
+                  animate="center"
+                  exit="exit"
+                  transition={slideTransition}
+                  className="relative flex h-full flex-1"
                 >
                   {renderSlide(current)}
                 </motion.div>
               </AnimatePresence>
             </div>
           </div>
-          <div className="flex flex-wrap items-center gap-4 text-sm font-semibold text-white/75">
-            <Users className="h-4 w-4" />
-            <span>There's more.</span>
-            <Button
-              variant="gradient"
-              size="lg"
-              onClick={onOpenFilters}
-              className="shadow-[0_18px_48px_rgba(253,230,138,0.35)]"
-            >
-              Launch filters
-            </Button>
-          </div>
         </div>
       </div>
       <div
         id="hero-toolbar-mount"
-        className="pointer-events-none absolute inset-x-0 bottom-0 z-30 px-5 pb-8 sm:px-10 lg:px-20"
+        className="pointer-events-none absolute inset-x-0 bottom-0 z-30 px-5 pb-8 sm:px-10 lg:px-16"
       />
     </section>
   );
@@ -3662,6 +3818,15 @@ export default function LoremakerApp({ initialCharacters = [], initialError = nu
       return next;
     });
   }, [focusArena]);
+
+  const openArena = useCallback(() => {
+    setShowArena(true);
+    setTimeout(focusArena, 80);
+  }, [focusArena]);
+
+  const closeArena = useCallback(() => {
+    setShowArena(false);
+  }, []);
 
   const filtered = useMemo(
     () => data.filter((c) => matchesFilters(c, filters, combineAND, query)),
@@ -3850,6 +4015,7 @@ export default function LoremakerApp({ initialCharacters = [], initialError = nu
         <meta name="author" content="Menelek Makonnen" />
         <meta name="robots" content="index,follow" />
         <link rel="canonical" href={siteUrl} />
+        <link rel="sitemap" type="application/xml" href={`${siteUrl}/sitemap.xml`} />
         <meta property="og:type" content="website" />
         <meta
           property="og:title"
@@ -3901,6 +4067,7 @@ export default function LoremakerApp({ initialCharacters = [], initialError = nu
           onOpenCharacter={openCharacter}
           onFacet={handleFacet}
           onToggleArena={toggleArena}
+          onOpenArena={openArena}
           onSync={refetch}
           showArena={showArena}
           characterNames={universeNames}
@@ -3938,6 +4105,7 @@ export default function LoremakerApp({ initialCharacters = [], initialError = nu
                 setSlots={setArenaSlots}
                 onOpenCharacter={openCharacter}
                 pulseKey={arenaPulseKey}
+                onClose={closeArena}
               />
             </div>
           )}

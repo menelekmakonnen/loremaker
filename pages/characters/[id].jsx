@@ -58,7 +58,7 @@ function CharacterProfilePage({ character, siteUrl }) {
               href="/"
               className="inline-flex items-center gap-2 rounded-full bg-white px-5 py-2 font-bold text-black transition hover:bg-white/90"
             >
-              Back to Codex
+              Back to All Characters
             </Link>
           </div>
         </div>
@@ -71,10 +71,16 @@ function CharacterProfilePage({ character, siteUrl }) {
   const locations = normaliseArray(character.locations);
   const stories = normaliseArray(character.stories);
   const tags = normaliseArray(character.tags);
+  const allies = normaliseArray(character.allies);
+  const enclaves = normaliseArray(character.enclaves);
+  const motifs = normaliseArray(character.motifs);
   const abilities = Array.isArray(character.powers) ? character.powers : [];
   const image = character.cover || character.gallery?.[0] || null;
   const canonicalUrl = `${siteUrl}/characters/${character.id || slugifyId(character.name)}`;
   const description = character.longDesc || character.shortDesc || `${character.name} profile from the LoreMaker Universe.`;
+  const allyList = allies.length ? allies : factions;
+  const enclaveList = enclaves.length ? enclaves : locations;
+  const motifList = motifs.length ? motifs : tags;
 
   const schemaJson = useMemo(() => {
     const payload = clean({
@@ -135,78 +141,132 @@ function CharacterProfilePage({ character, siteUrl }) {
       <main className="min-h-screen bg-[#050813] pb-16 text-white">
         <header className="relative overflow-hidden border-b border-white/10 bg-black/40">
           <div className="absolute inset-0 bg-gradient-to-br from-indigo-900/40 via-amber-500/10 to-transparent" />
-          <div className="relative mx-auto flex max-w-6xl flex-col gap-10 px-4 pb-16 pt-20 lg:flex-row">
-            <div className="flex-1 space-y-5">
-              <p className="text-xs font-black uppercase tracking-[0.35em] text-white/70">LoreMaker Profile</p>
-              <h1 className="text-4xl font-black leading-tight text-balance sm:text-5xl lg:text-6xl">{character.name}</h1>
-              {aliases.length > 0 && (
-                <p className="text-sm font-semibold text-white/70">Also known as: {aliases.join(", ")}</p>
-              )}
-              <p className="max-w-2xl text-base font-semibold text-white/80 sm:text-lg">{description}</p>
-              <div className="flex flex-wrap gap-3 text-xs font-semibold text-white/70 sm:text-sm">
-                {character.alignment && (
-                  <span className="rounded-full border border-white/20 px-4 py-1">Alignment: {character.alignment}</span>
-                )}
-                {character.status && (
-                  <span className="rounded-full border border-white/20 px-4 py-1">Status: {character.status}</span>
-                )}
-                {character.era && <span className="rounded-full border border-white/20 px-4 py-1">Era: {character.era}</span>}
-              </div>
-              <div className="flex flex-wrap gap-3 pt-4">
-                <Link
-                  href="/"
-                  className="inline-flex items-center rounded-full bg-white px-5 py-2 text-sm font-bold text-black transition hover:bg-white/90"
-                >
-                  ← Back to Codex
-                </Link>
-                <Link
-                  href="/#characters-grid"
-                  className="inline-flex items-center rounded-full border border-white/30 px-5 py-2 text-sm font-bold text-white transition hover:bg-white/10"
-                >
-                  Browse all heroes
-                </Link>
-              </div>
+          <div className="relative mx-auto max-w-6xl px-4 pb-16 pt-24">
+            <div className="absolute left-4 top-6 sm:left-6 sm:top-8">
+              <Link
+                href="/"
+                className="inline-flex items-center gap-2 rounded-full border border-white/30 bg-black/50 px-4 py-1.5 text-[11px] font-semibold uppercase tracking-[0.3em] text-white/80 transition hover:border-amber-200/60 hover:text-amber-200"
+              >
+                ← Back to All Characters
+              </Link>
             </div>
-            <figure className="flex w-full max-w-md flex-col gap-4 self-end">
-              {image ? (
-                <img
-                  src={image}
-                  alt={`${character.name} portrait from the LoreMaker Universe`}
-                  className="h-72 w-full rounded-3xl border border-white/15 object-cover shadow-[0_18px_60px_rgba(15,18,45,0.6)]"
-                  referrerPolicy="no-referrer"
-                  crossOrigin="anonymous"
-                  decoding="async"
-                  loading="lazy"
-                />
-              ) : (
-                <div className="flex h-72 items-center justify-center rounded-3xl border border-dashed border-white/20 bg-white/10 text-lg font-black text-white/70">
-                  Classified imagery pending
+            <div className="relative flex flex-col gap-10 lg:flex-row">
+              <div className="flex-1 space-y-5 pt-10 lg:pt-0">
+                <p className="text-xs font-black uppercase tracking-[0.35em] text-white/70">Character Dossier</p>
+                <h1 className="text-4xl font-black leading-tight text-balance sm:text-5xl lg:text-6xl">{character.name}</h1>
+                {aliases.length > 0 && (
+                  <p className="text-sm font-semibold text-white/70">Also known as: {aliases.join(", ")}</p>
+                )}
+                <p className="max-w-2xl text-base font-semibold text-white/80 sm:text-lg">{description}</p>
+                <div className="flex flex-wrap gap-3 text-xs font-semibold text-white/70 sm:text-sm">
+                  {character.alignment && (
+                    <span className="rounded-full border border-white/20 px-4 py-1">Alignment: {character.alignment}</span>
+                  )}
+                  {character.status && (
+                    <span className="rounded-full border border-white/20 px-4 py-1">Status: {character.status}</span>
+                  )}
+                  {character.era && <span className="rounded-full border border-white/20 px-4 py-1">Era: {character.era}</span>}
                 </div>
-              )}
-              <figcaption className="text-sm text-white/70">
-                {character.firstAppearance
-                  ? `First documented in ${character.firstAppearance}.`
-                  : "Primary codex portrait."}
-              </figcaption>
-            </figure>
+                <div className="flex flex-wrap gap-3 pt-4">
+                  <Link
+                    href="/#characters-grid"
+                    className="inline-flex items-center rounded-full border border-white/30 px-5 py-2 text-sm font-bold text-white transition hover:bg-white/10"
+                  >
+                    Browse all heroes
+                  </Link>
+                  <Link
+                    href="/#arena-anchor"
+                    className="inline-flex items-center rounded-full border border-white/30 px-5 py-2 text-sm font-bold text-white transition hover:bg-white/10"
+                  >
+                    Visit the Battle Arena
+                  </Link>
+                </div>
+              </div>
+              <figure className="flex w-full max-w-md flex-col gap-4 self-end">
+                {image ? (
+                  <img
+                    src={image}
+                    alt={`${character.name} portrait from the LoreMaker Universe`}
+                    className="h-72 w-full rounded-3xl border border-white/15 object-cover shadow-[0_18px_60px_rgba(15,18,45,0.6)]"
+                    referrerPolicy="no-referrer"
+                    crossOrigin="anonymous"
+                    decoding="async"
+                    loading="lazy"
+                  />
+                ) : (
+                  <div className="flex h-72 items-center justify-center rounded-3xl border border-dashed border-white/20 bg-white/10 text-lg font-black text-white/70">
+                    Classified imagery pending
+                  </div>
+                )}
+                <figcaption className="text-sm text-white/70">
+                  {character.firstAppearance
+                    ? `First documented in ${character.firstAppearance}.`
+                    : "Primary dossier portrait."}
+                </figcaption>
+              </figure>
+            </div>
           </div>
         </header>
 
         <div className="mx-auto mt-12 grid max-w-6xl gap-10 px-4">
           <section className="rounded-3xl border border-white/10 bg-white/5 p-8">
-            <h2 className="text-2xl font-black text-white">Origin Story</h2>
+            <h2 className="text-2xl font-black text-white">Story so far</h2>
             <p className="mt-4 whitespace-pre-wrap text-base font-semibold leading-relaxed text-white/80">
               {character.longDesc ||
                 `The chronicles of ${character.name} are still being recorded. Check back soon for a fully transcribed biography.`}
             </p>
-            {tags.length > 0 && (
+          </section>
+
+          <section className="rounded-3xl border border-white/10 bg-white/5 p-8">
+            <h2 className="text-2xl font-black text-white">Allies &amp; Enclaves</h2>
+            <div className="mt-6 grid gap-6 md:grid-cols-2">
+              <div>
+                <h3 className="text-sm font-bold uppercase tracking-[0.3em] text-white/60">Allies</h3>
+                <ul className="mt-3 space-y-2 text-base text-white/80">
+                  {allyList.length ? allyList.map((name) => <li key={name}>{name}</li>) : <li>No allies recorded.</li>}
+                </ul>
+              </div>
+              <div>
+                <h3 className="text-sm font-bold uppercase tracking-[0.3em] text-white/60">Enclaves</h3>
+                <ul className="mt-3 space-y-2 text-base text-white/80">
+                  {enclaveList.length ? enclaveList.map((name) => <li key={name}>{name}</li>) : <li>Operates across undisclosed realms.</li>}
+                </ul>
+              </div>
+            </div>
+            <div className="mt-6 grid gap-3 text-sm font-semibold text-white/75 md:grid-cols-2">
+              {character.firstAppearance && (
+                <div className="rounded-2xl border border-white/15 bg-black/40 p-4">
+                  <p className="text-xs uppercase tracking-[0.35em] text-white/60">First appearance</p>
+                  <p className="mt-2 text-white">{character.firstAppearance}</p>
+                </div>
+              )}
+              {character.status && (
+                <div className="rounded-2xl border border-white/15 bg-black/40 p-4">
+                  <p className="text-xs uppercase tracking-[0.35em] text-white/60">Current status</p>
+                  <p className="mt-2 text-white">{character.status}</p>
+                </div>
+              )}
+              {character.era && (
+                <div className="rounded-2xl border border-white/15 bg-black/40 p-4">
+                  <p className="text-xs uppercase tracking-[0.35em] text-white/60">Era</p>
+                  <p className="mt-2 text-white">{character.era}</p>
+                </div>
+              )}
+            </div>
+          </section>
+
+          <section className="rounded-3xl border border-white/10 bg-white/5 p-8">
+            <h2 className="text-2xl font-black text-white">Motifs &amp; Themes</h2>
+            {motifList.length ? (
               <div className="mt-6 flex flex-wrap gap-2 text-xs font-semibold uppercase tracking-[0.25em] text-white/60">
-                {tags.map((tag) => (
-                  <span key={tag} className="rounded-full border border-white/20 px-3 py-1">
-                    {tag}
+                {motifList.map((motif) => (
+                  <span key={motif} className="rounded-full border border-white/20 px-3 py-1">
+                    {motif}
                   </span>
                 ))}
               </div>
+            ) : (
+              <p className="mt-4 text-base text-white/70">Motifs continue to crystallise as new chronicles are penned.</p>
             )}
           </section>
 
@@ -243,44 +303,6 @@ function CharacterProfilePage({ character, siteUrl }) {
           </section>
 
           <section className="rounded-3xl border border-white/10 bg-white/5 p-8">
-            <h2 className="text-2xl font-black text-white">Alliances &amp; Territories</h2>
-            <div className="mt-6 grid gap-6 md:grid-cols-2">
-              <div>
-                <h3 className="text-sm font-bold uppercase tracking-[0.3em] text-white/60">Factions</h3>
-                <ul className="mt-3 space-y-2 text-base text-white/80">
-                  {factions.length ? factions.map((name) => <li key={name}>{name}</li>) : <li>No formal allegiance recorded.</li>}
-                </ul>
-              </div>
-              <div>
-                <h3 className="text-sm font-bold uppercase tracking-[0.3em] text-white/60">Strongholds</h3>
-                <ul className="mt-3 space-y-2 text-base text-white/80">
-                  {locations.length ? locations.map((name) => <li key={name}>{name}</li>) : <li>Operates across undisclosed realms.</li>}
-                </ul>
-              </div>
-            </div>
-            <div className="mt-6 grid gap-3 text-sm font-semibold text-white/75 md:grid-cols-2">
-              {character.firstAppearance && (
-                <div className="rounded-2xl border border-white/15 bg-black/40 p-4">
-                  <p className="text-xs uppercase tracking-[0.35em] text-white/60">First appearance</p>
-                  <p className="mt-2 text-white">{character.firstAppearance}</p>
-                </div>
-              )}
-              {character.status && (
-                <div className="rounded-2xl border border-white/15 bg-black/40 p-4">
-                  <p className="text-xs uppercase tracking-[0.35em] text-white/60">Current status</p>
-                  <p className="mt-2 text-white">{character.status}</p>
-                </div>
-              )}
-              {character.era && (
-                <div className="rounded-2xl border border-white/15 bg-black/40 p-4">
-                  <p className="text-xs uppercase tracking-[0.35em] text-white/60">Era</p>
-                  <p className="mt-2 text-white">{character.era}</p>
-                </div>
-              )}
-            </div>
-          </section>
-
-          <section className="rounded-3xl border border-white/10 bg-white/5 p-8">
             <h2 className="text-2xl font-black text-white">Key Appearances</h2>
             {stories.length ? (
               <ol className="mt-6 list-decimal space-y-2 pl-6 text-base text-white/80">
@@ -290,7 +312,7 @@ function CharacterProfilePage({ character, siteUrl }) {
               </ol>
             ) : (
               <p className="mt-4 text-base text-white/70">
-                Records of {character.name}'s defining appearances are still being chronicled within the Codex.
+                Records of {character.name}'s defining appearances are still being chronicled within the Character Dossier.
               </p>
             )}
           </section>
