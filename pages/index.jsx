@@ -4018,7 +4018,9 @@ function HeroSection({
             />
             <div className="absolute inset-0 bg-gradient-to-b from-black/85 via-[#060b1f]/72 to-[#03050c]/85" />
           </motion.div>
-        ) : null}
+        ) : (
+          <div className="absolute inset-0 -z-20 bg-gradient-to-b from-black via-[#060b1f] to-[#03050c]" aria-hidden="true" />
+        )}
       </AnimatePresence>
       <HeroDynamicBackground pointer={pointer} ripples={ripples} />
       <HeroHalo />
@@ -4031,19 +4033,6 @@ function HeroSection({
           id="lore-header"
           className="relative w-full overflow-hidden rounded-[32px] border border-white/30 bg-black/40 px-6 py-4 backdrop-blur-3xl shadow-[0_24px_80px_rgba(8,10,26,0.6)]"
         >
-          {sharedBackground ? (
-            <>
-              <ImageSafe
-                src={sharedBackground}
-                alt=""
-                decoding="async"
-                loading="eager"
-                className="absolute inset-0 -z-10 h-full w-full object-cover object-[68%_center]"
-                aria-hidden="true"
-              />
-              <div className="absolute inset-0 -z-10 bg-black/70" aria-hidden="true" />
-            </>
-          ) : null}
           <div className="relative z-10 flex w-full flex-wrap items-center justify-between gap-4">
             <div className="flex items-center gap-3">
               <LoreShield onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })} />
