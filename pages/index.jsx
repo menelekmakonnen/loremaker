@@ -4029,102 +4029,117 @@ function HeroSection({
       <div className="relative z-10 flex min-h-screen w-full flex-col px-4 pb-[var(--toolbar-offset,9rem)] pt-10 sm:px-8 sm:pt-14 lg:px-16 xl:px-20 2xl:px-24">
         <header
           id="lore-header"
-          className="flex w-full flex-wrap items-center justify-between gap-4 rounded-[32px] border border-white/30 bg-black/60 px-6 py-4 backdrop-blur-3xl shadow-[0_24px_80px_rgba(8,10,26,0.6)]"
+          className="relative w-full overflow-hidden rounded-[32px] border border-white/30 bg-black/40 px-6 py-4 backdrop-blur-3xl shadow-[0_24px_80px_rgba(8,10,26,0.6)]"
         >
-          <div className="flex items-center gap-3">
-            <LoreShield onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })} />
-            <div className="flex flex-col gap-1 text-xs font-semibold text-white/80 sm:text-sm">
-              <span className="hidden sm:inline">Loremaker Universe</span>
-              <div className="flex flex-wrap items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => window.location.reload()}
-                  className="rounded-full border border-white/35 px-3 py-1 text-white transition hover:bg-white/10"
-                >
-                  Loremaker
-                </button>
-                <Button
-                  as="a"
-                  href="https://menelekmakonnen.com"
-                  target="_blank"
-                  rel="noreferrer"
-                  variant="subtle"
-                  size="sm"
-              className="px-3 py-1 text-xs font-semibold text-white/85"
-            >
-              Menelek Makonnen
-            </Button>
+          {sharedBackground ? (
+            <>
+              <ImageSafe
+                src={sharedBackground}
+                alt=""
+                decoding="async"
+                loading="eager"
+                className="absolute inset-0 -z-10 h-full w-full object-cover object-[68%_center]"
+                aria-hidden="true"
+              />
+              <div className="absolute inset-0 -z-10 bg-black/70" aria-hidden="true" />
+            </>
+          ) : null}
+          <div className="relative z-10 flex w-full flex-wrap items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <LoreShield onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })} />
+              <div className="flex flex-col gap-1 text-xs font-semibold text-white/80 sm:text-sm">
+                <span className="hidden sm:inline">Loremaker Universe</span>
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => window.location.reload()}
+                    className="rounded-full border border-white/35 px-3 py-1 text-white transition hover:bg-white/10"
+                  >
+                    Loremaker
+                  </button>
+                  <Button
+                    as="a"
+                    href="https://menelekmakonnen.com"
+                    target="_blank"
+                    rel="noreferrer"
+                    variant="subtle"
+                    size="sm"
+                    className="px-3 py-1 text-xs font-semibold text-white/85"
+                  >
+                    Menelek Makonnen
+                  </Button>
+                </div>
               </div>
             </div>
-          </div>
-          <div className="flex items-center gap-2 sm:hidden">
-            <Button
-              variant="ghost"
-              size="sm"
-              className="flex items-center gap-2 px-3"
-              onClick={onOpenFilters}
-              aria-label="Open filters"
-            >
-              <Filter className="h-4 w-4" />
-              <span className="text-xs font-semibold">Filters</span>
-            </Button>
-            <Button
-              variant={showArena ? "subtle" : "ghost"}
-              size="sm"
-              className="flex items-center gap-2 px-3"
-              onClick={onToggleArena}
-              aria-label={showArena ? "Hide arena" : "Open arena"}
-              aria-pressed={showArena}
-            >
-              <Swords className="h-4 w-4" />
-              <span className="text-xs font-semibold">Arena</span>
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="flex items-center gap-2 px-3"
-              onClick={onSync}
-              aria-label="Sync universe"
-            >
-              <RefreshCcw className="h-4 w-4" />
-              <span className="text-xs font-semibold">Sync</span>
-            </Button>
-          </div>
-          <div className="hidden items-center gap-2 sm:flex">
-            <Button
-              variant="ghost"
-              size="sm"
-              className="inline-flex items-center gap-2 px-4 text-sm font-semibold"
-              onClick={onOpenFilters}
-              aria-label="Open filters"
-            >
-              <Filter className="h-4 w-4" aria-hidden="true" />
-              <span>Launch filters</span>
-            </Button>
-            <Button
-              variant={showArena ? "subtle" : "ghost"}
-              size="sm"
-              className={cx(
-                "inline-flex items-center gap-2 px-4 text-sm font-semibold",
-                showArena ? "border border-amber-200/60 bg-amber-200/20" : ""
-              )}
-              onClick={onToggleArena}
-              aria-label={showArena ? "Hide arena" : "Open arena"}
-              aria-pressed={showArena}
-            >
-              <Swords className="h-4 w-4" aria-hidden="true" />
-              <span>{showArena ? "Hide arena" : "Battle arena"}</span>
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="inline-flex items-center gap-2 px-4 text-sm font-semibold"
-              onClick={onSync}
-              aria-label="Sync universe"
-            >
-              <RefreshCcw className="h-4 w-4" aria-hidden="true" />
-              <span>Sync</span>
-            </Button>
+            <div className="flex items-center gap-2 sm:hidden">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="flex items-center gap-2 px-3"
+                onClick={onOpenFilters}
+                aria-label="Open filters"
+              >
+                <Filter className="h-4 w-4" />
+                <span className="text-xs font-semibold">Filters</span>
+              </Button>
+              <Button
+                variant={showArena ? "subtle" : "ghost"}
+                size="sm"
+                className="flex items-center gap-2 px-3"
+                onClick={onToggleArena}
+                aria-label={showArena ? "Hide arena" : "Open arena"}
+                aria-pressed={showArena}
+              >
+                <Swords className="h-4 w-4" />
+                <span className="text-xs font-semibold">Arena</span>
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="flex items-center gap-2 px-3"
+                onClick={onSync}
+                aria-label="Sync universe"
+              >
+                <RefreshCcw className="h-4 w-4" />
+                <span className="text-xs font-semibold">Sync</span>
+              </Button>
+            </div>
+            <div className="hidden items-center gap-2 sm:flex">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="inline-flex items-center gap-2 px-4 text-sm font-semibold"
+                onClick={onOpenFilters}
+                aria-label="Open filters"
+              >
+                <Filter className="h-4 w-4" aria-hidden="true" />
+                <span>Launch filters</span>
+              </Button>
+              <Button
+                variant={showArena ? "subtle" : "ghost"}
+                size="sm"
+                className={cx(
+                  "inline-flex items-center gap-2 px-4 text-sm font-semibold",
+                  showArena ? "border border-amber-200/60 bg-amber-200/20" : ""
+                )}
+                onClick={onToggleArena}
+                aria-label={showArena ? "Hide arena" : "Open arena"}
+                aria-pressed={showArena}
+              >
+                <Swords className="h-4 w-4" aria-hidden="true" />
+                <span>{showArena ? "Hide arena" : "Battle arena"}</span>
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="inline-flex items-center gap-2 px-4 text-sm font-semibold"
+                onClick={onSync}
+                aria-label="Sync universe"
+              >
+                <RefreshCcw className="h-4 w-4" aria-hidden="true" />
+                <span>Sync</span>
+              </Button>
+            </div>
           </div>
         </header>
         <div className="mt-6 flex flex-1 flex-col sm:mt-10">
