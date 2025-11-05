@@ -759,15 +759,19 @@ export default function CharacterProfilePage({ character, canonicalUrl, related,
             </AnimatePresence>
           </div>
           <div className="relative z-10 mx-auto max-w-7xl px-4 pb-24 pt-20 sm:px-6 lg:px-8">
+            <nav className="mb-10 flex w-full max-w-5xl items-center gap-3 text-[11px] font-semibold uppercase tracking-[0.35em] text-white/70">
+              <Link
+                href="/"
+                className="inline-flex items-center gap-2 text-white transition hover:text-amber-200"
+                prefetch={false}
+              >
+                ← Back to all characters
+              </Link>
+              <span className="inline-block h-1 w-1 rounded-full bg-white/50" aria-hidden="true" />
+              <span className="text-white/80">Character dossier</span>
+            </nav>
             <div className="flex flex-col gap-12 lg:grid lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] lg:items-end">
               <div className="space-y-8">
-                <nav className="flex items-center gap-3 text-xs font-semibold uppercase tracking-[0.35em] text-white/70">
-                  <Link href="/" className="transition hover:text-white">
-                    Loremaker Universe
-                  </Link>
-                  <span className="inline-block h-1 w-1 rounded-full bg-white/50" aria-hidden="true" />
-                  <span className="text-white/80">Codex dossier</span>
-                </nav>
                 <div className="space-y-4">
                   <span className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-4 py-1 text-[11px] font-semibold uppercase tracking-[0.4em] text-white/75">
                     <Sparkles className="h-4 w-4 text-amber-200" aria-hidden="true" />
@@ -821,7 +825,7 @@ export default function CharacterProfilePage({ character, canonicalUrl, related,
                     href="/#characters-grid"
                     className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-5 py-2 text-sm font-semibold text-white/85 transition hover:border-white/40 hover:bg-white/20"
                   >
-                    ← Back to codex
+                    ← Back to all characters
                   </Link>
                   <Link
                     href={`/?arena=${character.slug}#arena-anchor`}
@@ -884,8 +888,62 @@ export default function CharacterProfilePage({ character, canonicalUrl, related,
                 ))}
               </dl>
             </article>
+            {!!allyGroups.length && (
+              <article className="space-y-4 rounded-3xl border border-white/12 bg-white/5 p-6 backdrop-blur-xl lg:col-span-5 lg:col-start-1">
+                <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.35em] text-white/70">
+                  <Crown className="h-4 w-4 text-amber-200" aria-hidden="true" /> Allies &amp; Enclaves
+                </div>
+                <p className="text-sm font-semibold text-white/70">
+                  Meet the trusted circles who stand with {character.name}.
+                </p>
+                <div className="space-y-3">
+                  {allyGroups.map((group) => (
+                    <div key={group.label} className="space-y-3 rounded-2xl border border-white/12 bg-black/35 p-3">
+                      <div className="flex items-center justify-between text-[11px] font-bold text-white">
+                        <span>{group.label}</span>
+                        <span className="text-[9px] font-semibold uppercase tracking-[0.35em] text-white/50">
+                          {group.characters.length} dossier{group.characters.length === 1 ? "" : "s"}
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6">
+                        {group.characters.map((entry) => (
+                          <Link
+                            key={entry.slug}
+                            href={`/characters/${entry.slug}`}
+                            className="group overflow-hidden rounded-xl border border-white/10 bg-white/5 p-2 text-white transition hover:border-amber-300/60 hover:bg-amber-200/10"
+                            prefetch={false}
+                          >
+                            <div className="aspect-[3/4] w-full overflow-hidden rounded-lg border border-white/10 bg-black/40">
+                              <ImageSafe
+                                src={entry.cover}
+                                alt={characterAltText(entry.name)}
+                                fallbackLabel={entry.name}
+                                className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
+                                loading="lazy"
+                              />
+                            </div>
+                            <div className="mt-1 space-y-0.5 text-left">
+                              <p className="text-[11px] font-bold text-white">{entry.name}</p>
+                              {(entry.alignment || entry.status) && (
+                                <p className="text-[9px] font-semibold uppercase tracking-[0.3em] text-white/55">
+                                  {[entry.alignment, entry.status].filter(Boolean).join(" • ")}
+                                </p>
+                              )}
+                            </div>
+                            <span className="mt-1 inline-flex items-center gap-1 text-[10px] font-semibold text-amber-200">
+                              View dossier
+                              <ArrowUpRight className="h-3 w-3" aria-hidden="true" />
+                            </span>
+                          </Link>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </article>
+            )}
             {!!tags.length && (
-              <article className="rounded-3xl border border-white/12 bg-white/5 p-8 backdrop-blur-xl lg:col-span-5">
+              <article className="rounded-3xl border border-white/12 bg-white/5 p-8 backdrop-blur-xl lg:col-span-7 lg:col-start-6">
                 <h3 className="text-xl font-black text-white">Motifs &amp; Themes</h3>
                 <p className="mt-2 text-sm font-semibold text-white/70">
                   Recurring symbols and resonant ideas that define this legend.
@@ -928,60 +986,6 @@ export default function CharacterProfilePage({ character, canonicalUrl, related,
                       </div>
                     );
                   })}
-                </div>
-              </article>
-            )}
-            {!!allyGroups.length && (
-              <article className="space-y-4 rounded-3xl border border-white/12 bg-white/5 p-6 backdrop-blur-xl lg:col-span-5">
-                <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.35em] text-white/70">
-                  <Crown className="h-4 w-4 text-amber-200" aria-hidden="true" /> Allies &amp; Enclaves
-                </div>
-                <p className="text-sm font-semibold text-white/70">
-                  Meet the trusted circles who stand with {character.name}.
-                </p>
-                <div className="space-y-3">
-                  {allyGroups.map((group) => (
-                    <div key={group.label} className="space-y-3 rounded-2xl border border-white/12 bg-black/35 p-3">
-                      <div className="flex items-center justify-between text-[11px] font-bold text-white">
-                        <span>{group.label}</span>
-                        <span className="text-[9px] font-semibold uppercase tracking-[0.35em] text-white/50">
-                          {group.characters.length} dossier{group.characters.length === 1 ? "" : "s"}
-                        </span>
-                      </div>
-                      <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-4 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6">
-                        {group.characters.map((entry) => (
-                          <Link
-                            key={entry.slug}
-                            href={`/characters/${entry.slug}`}
-                            className="group overflow-hidden rounded-xl border border-white/10 bg-white/5 p-2 text-white transition hover:border-amber-300/60 hover:bg-amber-200/10"
-                            prefetch={false}
-                          >
-                            <div className="aspect-[3/4] w-full overflow-hidden rounded-lg border border-white/10 bg-black/40">
-                              <ImageSafe
-                                src={entry.cover}
-                                alt={characterAltText(entry.name)}
-                                fallbackLabel={entry.name}
-                                className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
-                                loading="lazy"
-                              />
-                            </div>
-                            <div className="mt-1.5 space-y-0.5 text-left">
-                              <p className="text-[11px] font-bold text-white">{entry.name}</p>
-                              {(entry.alignment || entry.status) && (
-                                <p className="text-[9px] font-semibold uppercase tracking-[0.3em] text-white/55">
-                                  {[entry.alignment, entry.status].filter(Boolean).join(" • ")}
-                                </p>
-                              )}
-                            </div>
-                            <span className="mt-1 inline-flex items-center gap-1 text-[10px] font-semibold text-amber-200">
-                              View dossier
-                              <ArrowUpRight className="h-3 w-3" aria-hidden="true" />
-                            </span>
-                          </Link>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
                 </div>
               </article>
             )}
@@ -1092,7 +1096,7 @@ export default function CharacterProfilePage({ character, canonicalUrl, related,
                   href="/"
                   className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.3em] text-white/60 transition hover:text-white"
                 >
-                  Return to codex
+                  Return to all characters
                   <ArrowUpRight className="h-3 w-3" aria-hidden="true" />
                 </Link>
               </div>

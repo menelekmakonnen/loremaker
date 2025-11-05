@@ -30,7 +30,6 @@ import {
   MapPin,
   Layers,
   Atom,
-  Clock,
   Library,
   Crown,
   Swords,
@@ -99,6 +98,22 @@ function normaliseSearchText(value) {
     .trim();
 }
 
+const HERO_SLIDE_TRANSITION = { duration: 0.7, ease: "easeInOut" };
+
+const HERO_SLIDE_VARIANTS = {
+  enter: (direction = 1) => ({
+    x: direction > 0 ? "100%" : "-100%",
+    opacity: 0,
+    scale: 0.98,
+  }),
+  center: { x: 0, opacity: 1, scale: 1 },
+  exit: (direction = 1) => ({
+    x: direction > 0 ? "-100%" : "100%",
+    opacity: 0,
+    scale: 0.98,
+  }),
+};
+
 function hasIllustration(character) {
   if (!character) return false;
   if (character.cover) return true;
@@ -143,8 +158,18 @@ function Button({ variant = "solid", size = "md", className = "", children, as: 
   );
 }
 
-function Card({ className = "", children }) {
-  return <div className={cx("rounded-3xl border border-white/12 bg-white/8 backdrop-blur-2xl shadow-[0_25px_80px_rgba(8,8,20,0.55)]", className)}>{children}</div>;
+function Card({ className = "", children, ...props }) {
+  return (
+    <div
+      className={cx(
+        "rounded-3xl border border-white/12 bg-white/8 backdrop-blur-2xl shadow-[0_25px_80px_rgba(8,8,20,0.55)]",
+        className
+      )}
+      {...props}
+    >
+      {children}
+    </div>
+  );
 }
 const CardHeader = ({ className = "", children }) => <div className={cx("p-5", className)}>{children}</div>;
 const CardContent = ({ className = "", children }) => <div className={cx("p-5", className)}>{children}</div>;
@@ -679,9 +704,9 @@ function RosterSlide({ slide, icon, facetKey, onFacet, onOpenCharacter, limit, b
         : `Masters of ${payload.name}`;
 
   return (
-    <div className="relative h-full rounded-[32px] border border-white/15 bg-black/40 text-white">
+    <div className="relative h-full bg-black/40 text-white">
       {background && (
-        <div className="absolute inset-0 overflow-hidden rounded-[32px]">
+        <div className="absolute inset-0 overflow-hidden">
           <ImageSafe
             src={background}
             alt={characterAltText(payload.name)}
@@ -691,7 +716,7 @@ function RosterSlide({ slide, icon, facetKey, onFacet, onOpenCharacter, limit, b
           <div className="absolute inset-0 bg-gradient-to-r from-black/85 via-[#080d22]/75 to-[#050811]/45" />
         </div>
       )}
-      <div className="relative grid h-full gap-8 rounded-[32px] bg-black/40 p-8 backdrop-blur-lg lg:grid-cols-[2fr_3fr]">
+      <div className="relative grid h-full gap-8 bg-black/40 p-8 backdrop-blur-lg lg:grid-cols-[2fr_3fr]">
         <div className="space-y-4">
           <div className="flex items-center gap-3 text-xs font-bold tracking-[0.35em] text-white/70">
             {icon}
@@ -910,6 +935,7 @@ function FacetChip({ active, onClick, children }) {
       type="button"
       onClick={onClick}
       aria-pressed={!!active}
+      data-hero-control="true"
       className={cx(
         "rounded-full border px-3 py-1 text-xs font-semibold tracking-wide transition",
         active ? "border-white bg-white text-black" : "border-white/30 bg-white/10 text-white hover:bg-white/20"
@@ -1038,16 +1064,17 @@ function CharacterCard({ char, onOpen, onFacet, onUseInSim, highlight }) {
     >
       <Card
         className={cx(
-          "flex h-full flex-col overflow-hidden bg-black/45 backdrop-blur-3xl",
+          "flex h-full cursor-pointer flex-col overflow-hidden bg-black/45 backdrop-blur-3xl focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-amber-300",
           highlight ? "ring-2 ring-amber-300" : "ring-1 ring-inset ring-white/15"
         )}
+        onClick={openProfile}
+        onKeyDown={handleProfileKey}
+        role="button"
+        tabIndex={0}
+        aria-label={`Open quick view for ${char.name}`}
       >
         <div className="relative">
           <div
-            role="button"
-            tabIndex={0}
-            onClick={openProfile}
-            onKeyDown={handleProfileKey}
             onMouseEnter={handleHoverIn}
             onMouseLeave={handleHoverOut}
             onPointerLeave={handleHoverOut}
@@ -1096,7 +1123,7 @@ function CharacterCard({ char, onOpen, onFacet, onUseInSim, highlight }) {
           </button>
         </div>
         <div className="flex flex-1 flex-col justify-between px-4 pb-4 pt-3 text-white/80">
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center justify-between gap-2">
             <span className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-3 py-1 text-[11px] font-semibold text-white">
               <span>{alignmentLabel}</span>
               {statusMeta && (
@@ -1106,6 +1133,20 @@ function CharacterCard({ char, onOpen, onFacet, onUseInSim, highlight }) {
                 </span>
               )}
             </span>
+            {char.slug && (
+              <Button
+                as={Link}
+                href={`/characters/${char.slug}`}
+                variant="subtle"
+                size="sm"
+                onClick={(event) => event.stopPropagation()}
+                className="flex items-center gap-1 px-3 text-xs font-semibold"
+                aria-label={`Open the full profile for ${char.name}`}
+              >
+                <ArrowUpRight size={14} aria-hidden="true" />
+                Full profile
+              </Button>
+            )}
           </div>
           <p className="mt-3 text-sm font-semibold leading-relaxed text-white/75">{shortCaption}</p>
           <div className="mt-4 flex flex-wrap gap-2">
@@ -1127,32 +1168,6 @@ function CharacterCard({ char, onOpen, onFacet, onUseInSim, highlight }) {
                 {highlightFacts.join(" • ")}
               </span>
             )}
-          </div>
-          <div className="mt-4 flex flex-wrap justify-between gap-2">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={(event) => {
-                event.stopPropagation();
-                openProfile();
-              }}
-              className="px-4 text-xs font-semibold text-white/70 transition hover:text-white"
-            >
-              Quick view
-              <ArrowRight size={14} />
-            </Button>
-            <Button
-              as={Link}
-              href={`/characters/${char.slug}`}
-              variant="subtle"
-              size="sm"
-              onClick={(event) => event.stopPropagation()}
-              className="px-4 text-xs font-semibold"
-              aria-label={`Open the full profile for ${char.name}`}
-            >
-              Full profile
-              <ArrowUpRight size={14} />
-            </Button>
           </div>
         </div>
       </Card>
@@ -1503,10 +1518,9 @@ function CharacterModal({ open, onClose, char, onFacet, onUseInSim, onNavigate }
               <div id={titleId} className="text-3xl font-black drop-shadow-[0_2px_8px_rgba(0,0,0,0.6)]">
                 {char.name}
               </div>
-              {char.era && <div className="text-[11px] font-extrabold tracking-[0.3em] text-white/70">{char.era}</div>}
             </div>
           </div>
-          <div className="flex justify-center">
+          <div className="flex flex-wrap justify-center gap-2">
             <Button
               variant="gradient"
               size="sm"
@@ -1517,6 +1531,18 @@ function CharacterModal({ open, onClose, char, onFacet, onUseInSim, onNavigate }
               <Swords size={16} />
               <span>Battle Arena</span>
             </Button>
+            {char.slug && (
+              <Button
+                as={Link}
+                href={`/characters/${char.slug}`}
+                variant="subtle"
+                size="sm"
+                className="flex items-center gap-2 px-5 py-2 text-xs font-semibold sm:text-sm"
+              >
+                <ArrowUpRight size={16} aria-hidden="true" />
+                <span>Full Profile</span>
+              </Button>
+            )}
           </div>
           <div className="flex justify-end gap-2 sm:gap-3">
             <Button variant="ghost" size="sm" onClick={onClose} aria-label="Close profile">
@@ -1581,18 +1607,6 @@ function CharacterModal({ open, onClose, char, onFacet, onUseInSim, onNavigate }
                       </FacetChip>
                     ))}
                   </div>
-                </div>
-              )}
-              {char.slug && (
-                <div className="rounded-2xl border border-white/15 bg-white/8 p-4">
-                  <div className="text-xs font-bold tracking-wide text-white/70">Full profile</div>
-                  <Link
-                    href={`/characters/${char.slug}`}
-                    className="mt-2 inline-flex items-center gap-2 text-sm font-semibold text-amber-200 transition hover:text-amber-100"
-                  >
-                    Dive into dossier
-                    <ArrowUpRight size={14} aria-hidden="true" />
-                  </Link>
                 </div>
               )}
               {char.firstAppearance && (
@@ -1840,10 +1854,10 @@ function ArenaCard({ char, position, onRelease, onOpen, health, isWinner, showX,
         aria-label={`Summon a random combatant for slot ${position}`}
       >
         <span className="text-base font-black tracking-[0.3em] text-slate-400 group-hover:text-amber-200">
-          Combatant {position}
+          Awaiting challenger
         </span>
-        <span className="max-w-[16rem] text-xs font-semibold text-slate-400 group-hover:text-slate-100">
-          Tap to deploy a random warrior from the codex
+        <span className="max-w-[18rem] text-xs font-semibold text-slate-400 group-hover:text-slate-100">
+          Click the crossed swords icon on any character card, or tap here to randomise a challenger.
         </span>
       </button>
     );
@@ -1856,6 +1870,8 @@ function ArenaCard({ char, position, onRelease, onOpen, health, isWinner, showX,
   const topLocations = (char.locations || []).slice(0, 2);
   const topFactions = (char.faction || []).slice(0, 2);
   const topTags = (char.tags || []).slice(0, 3);
+  const alias = Array.isArray(char.alias) ? char.alias[0] : char.alias;
+  const descriptor = alias || [char.alignment, char.status].filter(Boolean).join(" • ") || char.identity || "Codex champion";
   const confettiPieces = useMemo(
     () =>
       Array.from({ length: 16 }).map((_, index) => ({
@@ -1915,7 +1931,14 @@ function ArenaCard({ char, position, onRelease, onOpen, health, isWinner, showX,
         </motion.div>
       )}
       <div className="flex flex-wrap items-center justify-between gap-2 text-[9px] sm:text-xs">
-        <Badge className="bg-slate-800/80 px-3 py-1 text-[9px] tracking-[0.3em] text-slate-200">Combatant {position}</Badge>
+        <div className="flex flex-col gap-1">
+          <Badge className="bg-slate-800/80 px-3 py-1 text-[10px] tracking-[0.28em] text-slate-200 sm:text-xs">
+            {char.name}
+          </Badge>
+          <span className="text-[9px] font-semibold uppercase tracking-[0.35em] text-slate-500 sm:text-[10px]">
+            {descriptor}
+          </span>
+        </div>
         <div className="flex items-center gap-2">
           <Button
             variant="ghost"
@@ -2117,8 +2140,30 @@ function BattleArena({ characters, slots, setSlots, onOpenCharacter, pulseKey, o
   const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
   const runBattle = async () => {
-    if (!left || !right || left.id === right.id) return;
-    const computed = computeBattleTimeline(left, right);
+    let fighterA = left;
+    let fighterB = right;
+    const usedIds = [];
+    if (!fighterA) {
+      const candidate = pickRandomFighter([fighterB?.id]);
+      if (candidate) {
+        fighterA = candidate;
+      }
+    }
+    if (fighterA?.id) {
+      usedIds.push(fighterA.id);
+    }
+    if (!fighterB || fighterB.id === fighterA?.id) {
+      const candidate = pickRandomFighter(usedIds);
+      if (candidate) {
+        fighterB = candidate;
+      }
+    }
+    if (fighterB?.id && !usedIds.includes(fighterB.id)) {
+      usedIds.push(fighterB.id);
+    }
+    if (!fighterA || !fighterB || fighterA.id === fighterB.id) return;
+    setSlots((prev) => ({ ...prev, left: fighterA.id, right: fighterB.id }));
+    const computed = computeBattleTimeline(fighterA, fighterB);
     setBattleState("charging");
     setResult(null);
     setTimeline([]);
@@ -2139,20 +2184,28 @@ function BattleArena({ characters, slots, setSlots, onOpenCharacter, pulseKey, o
     setTimeout(() => setShowX(null), 2200);
   };
 
+  const pickRandomFighter = useCallback(
+    (exclude = []) => {
+      if (!characters.length) return null;
+      const blocked = new Set(exclude.filter(Boolean));
+      const pool = characters.filter((char) => char?.id && !blocked.has(char.id));
+      if (!pool.length) return null;
+      return pool[Math.floor(Math.random() * pool.length)];
+    },
+    [characters]
+  );
+
   const fillSlot = useCallback(
     (side) => {
-      if (!characters.length) return;
       setSlots((prev) => {
         if (prev[side]) return prev;
         const otherSide = side === "left" ? prev.right : prev.left;
-        const pool = characters.filter((char) => char?.id && char.id !== otherSide);
-        if (!pool.length) return prev;
-        const random = pool[Math.floor(Math.random() * pool.length)];
-        if (!random?.id) return prev;
-        return { ...prev, [side]: random.id };
+        const candidate = pickRandomFighter([otherSide]);
+        if (!candidate?.id) return prev;
+        return { ...prev, [side]: candidate.id };
       });
     },
-    [characters, setSlots]
+    [pickRandomFighter, setSlots]
   );
 
   const autoFillLeft = useCallback(() => fillSlot("left"), [fillSlot]);
@@ -2160,18 +2213,15 @@ function BattleArena({ characters, slots, setSlots, onOpenCharacter, pulseKey, o
 
   const reshuffleSlot = useCallback(
     (side) => {
-      if (!characters.length) return;
       setSlots((prev) => {
         const otherSide = side === "left" ? prev.right : prev.left;
         const current = prev[side];
-        const pool = characters.filter((char) => char?.id && char.id !== otherSide && char.id !== current);
-        if (!pool.length) return prev;
-        const random = pool[Math.floor(Math.random() * pool.length)];
-        if (!random?.id) return prev;
-        return { ...prev, [side]: random.id };
+        const candidate = pickRandomFighter([otherSide, current]);
+        if (!candidate?.id) return prev;
+        return { ...prev, [side]: candidate.id };
       });
     },
-    [characters, setSlots]
+    [pickRandomFighter, setSlots]
   );
 
   const reset = () => {
@@ -2641,7 +2691,7 @@ function ToolsBar({
   useIsomorphicLayoutEffect(() => {
     if (!heroEl) return undefined;
     const height = barHeight || lastKnownHeight || 0;
-    heroEl.style.setProperty("--toolbar-offset", `${Math.ceil(height + 260)}px`);
+    heroEl.style.setProperty("--toolbar-offset", `${Math.ceil(height + 180)}px`);
     return () => {
       heroEl.style.removeProperty("--toolbar-offset");
     };
@@ -2740,14 +2790,16 @@ function ToolsBar({
               >
                 <Filter className="h-4 w-4" aria-hidden="true" />
               </button>
-              <button
-                type="button"
-                onClick={onClearFilters}
-                className="inline-flex h-9 w-9 flex-none items-center justify-center rounded-lg border border-white/20 bg-white/10 text-white transition hover:bg-white/20"
-                aria-label="Clear filters"
-              >
-                <X className="h-4 w-4" aria-hidden="true" />
-              </button>
+              {hasActiveFilters && (
+                <button
+                  type="button"
+                  onClick={onClearFilters}
+                  className="inline-flex h-9 w-9 flex-none items-center justify-center rounded-lg border border-white/20 bg-white/10 text-white transition hover:bg-white/20"
+                  aria-label="Clear filters"
+                >
+                  <X className="h-4 w-4" aria-hidden="true" />
+                </button>
+              )}
               <button
                 type="button"
                 onClick={onArenaToggle}
@@ -2817,15 +2869,17 @@ function ToolsBar({
               >
                 <Filter className="h-4 w-4" aria-hidden="true" />
               </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={onClearFilters}
-                className="inline-flex h-10 w-10 flex-none items-center justify-center rounded-lg border border-white/15 bg-white/10 p-0 text-white hover:bg-white/20"
-                aria-label="Clear filters"
-              >
-                <X className="h-4 w-4" aria-hidden="true" />
-              </Button>
+              {hasActiveFilters && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={onClearFilters}
+                  className="inline-flex h-10 w-10 flex-none items-center justify-center rounded-lg border border-white/15 bg-white/10 p-0 text-white hover:bg-white/20"
+                  aria-label="Clear filters"
+                >
+                  <X className="h-4 w-4" aria-hidden="true" />
+                </Button>
+              )}
               <button
                 type="button"
                 onClick={onArenaToggle}
@@ -2924,14 +2978,16 @@ function ToolsBar({
                 >
                   <Filter className="h-4 w-4" aria-hidden="true" />
                 </button>
-                <button
-                  type="button"
-                  onClick={onClearFilters}
-                  className="inline-flex h-9 w-9 flex-none items-center justify-center rounded-lg border border-white/20 bg-white/10 text-white transition hover:bg-white/20"
-                  aria-label="Clear filters"
-                >
-                  <X className="h-4 w-4" aria-hidden="true" />
-                </button>
+                {hasActiveFilters && (
+                  <button
+                    type="button"
+                    onClick={onClearFilters}
+                    className="inline-flex h-9 w-9 flex-none items-center justify-center rounded-lg border border-white/20 bg-white/10 text-white transition hover:bg-white/20"
+                    aria-label="Clear filters"
+                  >
+                    <X className="h-4 w-4" aria-hidden="true" />
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={onSync}
@@ -2998,16 +3054,18 @@ function ToolsBar({
                 <Filter className="h-4 w-4" aria-hidden="true" />
                 <span className="text-xs font-semibold sm:text-sm">Filters</span>
               </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={onClearFilters}
-                className="flex-none"
-                aria-label="Clear filters"
-              >
-                <X size={14} aria-hidden="true" />
-                <span className="text-xs font-semibold sm:text-sm">Clear</span>
-              </Button>
+              {hasActiveFilters && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={onClearFilters}
+                  className="flex-none"
+                  aria-label="Clear filters"
+                >
+                  <X size={14} aria-hidden="true" />
+                  <span className="text-xs font-semibold sm:text-sm">Clear</span>
+                </Button>
+              )}
               <div className="flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1.5 text-xs font-semibold text-white/85">
                 <Users className="h-3.5 w-3.5 text-amber-200" aria-hidden="true" />
                 <span>{countLabel}</span>
@@ -3129,6 +3187,7 @@ function HeroSection({
   onOpenCharacter,
   onFacet,
   onToggleArena,
+  onOpenArena,
   onSync,
   showArena,
   characterNames = [],
@@ -3161,6 +3220,30 @@ function HeroSection({
   const [tickerIndex, setTickerIndex] = useState(0);
   const [featureImageIndex, setFeatureImageIndex] = useState(0);
   const [featureSequence, setFeatureSequence] = useState([]);
+  const autoAdvanceRef = useRef(null);
+
+  const clearAutoAdvance = useCallback(() => {
+    if (autoAdvanceRef.current) {
+      clearInterval(autoAdvanceRef.current);
+      autoAdvanceRef.current = null;
+    }
+  }, []);
+
+  const scheduleAutoAdvance = useCallback(() => {
+    clearAutoAdvance();
+    if (slides.length <= 1) return;
+    autoAdvanceRef.current = setInterval(() => {
+      setDirection(1);
+      setIndex((prev) => {
+        if (slides.length <= 0) return prev;
+        return (prev + 1) % slides.length;
+      });
+    }, 60000);
+  }, [slides, clearAutoAdvance]);
+
+  const pauseAutoAdvance = useCallback(() => {
+    clearAutoAdvance();
+  }, [clearAutoAdvance]);
 
   const backgroundSources = useMemo(() => {
     const provided = (featured?.backgrounds || []).filter(Boolean);
@@ -3227,7 +3310,8 @@ function HeroSection({
     setIndex(defaultSlideIndex);
     autoPlayed.current = false;
     setInitialPeek(true);
-  }, [defaultSlideIndex]);
+    scheduleAutoAdvance();
+  }, [defaultSlideIndex, scheduleAutoAdvance]);
 
   useEffect(() => {
     setTickerIndex(0);
@@ -3247,21 +3331,15 @@ function HeroSection({
       setDirection(1);
       setIndex((prev) => (prev + 1) % slides.length);
       autoPlayed.current = true;
+      scheduleAutoAdvance();
     }, 3600);
     return () => clearTimeout(timer);
-  }, [slides.length]);
+  }, [slides.length, scheduleAutoAdvance]);
 
   useEffect(() => {
-    if (slides.length <= 1) return undefined;
-    const interval = setInterval(() => {
-      setDirection(1);
-      setIndex((prev) => {
-        if (slides.length <= 0) return prev;
-        return (prev + 1) % slides.length;
-      });
-    }, 60000);
-    return () => clearInterval(interval);
-  }, [slides.length]);
+    scheduleAutoAdvance();
+    return clearAutoAdvance;
+  }, [slides, scheduleAutoAdvance, clearAutoAdvance]);
 
   const current = slides[index] || slides[0];
   const peekActive = initialPeek && current?.key === "character";
@@ -3325,27 +3403,34 @@ function HeroSection({
     if (slides.length <= 1) return;
     setDirection(-1);
     setIndex((prev) => (prev - 1 + slides.length) % slides.length);
-  }, [slides.length]);
+    scheduleAutoAdvance();
+  }, [slides.length, scheduleAutoAdvance]);
 
   const goNext = useCallback(() => {
     if (slides.length <= 1) return;
     setDirection(1);
     setIndex((prev) => (prev + 1) % slides.length);
-  }, [slides.length]);
+    scheduleAutoAdvance();
+  }, [slides.length, scheduleAutoAdvance]);
 
   const activeTickerName = tickerNames[tickerIndex % Math.max(tickerNames.length, 1)] || "Lore";
 
-  const handleSlidePointerDown = useCallback((event) => {
-    if (event.pointerType === "mouse" && event.button !== 0) return;
-    if (event.target?.closest?.('[data-hero-control]')) return;
-    slidePointer.current = {
-      id: event.pointerId,
-      x: event.clientX,
-      y: event.clientY,
-      container: event.currentTarget,
-    };
-    event.currentTarget.setPointerCapture?.(event.pointerId);
-  }, []);
+  const handleSlidePointerDown = useCallback(
+    (event) => {
+      if (event.pointerType === "mouse" && event.button !== 0) return;
+      if (event.target?.closest?.('[data-hero-control]')) return;
+      pauseAutoAdvance();
+      slidePointer.current = {
+        id: event.pointerId,
+        x: event.clientX,
+        y: event.clientY,
+        container: event.currentTarget,
+        rect: event.currentTarget.getBoundingClientRect(),
+      };
+      event.currentTarget.setPointerCapture?.(event.pointerId);
+    },
+    [pauseAutoAdvance]
+  );
 
   const handleSlidePointerUp = useCallback(
     (event) => {
@@ -3362,9 +3447,20 @@ function HeroSection({
         } else {
           goPrev();
         }
+      } else {
+        const rect = start.rect || start.container?.getBoundingClientRect?.();
+        if (rect?.width) {
+          const relative = (event.clientX - rect.left) / rect.width;
+          if (relative <= 0.1) {
+            goPrev();
+          } else if (relative >= 0.9) {
+            goNext();
+          }
+        }
       }
+      scheduleAutoAdvance();
     },
-    [goNext, goPrev]
+    [goNext, goPrev, scheduleAutoAdvance]
   );
 
   const handleSlidePointerCancel = useCallback(() => {
@@ -3372,7 +3468,8 @@ function HeroSection({
     const start = slidePointer.current;
     slidePointer.current = null;
     safeReleasePointerCapture(start.container, start.id);
-  }, []);
+    scheduleAutoAdvance();
+  }, [scheduleAutoAdvance]);
 
   const handleSlidePointerLeave = useCallback(
     (event) => {
@@ -3381,15 +3478,16 @@ function HeroSection({
       if (event.pointerId && start.id && event.pointerId !== start.id) return;
       slidePointer.current = null;
       safeReleasePointerCapture(start.container, start.id);
+      scheduleAutoAdvance();
     },
-    []
+    [scheduleAutoAdvance]
   );
 
   const renderCharacter = (slide) => {
     const char = slide.data;
     if (!char) {
       return (
-        <div className="flex h-full flex-col justify-center gap-4 rounded-[32px] border border-white/15 bg-black/50 p-8 text-white">
+        <div className="flex h-full w-full flex-col justify-center gap-4 bg-black/50 p-8 text-white">
           <div className="text-xs font-bold tracking-[0.35em] text-white/60">Featured Character</div>
           <p className="text-base font-semibold text-white/70 sm:text-lg">Loading today’s legend…</p>
         </div>
@@ -3434,7 +3532,7 @@ function HeroSection({
               openProfile();
             }
           }}
-          className="relative flex h-full flex-col justify-end overflow-hidden rounded-[32px] border border-white/15 bg-black/70 p-6 text-white"
+          className="relative flex h-full w-full cursor-pointer flex-col justify-end overflow-hidden bg-black/70 p-6 text-white"
         >
           {activeBackground && (
             <AnimatePresence mode="wait">
@@ -3466,6 +3564,7 @@ function HeroSection({
               <button
                 type="button"
                 onClick={(event) => handleFacetClick(event, { key: "locations", value: primaryLocation })}
+                data-hero-control="true"
                 className="rounded-full border border-white/25 bg-white/10 px-3 py-1 text-[11px] font-semibold text-white/85"
               >
                 {primaryLocation}
@@ -3487,6 +3586,7 @@ function HeroSection({
                   openProfile();
                 }}
                 aria-label={dossierAria}
+                data-hero-control="true"
                 className="inline-flex items-center gap-2 rounded-full px-5 py-2 text-sm font-semibold shadow-[0_18px_48px_rgba(253,230,138,0.35)]"
               >
                 Quick view
@@ -3498,6 +3598,7 @@ function HeroSection({
                 variant="subtle"
                 size="sm"
                 onClick={(event) => event.stopPropagation()}
+                data-hero-control="true"
                 className="inline-flex items-center gap-2 rounded-full px-5 py-2 text-sm font-semibold"
               >
                 Full profile
@@ -3525,7 +3626,7 @@ function HeroSection({
             openProfile();
           }
         }}
-        className="relative flex h-full flex-col justify-center overflow-hidden rounded-[32px] border border-white/15 bg-black/65 p-8 text-white lg:p-12"
+        className="relative flex h-full w-full cursor-pointer flex-col justify-center overflow-hidden bg-black/65 p-8 text-white lg:p-12"
       >
         {activeBackground && (
           <AnimatePresence mode="wait">
@@ -3586,6 +3687,7 @@ function HeroSection({
                     key={power.name}
                     type="button"
                     onClick={(event) => handleFacetClick(event, { key: "powers", value: power.name })}
+                    data-hero-control="true"
                     className="rounded-full bg-white/10 px-4 py-1.5 text-xs font-bold tracking-wide text-white/90 transition hover:bg-white/20"
                   >
                     {power.name} • {power.level}/10
@@ -3641,27 +3743,47 @@ function HeroSection({
       { inset: "18%", duration: 34, delay: 0.6, dotClass: "bg-fuchsia-300" },
       { inset: "30%", duration: 40, delay: 1.1, dotClass: "bg-indigo-300" },
     ];
+    const handleDiscover = (event) => {
+      event.stopPropagation();
+      onScrollToCharacters?.();
+    };
+    const handleArena = (event) => {
+      event.stopPropagation();
+      onOpenArena?.();
+    };
     if (isCompact) {
       return (
-        <div className="relative flex h-full flex-col justify-between rounded-[32px] border border-white/15 bg-black/60 p-6 text-white">
+        <div className="relative flex h-full flex-col justify-between bg-black/60 p-6 text-white">
           <div className="space-y-4">
             <div className="text-sm font-semibold text-white/80">{slide.label}</div>
             <h2 className="text-2xl font-black leading-snug text-balance">{title}</h2>
             <p className="text-sm font-semibold text-white/75">{blurb}</p>
           </div>
-          <Button
-            variant="gradient"
-            size="md"
-            onClick={onScrollToCharacters}
-            className="self-start shadow-[0_18px_48px_rgba(253,230,138,0.35)]"
-          >
-            Discover the Universe
-          </Button>
+          <div className="flex flex-wrap gap-3">
+            <Button
+              variant="gradient"
+              size="md"
+              onClick={handleDiscover}
+              data-hero-control="true"
+              className="self-start shadow-[0_18px_48px_rgba(253,230,138,0.35)]"
+            >
+              Discover the Universe
+            </Button>
+            <Button
+              variant="subtle"
+              size="md"
+              onClick={handleArena}
+              data-hero-control="true"
+              className="self-start"
+            >
+              Open Battle Arena
+            </Button>
+          </div>
         </div>
       );
     }
     return (
-      <div className="relative flex h-full flex-col overflow-hidden rounded-[32px] border border-white/15 bg-gradient-to-br from-black/70 via-indigo-900/60 to-fuchsia-700/45 p-8 text-white md:p-12">
+      <div className="relative flex h-full w-full flex-col overflow-hidden bg-gradient-to-br from-black/70 via-indigo-900/60 to-fuchsia-700/45 p-8 text-white md:p-12">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.12),transparent_55%)]" />
         <motion.div
           className="absolute -right-32 top-1/4 h-72 w-72 rounded-full bg-amber-400/20 blur-3xl"
@@ -3677,16 +3799,15 @@ function HeroSection({
               <Button
                 variant="gradient"
                 size="lg"
-                onClick={onScrollToCharacters}
+                onClick={handleDiscover}
+                data-hero-control="true"
                 className="shadow-[0_18px_48px_rgba(253,230,138,0.35)]"
               >
                 Discover the Universe
               </Button>
-            </div>
-            <div className="flex flex-wrap gap-2 text-[11px] font-semibold tracking-[0.35em] text-white/70 sm:text-xs">
-              <span>Daily sync across every device</span>
-              <span className="hidden sm:inline">•</span>
-              <span>One universe — countless stories</span>
+              <Button variant="subtle" size="lg" onClick={handleArena} className="bg-white/10" data-hero-control="true">
+                Open Battle Arena
+              </Button>
             </div>
           </div>
           <div className="relative flex items-center justify-center">
@@ -3785,7 +3906,7 @@ function HeroSection({
     }
   };
 
-  const heroHeightClass = isCompact ? "h-[360px]" : "h-[520px] lg:h-[560px]";
+  const heroHeightClass = isCompact ? "min-h-[340px]" : "min-h-[580px] lg:min-h-[640px]";
 
   return (
     <section
@@ -3802,10 +3923,10 @@ function HeroSection({
       <div className="absolute inset-x-0 top-0 h-32 bg-gradient-to-b from-black/50 to-transparent" />
       <div className="absolute -left-24 bottom-0 h-72 w-72 rounded-full bg-amber-400/15 blur-3xl" />
       <div className="absolute -right-20 -top-10 h-72 w-72 rounded-full bg-fuchsia-500/15 blur-3xl" />
-      <div className="relative z-10 mx-auto flex min-h-screen w-full max-w-[min(92rem,calc(100vw-2rem))] flex-col px-4 pb-[var(--toolbar-offset,9rem)] pt-10 sm:px-8 lg:px-16 xl:px-20 2xl:px-24">
+      <div className="relative z-10 flex min-h-screen w-full flex-col px-4 pb-[var(--toolbar-offset,9rem)] pt-10 sm:px-8 sm:pt-14 lg:px-16 xl:px-20 2xl:px-24">
         <header
           id="lore-header"
-          className="flex flex-wrap items-center justify-between gap-4 rounded-[28px] border border-white/30 bg-black/60 px-5 py-2 backdrop-blur-3xl shadow-[0_20px_60px_rgba(8,10,26,0.55)]"
+          className="flex w-full flex-wrap items-center justify-between gap-4 rounded-[32px] border border-white/30 bg-black/60 px-6 py-4 backdrop-blur-3xl shadow-[0_24px_80px_rgba(8,10,26,0.6)]"
         >
           <div className="flex items-center gap-3">
             <LoreShield onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })} />
@@ -3903,20 +4024,11 @@ function HeroSection({
             </Button>
           </div>
         </header>
-        <div className="mt-10 flex flex-1 flex-col gap-10 sm:mt-14">
-          <div className="flex flex-col gap-3 text-sm font-semibold tracking-[0.18em] text-white/70 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-center gap-2 text-white">
-              <Clock size={12} /> {todayKey()} • Daily lore sequence
-            </div>
-            <div className="flex items-center gap-2 text-white/70">
-              <Sparkles className="hidden h-4 w-4 sm:inline" />
-              <span className="text-xs sm:text-sm">Curated highlights from across the cosmos</span>
-            </div>
-          </div>
+        <div className="mt-8 flex flex-1 flex-col gap-10 sm:mt-12">
           <div className="flex flex-1 items-center">
             <div
               className={cx(
-                "relative w-full overflow-hidden rounded-[36px] border border-white/15 bg-black/60 shadow-[0_40px_120px_rgba(12,9,32,0.55)] touch-pan-y",
+                "relative flex-1 overflow-hidden shadow-[0_50px_160px_rgba(8,10,26,0.6)] touch-pan-y",
                 heroHeightClass
               )}
               onPointerDown={handleSlidePointerDown}
@@ -3928,23 +4040,27 @@ function HeroSection({
                 <>
                   <button
                     type="button"
-                    onClick={goPrev}
-                    className="absolute left-0 top-1/2 z-30 flex h-10 w-10 items-center justify-center rounded-full border border-white/35 bg-black/70 text-white shadow-lg transition hover:bg-black/90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-300 sm:h-12 sm:w-12"
-                    style={{ transform: "translate(-130%, -50%)" }}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      goPrev();
+                    }}
+                    className="absolute inset-y-0 left-0 z-30 flex w-16 items-center justify-start bg-gradient-to-r from-black/45 via-black/10 to-transparent pl-3 text-white/70 transition hover:text-white sm:w-20"
                     aria-label="Previous highlight"
                     data-hero-control="true"
                   >
-                    <ChevronLeft className="h-5 w-5 sm:h-6 sm:w-6" />
+                    <ChevronLeft className="h-6 w-6" />
                   </button>
                   <button
                     type="button"
-                    onClick={goNext}
-                    className="absolute right-0 top-1/2 z-30 flex h-10 w-10 items-center justify-center rounded-full border border-white/35 bg-black/70 text-white shadow-lg transition hover:bg-black/90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-300 sm:h-12 sm:w-12"
-                    style={{ transform: "translate(130%, -50%)" }}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      goNext();
+                    }}
+                    className="absolute inset-y-0 right-0 z-30 flex w-16 items-center justify-end bg-gradient-to-l from-black/45 via-black/10 to-transparent pr-3 text-white/70 transition hover:text-white sm:w-20"
                     aria-label="Next highlight"
                     data-hero-control="true"
                   >
-                    <ChevronRight className="h-5 w-5 sm:h-6 sm:w-6" />
+                    <ChevronRight className="h-6 w-6" />
                   </button>
                 </>
               )}
@@ -3952,28 +4068,17 @@ function HeroSection({
                 <motion.div
                   key={current?.key}
                   custom={direction}
-                  initial={peekActive ? { opacity: 1, x: 0 } : { opacity: 0, x: direction > 0 ? 140 : -140 }}
-                  animate={peekActive ? { opacity: 1, x: [28, 0] } : { opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: direction > 0 ? -140 : 140 }}
-                  transition={{ duration: peekActive ? 1.2 : 0.85, ease: "easeInOut" }}
-                  className="relative h-full"
+                  variants={HERO_SLIDE_VARIANTS}
+                  initial={peekActive ? "center" : "enter"}
+                  animate={peekActive ? { x: [-36, 0], opacity: 1 } : "center"}
+                  exit="exit"
+                  transition={peekActive ? { duration: 1.1, ease: "easeInOut" } : HERO_SLIDE_TRANSITION}
+                  className="relative h-full w-full"
                 >
                   {renderSlide(current)}
                 </motion.div>
               </AnimatePresence>
             </div>
-          </div>
-          <div className="mt-12 flex flex-wrap items-center gap-4 pb-6 text-sm font-semibold text-white/75">
-            <Users className="h-4 w-4" />
-            <span>There's more.</span>
-            <Button
-              variant="gradient"
-              size="lg"
-              onClick={onOpenFilters}
-              className="shadow-[0_18px_48px_rgba(253,230,138,0.35)]"
-            >
-              Launch filters
-            </Button>
           </div>
         </div>
       </div>
@@ -4297,6 +4402,15 @@ export default function LoremakerApp({ initialCharacters = [], initialError = nu
         setTimeout(focusArena, 80);
       }
       return next;
+    });
+  }, [focusArena]);
+
+  const openArena = useCallback(() => {
+    setShowArena((prev) => {
+      if (prev) return prev;
+      setArenaPulseKey((key) => key + 1);
+      setTimeout(focusArena, 80);
+      return true;
     });
   }, [focusArena]);
 
@@ -4626,6 +4740,7 @@ export default function LoremakerApp({ initialCharacters = [], initialError = nu
           onOpenCharacter={openCharacter}
           onFacet={handleFacet}
           onToggleArena={toggleArena}
+          onOpenArena={openArena}
           onSync={refetch}
           showArena={showArena}
           characterNames={universeNames}
