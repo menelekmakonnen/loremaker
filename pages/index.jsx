@@ -48,6 +48,7 @@ import {
   seededRandom,
 } from "../lib/characters";
 import ImageSafe, { characterAltText, Insignia } from "../components/image-safe";
+import SiteFooter from "../components/site-footer";
 
 /**
  * Ultra interactive Loremaker experience
@@ -4080,16 +4081,11 @@ function HeroSection({
       <div className="relative z-10 flex min-h-screen w-full flex-col px-4 pb-[var(--toolbar-offset,9rem)] pt-10 sm:px-8 sm:pt-14 lg:px-16 xl:px-20 2xl:px-24">
         <header
           id="lore-header"
-          className="relative w-full overflow-hidden rounded-[32px] border border-white/20 bg-black/35 px-6 py-4 backdrop-blur-3xl shadow-[0_24px_80px_rgba(8,10,26,0.6)]"
+          className="hero-header relative w-full overflow-hidden rounded-[32px] border border-white/20 bg-black/35 px-6 py-4 backdrop-blur-3xl shadow-[0_24px_80px_rgba(8,10,26,0.6)]"
           style={
             sharedBackground
               ? {
-                  backgroundImage: `linear-gradient(90deg, rgba(0,0,0,0.85) 0%, rgba(8,12,33,0.74) 50%, rgba(4,6,15,0.78) 100%), url(${JSON.stringify(
-                    sharedBackground
-                  )})`,
-                  backgroundSize: "cover",
-                  backgroundPosition: "70% center",
-                  backgroundRepeat: "no-repeat",
+                  "--hero-header-image": `url(${sharedBackground.replace(/"/g, '\\"')})`,
                 }
               : undefined
           }
@@ -4110,6 +4106,20 @@ function HeroSection({
                   >
                     Loremaker
                   </button>
+                  <nav className="flex flex-wrap items-center gap-1 rounded-full bg-black/20 px-2 py-1 text-[0.65rem] font-semibold uppercase tracking-[0.3em] text-white/60 sm:gap-2 sm:px-3 sm:text-xs">
+                    <Link href="/factions" className="rounded-full px-2 py-1 transition hover:text-white">
+                      Factions
+                    </Link>
+                    <Link href="/locations" className="rounded-full px-2 py-1 transition hover:text-white">
+                      Locations
+                    </Link>
+                    <Link href="/powers" className="rounded-full px-2 py-1 transition hover:text-white">
+                      Powers
+                    </Link>
+                    <Link href="/timelines" className="rounded-full px-2 py-1 transition hover:text-white">
+                      Timelines
+                    </Link>
+                  </nav>
                   <Button
                     as="a"
                     href="https://menelekmakonnen.com"
@@ -4158,16 +4168,6 @@ function HeroSection({
               </Button>
             </div>
             <div className="hidden items-center gap-2 sm:flex">
-              <Button
-                variant="ghost"
-                size="sm"
-                className="inline-flex items-center gap-2 px-4 text-sm font-semibold"
-                onClick={onOpenFilters}
-                aria-label="Open filters"
-              >
-                <Filter className="h-4 w-4" aria-hidden="true" />
-                <span>Launch filters</span>
-              </Button>
               <Button
                 variant={showArena ? "subtle" : "ghost"}
                 size="sm"
@@ -4281,7 +4281,6 @@ export default function LoremakerApp({ initialCharacters = [], initialError = nu
   const sortedRef = useRef([]);
   const processedArenaRef = useRef(null);
   const archiveRef = useRef(null);
-  const currentYear = useMemo(() => new Date().getFullYear(), []);
   const slugify = useCallback(
     (value) =>
       (value || "")
@@ -4994,123 +4993,7 @@ export default function LoremakerApp({ initialCharacters = [], initialError = nu
         </div>
       </main>
 
-      <footer className="border-t border-white/10 bg-black/50 backdrop-blur-2xl">
-        <div className="mx-auto max-w-7xl px-3 py-10 sm:px-4">
-          <div className="grid gap-8 md:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)]">
-            <div className="space-y-4">
-              <p className="text-xs font-black tracking-[0.35em] text-white/70">LoreMaker Universe</p>
-              <p className="text-sm font-semibold tracking-[0.3em] text-white/70">
-                © {currentYear} Menelek Makonnen.
-              </p>
-              <p className="text-sm font-semibold tracking-[0.3em] text-white/70">
-                All characters, stories, lore, and artwork from the LoreMaker Universe are protected by copyright.
-              </p>
-            </div>
-            <div className="space-y-4">
-              <p className="text-xs font-black tracking-[0.35em] text-white/70">Explore</p>
-              <div className="flex flex-col gap-2">
-                <Button
-                  as="a"
-                  href="#arena-anchor"
-                  variant="subtle"
-                  size="sm"
-                  className="justify-start gap-2 px-4 text-xs tracking-[0.3em]"
-                >
-                  <Swords className="h-4 w-4" aria-hidden="true" />
-                  Battle Arena
-                </Button>
-                <Button
-                  type="button"
-                  onClick={handleRandomCharacter}
-                  variant="subtle"
-                  size="sm"
-                  className="justify-start gap-2 px-4 text-xs tracking-[0.3em]"
-                >
-                  <Sparkles className="h-4 w-4" aria-hidden="true" />
-                  Random Character
-                </Button>
-                <Button
-                  as="a"
-                  href="#characters-grid"
-                  variant="subtle"
-                  size="sm"
-                  className="justify-start gap-2 px-4 text-xs tracking-[0.3em]"
-                >
-                  <Users className="h-4 w-4" aria-hidden="true" />
-                  Character Archive
-                </Button>
-                <Button
-                  as="a"
-                  href="/factions"
-                  variant="subtle"
-                  size="sm"
-                  className="justify-start gap-2 px-4 text-xs tracking-[0.3em]"
-                >
-                  <Crown className="h-4 w-4" aria-hidden="true" />
-                  Factions Directory
-                </Button>
-                <Button
-                  as="a"
-                  href="/powers"
-                  variant="subtle"
-                  size="sm"
-                  className="justify-start gap-2 px-4 text-xs tracking-[0.3em]"
-                >
-                  <Atom className="h-4 w-4" aria-hidden="true" />
-                  Power Index
-                </Button>
-                <Button
-                  as="a"
-                  href="/locations"
-                  variant="subtle"
-                  size="sm"
-                  className="justify-start gap-2 px-4 text-xs tracking-[0.3em]"
-                >
-                  <MapPin className="h-4 w-4" aria-hidden="true" />
-                  World Footprints
-                </Button>
-                <Button
-                  as="a"
-                  href="/timelines"
-                  variant="subtle"
-                  size="sm"
-                  className="justify-start gap-2 px-4 text-xs tracking-[0.3em]"
-                >
-                  <Library className="h-4 w-4" aria-hidden="true" />
-                  Era Timelines
-                </Button>
-              </div>
-            </div>
-            <div className="space-y-4">
-              <p className="text-xs font-black tracking-[0.35em] text-white/70">Connect</p>
-              <div className="flex flex-col gap-2">
-                <Button
-                  as="a"
-                  href="https://menelekmakonnen.com"
-                  target="_blank"
-                  rel="noreferrer"
-                  variant="subtle"
-                  size="sm"
-                  className="justify-start gap-2 px-4 text-xs tracking-[0.3em]"
-                >
-                  <ArrowRight className="h-4 w-4" aria-hidden="true" />
-                  Menelek Makonnen
-                </Button>
-                <Button
-                  type="button"
-                  onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
-                  variant="ghost"
-                  size="sm"
-                  className="justify-start gap-2 px-4 text-xs tracking-[0.3em] text-white/70 hover:text-white"
-                >
-                  <ArrowUp className="h-4 w-4" aria-hidden="true" />
-                  Back to Top
-                </Button>
-              </div>
-            </div>
-          </div>
-        </div>
-      </footer>
+      <SiteFooter onRandomCharacter={handleRandomCharacter} />
 
       <CharacterModal
         open={openModal}

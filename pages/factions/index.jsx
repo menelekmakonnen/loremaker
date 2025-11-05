@@ -24,6 +24,7 @@ export default function FactionsIndexPage({ entries }) {
         description="Meet the alliances who command territories, uphold ancient vows, and influence the cosmic balance of the LoreMaker Universe."
         entries={entries}
         basePath="/factions"
+        enableArena
       />
     </>
   );

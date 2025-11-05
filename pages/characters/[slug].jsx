@@ -25,6 +25,7 @@ import {
   seededRandom,
 } from "../../lib/characters";
 import ImageSafe, { characterAltText, imageCandidates } from "../../components/image-safe";
+import SiteFooter from "../../components/site-footer";
 
 const DEFAULT_SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL || "https://loremaker.app").replace(/\/$/, "");
 
@@ -201,7 +202,6 @@ function GalleryCarousel({ images = [], name = "LoreMaker legend", onActiveChang
   const pointerRef = useRef({ id: null, startX: 0, startY: 0, lastX: 0, moved: false, container: null, origin: null });
   const lightboxPointerRef = useRef({ id: null, startX: 0, startY: 0, lastX: 0, moved: false, container: null, origin: null });
   const altText = useMemo(() => `${name} | Loremaker Universe | Menelek Makonnen`, [name]);
-
   useEffect(() => {
     if (!length) {
       setActiveIndex(0);
@@ -723,6 +723,21 @@ export default function CharacterProfilePage({ character, canonicalUrl, related,
     if (related.length) sections.push({ id: "related", label: "More legends", shortLabel: "More" });
     return sections;
   }, [allyGroups.length, tags.length, powers.length, stories.length, character.eraTags, connectionSections.length, related.length]);
+  const fallbackPool = useMemo(
+    () =>
+      fallbackCharacters
+        .map((entry) => ({ slug: characterSlug(entry), name: entry.name }))
+        .filter((entry) => entry.slug),
+    []
+  );
+  const handleRandomCharacter = useCallback(() => {
+    if (!fallbackPool.length) return;
+    const random = fallbackPool[Math.floor(Math.random() * fallbackPool.length)];
+    if (!random?.slug) return;
+    if (typeof window !== "undefined") {
+      window.location.href = `/characters/${random.slug}`;
+    }
+  }, [fallbackPool]);
 
   return (
     <>
@@ -862,7 +877,7 @@ export default function CharacterProfilePage({ character, canonicalUrl, related,
         </section>
         <main className="mx-auto max-w-7xl space-y-20 px-4 py-16 sm:px-6 lg:px-8">
           {navSections.length > 1 && (
-            <nav className="sticky top-24 z-10 mb-10 hidden flex-wrap gap-2 rounded-3xl border border-white/10 bg-black/40 px-4 py-3 backdrop-blur-xl sm:flex">
+            <nav className="mb-10 hidden flex-wrap gap-2 rounded-3xl border border-white/10 bg-black/40 px-4 py-3 backdrop-blur-xl sm:flex">
               {navSections.map((item) => (
                 <a
                   key={item.id}
@@ -1188,6 +1203,7 @@ export default function CharacterProfilePage({ character, canonicalUrl, related,
             </section>
           )}
         </main>
+        <SiteFooter onRandomCharacter={handleRandomCharacter} arenaHref="/#arena-anchor" />
         <button
           type="button"
           onClick={() => {

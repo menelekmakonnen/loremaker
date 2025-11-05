@@ -1,6 +1,66 @@
-import React from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import { AnimatePresence, motion } from "framer-motion";
+import { ArrowRight, Shuffle, Swords, Users } from "lucide-react";
+
 import ImageSafe, { characterAltText, Insignia } from "./image-safe";
+import SiteFooter from "./site-footer";
+
+const SLIDE_VARIANTS = {
+  enter: (direction = 1) => ({
+    x: direction > 0 ? "100%" : "-100%",
+    opacity: 0,
+    scale: 0.96,
+  }),
+  center: { x: 0, opacity: 1, scale: 1 },
+  exit: (direction = 1) => ({
+    x: direction > 0 ? "-100%" : "100%",
+    opacity: 0,
+    scale: 0.96,
+  }),
+};
+
+function classNames(...values) {
+  return values.filter(Boolean).join(" ");
+}
+
+function normaliseSlides(entries = []) {
+  const filtered = entries.filter((entry) => entry && entry.slug);
+  const limit = filtered.length ? Math.min(filtered.length, 6) : 0;
+  return filtered
+    .slice(0, limit)
+    .map((entry) => ({
+      ...entry,
+      background: entry.primaryImage || entry.members?.[0]?.cover || null,
+    }));
+}
+
+function useAutoAdvance(length, handler) {
+  const timerRef = useRef(null);
+  const handlerRef = useRef(handler);
+  handlerRef.current = handler;
+
+  const cancel = useCallback(() => {
+    if (timerRef.current) {
+      clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
+  }, []);
+
+  const schedule = useCallback(() => {
+    cancel();
+    if (length <= 1) return;
+    timerRef.current = setTimeout(() => {
+      handlerRef.current?.();
+      schedule();
+    }, 60000);
+  }, [cancel, length]);
+
+  useEffect(() => schedule(), [schedule]);
+  useEffect(() => cancel, [cancel]);
+
+  return { schedule, cancel };
+}
 
 export function TaxonomyIndexLayout({
   title,
@@ -8,77 +68,482 @@ export function TaxonomyIndexLayout({
   entries,
   basePath,
   badgeLabel = "LoreMaker Universe",
+  enableArena = false,
 }) {
+  const slides = useMemo(() => normaliseSlides(entries), [entries]);
+  const [index, setIndex] = useState(0);
+  const [direction, setDirection] = useState(0);
+
+  useEffect(() => {
+    if (!slides.length) {
+      setIndex(0);
+      return;
+    }
+    setIndex((value) => (value >= slides.length ? slides.length - 1 : value));
+  }, [slides.length]);
+
+  const advance = useCallback(() => {
+    if (slides.length <= 1) return;
+    setDirection(1);
+    setIndex((value) => (value + 1) % slides.length);
+  }, [slides.length]);
+
+  const { schedule, cancel } = useAutoAdvance(slides.length, advance);
+
+  const goNext = useCallback(() => {
+    advance();
+    schedule();
+  }, [advance, schedule]);
+
+  const goPrev = useCallback(() => {
+    if (slides.length <= 1) return;
+    setDirection(-1);
+    setIndex((value) => (value - 1 + slides.length) % slides.length);
+    schedule();
+  }, [slides.length, schedule]);
+
+  const current = slides[index] || slides[0] || null;
+  const background = current?.background || slides.find((slide) => slide.background)?.background || null;
+
   return (
     <div className="relative min-h-screen overflow-hidden bg-[#050813] text-white">
-      <div
-        className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.14),transparent_55%),radial-gradient(circle_at_bottom_right,rgba(148,163,255,0.12),transparent_60%)]"
-        aria-hidden="true"
-      />
-      <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-transparent via-black/20 to-black/40" aria-hidden="true" />
-      <main className="relative z-10 mx-auto max-w-7xl space-y-12 px-4 py-16 sm:px-6 lg:px-8">
-        <header className="space-y-5">
-          <p className="text-xs font-semibold uppercase tracking-[0.35em] text-amber-200">{badgeLabel}</p>
-          <h1 className="text-4xl font-black leading-tight sm:text-5xl lg:text-6xl">{title}</h1>
-          <p className="max-w-3xl text-lg font-semibold text-white/75">{description}</p>
-          <div className="flex flex-wrap gap-3">
-            <Link
-              href="/"
-              className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-5 py-2 text-sm font-semibold text-white/80 transition hover:border-white/40 hover:text-white"
-            >
-              ← Back to home
-            </Link>
-          </div>
-        </header>
-        <section className="grid gap-6 sm:grid-cols-2 xl:grid-cols-3">
-          {entries.map((entry) => (
-            <Link
-              key={entry.slug}
-              href={`${basePath}/${entry.slug}`}
-              className="group relative overflow-hidden rounded-3xl border border-white/12 bg-white/5 p-6 transition hover:border-amber-300/60 hover:bg-amber-200/10 backdrop-blur-xl"
-            >
-              <div className="flex items-center justify-between text-xs font-semibold uppercase tracking-[0.3em] text-white/60">
-                <span>{entry.memberCount} dossier{entry.memberCount === 1 ? "" : "s"}</span>
-                <span className="rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs">{entry.type}</span>
+      <section className="relative overflow-hidden">
+        <div className="absolute inset-0 -z-20">
+          {background ? (
+            <ImageSafe
+              src={background}
+              alt=""
+              className="h-full w-full object-cover"
+              loading="eager"
+              decoding="async"
+              aria-hidden="true"
+            />
+          ) : (
+            <div className="h-full w-full bg-gradient-to-br from-black via-[#060a1c] to-[#04060f]" aria-hidden="true" />
+          )}
+          <div className="absolute inset-0 bg-gradient-to-b from-black/90 via-[#050a1a]/75 to-[#050813]/85" aria-hidden="true" />
+        </div>
+        <div className="relative z-10 flex min-h-[80vh] flex-col px-4 pb-12 pt-12 sm:px-8 lg:px-16">
+          <header
+            className="hero-header relative w-full overflow-hidden rounded-[32px] border border-white/20 bg-black/35 px-5 py-4 backdrop-blur-3xl shadow-[0_24px_80px_rgba(8,10,26,0.6)]"
+            style={
+              background
+                ? {
+                    "--hero-header-image": `url(${background.replace(/"/g, "\\\"")})`,
+                  }
+                : undefined
+            }
+          >
+            <div className="relative z-10 flex w-full flex-wrap items-center justify-between gap-4">
+              <div className="flex flex-wrap items-center gap-3 text-xs font-semibold uppercase tracking-[0.35em] text-white/70">
+                <Link
+                  href="/"
+                  className="rounded-full border border-white/30 bg-white/10 px-3 py-1 text-white transition hover:bg-white/20"
+                >
+                  Loremaker
+                </Link>
+                <nav className="flex flex-wrap items-center gap-2 text-[0.65rem] tracking-[0.3em] sm:text-xs">
+                  <Link href="/factions" className="rounded-full px-2 py-1 text-white/70 transition hover:text-white">
+                    Factions
+                  </Link>
+                  <Link href="/locations" className="rounded-full px-2 py-1 text-white/70 transition hover:text-white">
+                    Locations
+                  </Link>
+                  <Link href="/powers" className="rounded-full px-2 py-1 text-white/70 transition hover:text-white">
+                    Powers
+                  </Link>
+                  <Link href="/timelines" className="rounded-full px-2 py-1 text-white/70 transition hover:text-white">
+                    Timelines
+                  </Link>
+                </nav>
               </div>
-              <div className="mt-4 flex items-start gap-4">
-                <div className="relative h-16 w-16 overflow-hidden rounded-2xl border border-white/20 bg-black/40 shadow-[0_12px_40px_rgba(8,10,26,0.55)]">
-                  {entry.primaryImage ? (
-                    <ImageSafe
-                      src={entry.primaryImage}
-                      alt={characterAltText(entry.name)}
-                      fallbackLabel={entry.name}
-                      className="h-full w-full object-cover"
-                      loading="lazy"
-                    />
+              <a
+                href="https://menelekmakonnen.com"
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-2 rounded-full border border-white/25 bg-white/10 px-4 py-1.5 text-xs font-semibold uppercase tracking-[0.3em] text-white/85 transition hover:bg-white/20"
+              >
+                Menelek Makonnen
+              </a>
+            </div>
+          </header>
+          <div className="mt-10 flex flex-1 flex-col gap-10 lg:flex-row lg:items-center lg:gap-16">
+            <div className="max-w-2xl space-y-5">
+              <p className="text-xs font-semibold uppercase tracking-[0.4em] text-amber-200">{badgeLabel}</p>
+              <h1 className="text-4xl font-black leading-tight text-balance sm:text-5xl lg:text-6xl">{title}</h1>
+              <p className="max-w-xl text-sm font-semibold text-white/80 sm:text-base">{description}</p>
+              {current && (
+                <div className="space-y-4 rounded-3xl border border-white/12 bg-white/5 p-6 backdrop-blur-2xl">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="text-xs font-semibold uppercase tracking-[0.35em] text-white/70">
+                      Spotlight dossier
+                    </div>
+                    <div className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs font-semibold text-white/70">
+                      <Users className="h-3.5 w-3.5" aria-hidden="true" />
+                      {current.memberCount} dossier{current.memberCount === 1 ? "" : "s"}
+                    </div>
+                  </div>
+                  <h2 className="text-2xl font-black text-white sm:text-3xl">{current.name}</h2>
+                  {current.summary && <p className="text-sm font-semibold text-white/70">{current.summary}</p>}
+                  <div className="flex flex-wrap gap-3">
+                    <Link
+                      href={`${basePath}/${current.slug}`}
+                      className="inline-flex items-center gap-2 rounded-full border border-amber-300/60 bg-amber-300/20 px-5 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-amber-100 transition hover:bg-amber-300/30"
+                    >
+                      Open dossier
+                    </Link>
+                    <button
+                      type="button"
+                      onClick={goNext}
+                      className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-5 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-white transition hover:bg-white/20"
+                    >
+                      Next spotlight
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+            <div className="flex flex-1 flex-col gap-5">
+              <div className="relative overflow-hidden rounded-3xl border border-white/12 bg-white/5 p-6 backdrop-blur-2xl">
+                <AnimatePresence initial={false} custom={direction}>
+                  {current ? (
+                    <motion.div
+                      key={current.slug}
+                      variants={SLIDE_VARIANTS}
+                      custom={direction}
+                      initial="enter"
+                      animate="center"
+                      exit="exit"
+                      transition={{ duration: 0.6, ease: "easeInOut" }}
+                      className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center"
+                    >
+                      <div className="space-y-3 text-sm font-semibold text-white/70">
+                        {(current.snippets || []).slice(0, 3).map((snippet, idx) => (
+                          <p key={idx} className="rounded-2xl border border-white/10 bg-black/40 p-3">
+                            “{snippet}”
+                          </p>
+                        ))}
+                        {!current.snippets?.length && (
+                          <p className="rounded-2xl border border-white/10 bg-black/40 p-3">
+                            Fresh intelligence incoming from the LoreMaker archives.
+                          </p>
+                        )}
+                      </div>
+                      <div className="flex flex-col items-center gap-3">
+                        <div className="h-24 w-24 overflow-hidden rounded-2xl border border-white/20 bg-black/60 shadow-[0_12px_40px_rgba(8,10,26,0.55)]">
+                          {current.primaryImage ? (
+                            <ImageSafe
+                              src={current.primaryImage}
+                              alt={characterAltText(current.name)}
+                              fallbackLabel={current.name}
+                              className="h-full w-full object-cover"
+                              loading="lazy"
+                            />
+                          ) : (
+                            <div className="flex h-full w-full items-center justify-center">
+                              <Insignia label={current.name} size={52} />
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex gap-2">
+                          <button
+                            type="button"
+                            onClick={goPrev}
+                            className="rounded-full border border-white/20 bg-white/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.3em] text-white transition hover:bg-white/20"
+                          >
+                            Prev
+                          </button>
+                          <button
+                            type="button"
+                            onClick={goNext}
+                            className="rounded-full border border-white/20 bg-white/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.3em] text-white transition hover:bg-white/20"
+                          >
+                            Next
+                          </button>
+                        </div>
+                      </div>
+                    </motion.div>
                   ) : (
-                    <div className="flex h-full w-full items-center justify-center bg-black/60">
-                      <Insignia label={entry.name} size={44} />
+                    <div className="grid gap-3 text-sm font-semibold text-white/60">
+                      Awaiting featured dossiers from the LoreMaker archive.
                     </div>
                   )}
-                </div>
-                <div className="flex-1 space-y-2">
-                  <h2 className="text-2xl font-black text-white sm:text-3xl">{entry.name}</h2>
-                  <p className="text-sm font-semibold text-white/70 line-clamp-3">{entry.summary}</p>
-                </div>
+                </AnimatePresence>
               </div>
-              {entry.snippets?.length > 0 && (
-                <ul className="mt-4 space-y-2 text-sm font-semibold text-white/60">
-                  {entry.snippets.slice(0, 2).map((snippet, index) => (
-                    <li key={index} className="line-clamp-2">
-                      “{snippet}”
-                    </li>
-                  ))}
-                </ul>
-              )}
-              <span className="mt-5 inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.3em] text-amber-200">
-                Explore dossier
-              </span>
-            </Link>
-          ))}
+              <div className="flex gap-3 overflow-x-auto rounded-3xl border border-white/12 bg-white/5 p-4 backdrop-blur-2xl">
+                {slides.map((slide, slideIndex) => (
+                  <button
+                    key={slide.slug}
+                    type="button"
+                    onClick={() => {
+                      cancel();
+                      setDirection(slideIndex > index ? 1 : -1);
+                      setIndex(slideIndex);
+                      schedule();
+                    }}
+                    className={classNames(
+                      "flex min-w-[160px] flex-col items-start gap-2 rounded-2xl border px-3 py-3 text-left transition",
+                      slideIndex === index
+                        ? "border-amber-300/60 bg-amber-200/10 text-white"
+                        : "border-white/10 bg-black/30 text-white/70 hover:border-white/20"
+                    )}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="h-12 w-12 overflow-hidden rounded-xl border border-white/15 bg-black/40">
+                        {slide.primaryImage ? (
+                          <ImageSafe
+                            src={slide.primaryImage}
+                            alt={characterAltText(slide.name)}
+                            fallbackLabel={slide.name}
+                            className="h-full w-full object-cover"
+                            loading="lazy"
+                          />
+                        ) : (
+                          <div className="flex h-full w-full items-center justify-center">
+                            <Insignia label={slide.name} size={32} />
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex-1">
+                        <p className="text-sm font-black leading-tight text-white">{slide.name}</p>
+                        <p className="text-[0.65rem] font-semibold uppercase tracking-[0.3em] text-white/60">
+                          {slide.memberCount} dossier{slide.memberCount === 1 ? "" : "s"}
+                        </p>
+                      </div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+      <main className="relative z-10 mx-auto max-w-7xl space-y-16 px-4 py-16 sm:px-6 lg:px-8">
+        {enableArena && entries.length > 1 && <FactionArena entries={entries} basePath={basePath} />}
+        <section className="space-y-6">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <h2 className="text-2xl font-black text-white">Archive dossiers</h2>
+            <span className="text-sm font-semibold text-white/60">
+              {entries.length} dossier{entries.length === 1 ? "" : "s"} documented
+            </span>
+          </div>
+          <div className="grid gap-6 sm:grid-cols-2 xl:grid-cols-3">
+            {entries.map((entry) => (
+              <Link
+                key={entry.slug}
+                href={`${basePath}/${entry.slug}`}
+                className="group relative overflow-hidden rounded-3xl border border-white/12 bg-white/5 p-6 transition hover:border-amber-300/60 hover:bg-amber-200/10 backdrop-blur-xl"
+              >
+                <div className="flex items-center justify-between text-xs font-semibold uppercase tracking-[0.3em] text-white/60">
+                  <span>{entry.memberCount} dossier{entry.memberCount === 1 ? "" : "s"}</span>
+                  <span className="rounded-full border border-white/15 bg-white/10 px-3 py-1 text-[0.65rem]">{entry.type}</span>
+                </div>
+                <div className="mt-4 flex items-start gap-4">
+                  <div className="relative h-16 w-16 overflow-hidden rounded-2xl border border-white/20 bg-black/40 shadow-[0_12px_40px_rgba(8,10,26,0.55)]">
+                    {entry.primaryImage ? (
+                      <ImageSafe
+                        src={entry.primaryImage}
+                        alt={characterAltText(entry.name)}
+                        fallbackLabel={entry.name}
+                        className="h-full w-full object-cover"
+                        loading="lazy"
+                      />
+                    ) : (
+                      <div className="flex h-full w-full items-center justify-center bg-black/60">
+                        <Insignia label={entry.name} size={44} />
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex-1 space-y-2">
+                    <h3 className="text-2xl font-black text-white sm:text-3xl">{entry.name}</h3>
+                    <p className="text-sm font-semibold text-white/70 line-clamp-3">{entry.summary}</p>
+                  </div>
+                </div>
+                {entry.snippets?.length > 0 && (
+                  <ul className="mt-4 space-y-2 text-sm font-semibold text-white/60">
+                    {entry.snippets.slice(0, 2).map((snippet, snippetIndex) => (
+                      <li key={snippetIndex} className="line-clamp-2">
+                        “{snippet}”
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                <span className="mt-5 inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.3em] text-amber-200">
+                  Explore dossier
+                  <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
+                </span>
+              </Link>
+            ))}
+          </div>
         </section>
       </main>
+      <SiteFooter arenaHref={enableArena ? "#faction-arena" : "#arena-anchor"} />
     </div>
+  );
+}
+
+function FactionArena({ entries, basePath }) {
+  const roster = useMemo(() => entries.filter((entry) => entry && entry.slug), [entries]);
+  const [left, setLeft] = useState(() => roster[0] || null);
+  const [right, setRight] = useState(() => roster[1] || roster[0] || null);
+  const [result, setResult] = useState(null);
+
+  const selectBySlug = useCallback((slug) => roster.find((entry) => entry.slug === slug) || null, [roster]);
+
+  const chooseRandom = useCallback(
+    (excludeSlug) => {
+      if (!roster.length) return null;
+      const pool = roster.filter((entry) => (excludeSlug ? entry.slug !== excludeSlug : true));
+      const source = pool.length ? pool : roster;
+      return source[Math.floor(Math.random() * source.length)];
+    },
+    [roster]
+  );
+
+  const randomise = useCallback(
+    (setter, opponent) => {
+      const target = chooseRandom(opponent?.slug);
+      setter(target);
+      setResult(null);
+    },
+    [chooseRandom]
+  );
+
+  const resolveDuel = useCallback(
+    (l = left, r = right) => {
+      if (!l || !r) return;
+      const leftWeight = Math.max(1, l.memberCount || 1);
+      const rightWeight = Math.max(1, r.memberCount || 1);
+      const total = leftWeight + rightWeight;
+      const roll = Math.random() * total;
+      const winner = roll <= leftWeight ? l : r;
+      const loser = winner === l ? r : l;
+      setResult({
+        winner,
+        loser,
+        narrative: `${winner.name} orchestrate a decisive maneuver, outclassing ${loser.name} on the LoreMaker stage.`,
+      });
+    },
+    [left, right]
+  );
+
+  const duel = useCallback(() => {
+    resolveDuel();
+  }, [resolveDuel]);
+
+  const renderSlot = (label, value, setter, rival) => (
+    <div className="space-y-4 rounded-3xl border border-white/12 bg-white/5 p-6 backdrop-blur-2xl">
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-xs font-semibold uppercase tracking-[0.35em] text-white/70">{label}</p>
+        <button
+          type="button"
+          onClick={() => randomise(setter, rival)}
+          className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-3 py-1 text-[0.65rem] font-semibold uppercase tracking-[0.3em] text-white transition hover:bg-white/20"
+        >
+          <Shuffle className="h-3.5 w-3.5" aria-hidden="true" /> Randomise
+        </button>
+      </div>
+      <select
+        value={value?.slug || ""}
+        onChange={(event) => {
+          const selected = selectBySlug(event.target.value);
+          setter(selected);
+          setResult(null);
+        }}
+        className="w-full rounded-2xl border border-white/25 bg-black/70 px-3 py-2 text-sm font-semibold text-white shadow-inner focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300"
+      >
+        <option value="">Select a faction</option>
+        {roster.map((entry) => (
+          <option key={entry.slug} value={entry.slug} className="bg-black text-white">
+            {entry.name}
+          </option>
+        ))}
+      </select>
+      {value ? (
+        <div className="space-y-3">
+          <div className="flex items-center gap-3">
+            <div className="h-16 w-16 overflow-hidden rounded-2xl border border-white/20 bg-black/40">
+              {value.primaryImage ? (
+                <ImageSafe
+                  src={value.primaryImage}
+                  alt={characterAltText(value.name)}
+                  fallbackLabel={value.name}
+                  className="h-full w-full object-cover"
+                  loading="lazy"
+                />
+              ) : (
+                <div className="flex h-full w-full items-center justify-center bg-black/60">
+                  <Insignia label={value.name} size={48} />
+                </div>
+              )}
+            </div>
+            <div>
+              <p className="text-xl font-black text-white">{value.name}</p>
+              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-white/60">
+                {value.memberCount} dossier{value.memberCount === 1 ? "" : "s"}
+              </p>
+            </div>
+          </div>
+          {value.summary && <p className="text-sm font-semibold text-white/70">{value.summary}</p>}
+          <Link
+            href={`${basePath}/${value.slug}`}
+            className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.3em] text-amber-200 transition hover:text-amber-100"
+          >
+            Open dossier
+            <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
+          </Link>
+        </div>
+      ) : (
+        <p className="text-sm font-semibold text-white/60">Assign a faction to prepare the arena.</p>
+      )}
+    </div>
+  );
+
+  return (
+    <section id="faction-arena" className="space-y-6">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h2 className="text-2xl font-black text-white">Faction arena</h2>
+          <p className="text-sm font-semibold text-white/70">
+            Stage a lore clash and see which enclave dominates the LoreMaker Universe.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => {
+            const first = chooseRandom();
+            const second = chooseRandom(first?.slug);
+            setLeft(first);
+            setRight(second);
+            setResult(null);
+            setTimeout(() => resolveDuel(first, second), 180);
+          }}
+          className="inline-flex items-center gap-2 rounded-full border border-amber-300/60 bg-amber-300/20 px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-amber-100 transition hover:bg-amber-300/30"
+        >
+          <Swords className="h-4 w-4" aria-hidden="true" />
+          Random duel
+        </button>
+      </div>
+      <div className="grid gap-6 lg:grid-cols-2">
+        {renderSlot("Contender alpha", left, setLeft, right)}
+        {renderSlot("Contender omega", right, setRight, left)}
+      </div>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <button
+          type="button"
+          onClick={duel}
+          className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-white transition hover:bg-white/20"
+        >
+          Commence duel
+        </button>
+        {result && (
+          <div className="flex-1 rounded-3xl border border-amber-300/50 bg-amber-200/10 px-5 py-4 text-sm font-semibold text-amber-100">
+            <div className="text-lg font-black uppercase tracking-[0.35em] text-amber-200">{result.winner.name} prevail</div>
+            <p className="mt-2 text-sm text-amber-100">{result.narrative}</p>
+          </div>
+        )}
+      </div>
+    </section>
   );
 }
 
@@ -104,13 +569,35 @@ export function TaxonomyDetailLayout({
               className="h-full w-full object-cover"
               loading="eager"
             />
-            <div className="absolute inset-0 bg-gradient-to-r from-black/85 via-[#070b19]/70 to-[#050813]/80" />
+            <div className="absolute inset-0 bg-gradient-to-r from-black/88 via-[#070b19]/70 to-[#050813]/80" />
           </div>
         ) : (
           <div className="absolute inset-0 bg-gradient-to-r from-black via-[#070b19] to-[#050813]" aria-hidden="true" />
         )}
         <div className="relative z-10 mx-auto flex max-w-7xl flex-col gap-10 px-4 py-16 sm:px-6 lg:flex-row lg:items-end lg:px-8">
           <div className="flex-1 space-y-6">
+            <div className="flex flex-wrap items-center justify-between gap-3 text-xs font-semibold uppercase tracking-[0.35em] text-white/70">
+              <Link
+                href="/"
+                className="rounded-full border border-white/25 bg-white/10 px-3 py-1 text-white transition hover:bg-white/20"
+              >
+                Loremaker
+              </Link>
+              <nav className="flex flex-wrap items-center gap-2 text-[0.65rem] tracking-[0.3em] sm:text-xs">
+                <Link href="/factions" className="rounded-full px-2 py-1 text-white/70 transition hover:text-white">
+                  Factions
+                </Link>
+                <Link href="/locations" className="rounded-full px-2 py-1 text-white/70 transition hover:text-white">
+                  Locations
+                </Link>
+                <Link href="/powers" className="rounded-full px-2 py-1 text-white/70 transition hover:text-white">
+                  Powers
+                </Link>
+                <Link href="/timelines" className="rounded-full px-2 py-1 text-white/70 transition hover:text-white">
+                  Timelines
+                </Link>
+              </nav>
+            </div>
             <Link
               href={basePath}
               className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-5 py-2 text-sm font-semibold text-white/80 transition hover:border-white/40 hover:text-white"
@@ -192,42 +679,51 @@ export function TaxonomyDetailLayout({
                 </div>
                 <span className="mt-3 inline-flex items-center gap-1 text-xs font-semibold uppercase tracking-[0.3em] text-amber-200">
                   View dossier
+                  <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
                 </span>
               </Link>
             ))}
           </div>
         </section>
-        {entry.metrics?.averageLevel && (
-          <section className="rounded-3xl border border-white/12 bg-white/5 p-6 backdrop-blur-xl">
-            <h2 className="text-xl font-black text-white">Power metrics</h2>
-            <p className="mt-2 text-sm font-semibold text-white/70">Average mastery across the known wielders of this ability.</p>
-            <div className="mt-4 flex flex-wrap items-baseline gap-4">
-              <div className="text-4xl font-black text-amber-200">{entry.metrics.averageLevel}</div>
-              <div className="text-sm font-semibold text-white/60">Average rating out of 10</div>
-            </div>
-          </section>
-        )}
         {relatedEntries.length > 0 && (
-          <section className="space-y-4">
-            <h2 className="text-2xl font-black text-white">More {plural.toLowerCase()}</h2>
+          <section className="space-y-6">
+            <h2 className="text-2xl font-black text-white">Connected lore</h2>
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {relatedEntries.map((item) => (
+              {relatedEntries.map((related) => (
                 <Link
-                  key={item.slug}
-                  href={`${basePath}/${item.slug}`}
+                  key={related.slug}
+                  href={`${basePath}/${related.slug}`}
                   className="group overflow-hidden rounded-3xl border border-white/12 bg-white/5 p-5 transition hover:border-amber-300/60 hover:bg-amber-200/10 backdrop-blur-xl"
                 >
-                  <p className="text-lg font-bold text-white">{item.name}</p>
-                  <p className="mt-2 text-sm font-semibold text-white/70 line-clamp-3">{item.summary}</p>
-                  <span className="mt-4 inline-flex items-center gap-1 text-xs font-semibold uppercase tracking-[0.3em] text-amber-200">
-                    Explore dossier
-                  </span>
+                  <div className="flex items-center gap-3">
+                    <div className="h-14 w-14 overflow-hidden rounded-2xl border border-white/20 bg-black/40">
+                      {related.primaryImage ? (
+                        <ImageSafe
+                          src={related.primaryImage}
+                          alt={characterAltText(related.name)}
+                          fallbackLabel={related.name}
+                          className="h-full w-full object-cover"
+                          loading="lazy"
+                        />
+                      ) : (
+                        <div className="flex h-full w-full items-center justify-center bg-black/60">
+                          <Insignia label={related.name} size={40} />
+                        </div>
+                      )}
+                    </div>
+                    <div>
+                      <p className="text-lg font-bold text-white">{related.name}</p>
+                      <p className="text-xs font-semibold uppercase tracking-[0.3em] text-white/60">{related.memberCount} dossier{related.memberCount === 1 ? "" : "s"}</p>
+                    </div>
+                  </div>
+                  {related.summary && <p className="mt-3 text-sm font-semibold text-white/70">{related.summary}</p>}
                 </Link>
               ))}
             </div>
           </section>
         )}
       </main>
+      <SiteFooter arenaHref="/#arena-anchor" />
     </div>
   );
 }
