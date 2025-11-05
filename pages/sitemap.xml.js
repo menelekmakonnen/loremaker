@@ -1,9 +1,9 @@
 import fallbackCharacters from "../data/fallback-characters.json";
-import { fetchCharactersFromSheets } from "../lib/characters";
+import { fetchCharactersFromSheets, fillDailyPowers } from "../lib/characters";
 
-const DEFAULT_SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL || "https://loremaker.app").replace(/\/$/, "");
+const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL || "https://loremaker.app").replace(/\/$/, "");
 
-function slugify(value) {
+function slugifyId(value) {
   return (value || "")
     .toString()
     .toLowerCase()
@@ -11,67 +11,68 @@ function slugify(value) {
     .replace(/(^-|-$)+/g, "");
 }
 
-function escapeXml(value) {
-  return value
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&apos;");
-}
-
-function buildUrlNode({ loc, changefreq = "weekly", priority = "0.5", lastmod }) {
-  const lines = ["  <url>", `    <loc>${escapeXml(loc)}</loc>`, `    <changefreq>${changefreq}</changefreq>`, `    <priority>${priority}</priority>`];
-  if (lastmod) {
-    lines.splice(3, 0, `    <lastmod>${escapeXml(lastmod)}</lastmod>`);
-  }
-  lines.push("  </url>");
-  return lines.join("\n");
-}
-
-function buildSitemap(characters, siteUrl) {
-  const today = new Date().toISOString().slice(0, 10);
-  const urls = [
-    buildUrlNode({ loc: siteUrl, changefreq: "daily", priority: "1.0", lastmod: today }),
-  ];
-
-  characters.forEach((character) => {
-    if (!character || !character.name) return;
-    const slug = character.id || slugify(character.name);
-    if (!slug) return;
-    urls.push(
-      buildUrlNode({
-        loc: `${siteUrl}/characters/${slug}`,
-        changefreq: "weekly",
-        priority: "0.8",
-        lastmod: today,
-      })
-    );
-  });
-
-  return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls.join("\n")}\n</urlset>`;
-}
-
-export default function Sitemap() {
-  return null;
-}
-
-export async function getServerSideProps({ res }) {
-  let characters = fallbackCharacters;
-
+async function loadCharacters() {
   try {
-    const fetched = await fetchCharactersFromSheets();
-    if (Array.isArray(fetched) && fetched.length) {
-      characters = fetched;
+    const remote = await fetchCharactersFromSheets();
+    if (remote?.length) {
+      return remote;
     }
   } catch (error) {
     console.warn("[sitemap] Falling back to bundled characters", error);
   }
+  return fallbackCharacters.map((char) => fillDailyPowers(char));
+}
 
-  const xml = buildSitemap(characters, DEFAULT_SITE_URL);
-  res.setHeader("Content-Type", "application/xml");
-  res.write(xml);
+export async function getServerSideProps({ res }) {
+  const characters = await loadCharacters();
+  const now = new Date().toISOString();
+  const urls = [
+    {
+      loc: `${SITE_URL}/`,
+      changefreq: "daily",
+      priority: "1.0",
+      lastmod: now,
+    },
+    ...characters
+      .map((character) => {
+        const slug = character?.id || slugifyId(character?.name);
+        if (!slug) return null;
+        return {
+          loc: `${SITE_URL}/characters/${slug}`,
+          changefreq: "weekly",
+          priority: "0.8",
+          lastmod: now,
+        };
+      })
+      .filter(Boolean),
+  ];
+
+  const body = [
+    "<?xml version=\"1.0\" encoding=\"UTF-8\"?>",
+    '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
+    ...urls.map(
+      (url) =>
+        [
+          "  <url>",
+          `    <loc>${url.loc}</loc>`,
+          url.lastmod ? `    <lastmod>${url.lastmod}</lastmod>` : null,
+          url.changefreq ? `    <changefreq>${url.changefreq}</changefreq>` : null,
+          url.priority ? `    <priority>${url.priority}</priority>` : null,
+          "  </url>",
+        ]
+          .filter(Boolean)
+          .join("\n")
+    ),
+    "</urlset>",
+  ].join("\n");
+
+  res.setHeader("Content-Type", "text/xml");
+  res.write(body);
   res.end();
 
   return { props: {} };
+}
+
+export default function SiteMap() {
+  return null;
 }
