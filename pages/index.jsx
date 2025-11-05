@@ -704,19 +704,20 @@ function RosterSlide({ slide, icon, facetKey, onFacet, onOpenCharacter, limit, b
         : `Masters of ${payload.name}`;
 
   return (
-    <div className="relative h-full bg-black/40 text-white">
+    <div className="relative flex h-full w-full flex-col justify-center overflow-hidden text-white">
+      <div className="absolute inset-0 bg-black/60" />
       {background && (
         <div className="absolute inset-0 overflow-hidden">
           <ImageSafe
             src={background}
             alt={characterAltText(payload.name)}
             fallbackLabel={payload.name}
-            className="h-full w-full object-cover object-[72%_center]"
+            className="h-full w-full object-cover object-center"
           />
           <div className="absolute inset-0 bg-gradient-to-r from-black/85 via-[#080d22]/75 to-[#050811]/45" />
         </div>
       )}
-      <div className="relative grid h-full gap-8 bg-black/40 p-8 backdrop-blur-lg lg:grid-cols-[2fr_3fr]">
+      <div className="relative z-10 grid h-full gap-8 px-8 py-10 backdrop-blur-lg lg:grid-cols-[2fr_3fr] lg:gap-12 xl:px-14">
         <div className="space-y-4">
           <div className="flex items-center gap-3 text-xs font-bold tracking-[0.35em] text-white/70">
             {icon}
@@ -4024,11 +4025,11 @@ function HeroSection({
             </Button>
           </div>
         </header>
-        <div className="mt-8 flex flex-1 flex-col gap-10 sm:mt-12">
-          <div className="flex flex-1 items-center">
+        <div className="mt-6 flex flex-1 flex-col sm:mt-10">
+          <div className="flex flex-1 items-stretch">
             <div
               className={cx(
-                "relative flex-1 overflow-hidden shadow-[0_50px_160px_rgba(8,10,26,0.6)] touch-pan-y",
+                "relative flex-1 overflow-hidden touch-pan-y -mx-4 sm:-mx-8 lg:-mx-16 xl:-mx-20 2xl:-mx-24",
                 heroHeightClass
               )}
               onPointerDown={handleSlidePointerDown}
