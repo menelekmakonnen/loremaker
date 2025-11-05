@@ -684,7 +684,16 @@ function HeroDynamicBackground({ pointer, ripples }) {
   );
 }
 
-function RosterSlide({ slide, icon, facetKey, onFacet, onOpenCharacter, limit, background }) {
+function RosterSlide({
+  slide,
+  icon,
+  facetKey,
+  onFacet,
+  onOpenCharacter,
+  onScrollToCharacters,
+  limit,
+  background,
+}) {
   const payload = slide.data;
   if (!payload?.name) {
     return (
@@ -726,15 +735,20 @@ function RosterSlide({ slide, icon, facetKey, onFacet, onOpenCharacter, limit, b
           <h2 className="text-2xl font-black leading-tight text-balance sm:text-4xl">{payload.name}</h2>
           <p className="text-sm font-semibold text-white/75">{descriptor}</p>
           <div className="flex flex-wrap gap-2">
-            <Button
-              type="button"
-              variant="gradient"
-              size="sm"
-              onClick={() => {
+          <Button
+            type="button"
+            variant="gradient"
+            size="sm"
+            onClick={(event) => {
+              event.stopPropagation();
+              if (payload?.name) {
                 onFacet?.({ key: facetKey, value: payload.name });
-              }}
-              className="shadow-[0_10px_30px_rgba(250,204,21,0.25)]"
-            >
+                setTimeout(() => onScrollToCharacters?.(), 80);
+              }
+            }}
+            data-hero-control="true"
+            className="shadow-[0_10px_30px_rgba(250,204,21,0.25)]"
+          >
               Filter by {payload.name}
             </Button>
           </div>
@@ -744,7 +758,11 @@ function RosterSlide({ slide, icon, facetKey, onFacet, onOpenCharacter, limit, b
             <button
               key={member.id || member.name}
               type="button"
-              onClick={() => onOpenCharacter?.(member)}
+              onClick={(event) => {
+                event.stopPropagation();
+                onOpenCharacter?.(member);
+              }}
+              data-hero-control="true"
               className="flex items-center gap-3 rounded-3xl border border-white/15 bg-white/10 p-3 text-left transition hover:bg-white/20"
             >
               <Insignia label={member.name} size={40} variant={slide.key === "faction" ? "faction" : "character"} />
@@ -1099,11 +1117,11 @@ function CharacterCard({ char, onOpen, onFacet, onUseInSim, highlight }) {
                 <div className="text-xs font-semibold text-white/80">{accentLabel}</div>
                 <h2 className="text-lg font-black leading-tight text-white">{char.name}</h2>
                 {primaryAlias && (
-                  <span className="text-[11px] font-semibold text-white/65">{primaryAlias}</span>
+                  <span className="text-sm font-semibold text-white/70">{primaryAlias}</span>
                 )}
               </div>
               {statusMeta && (
-                <span className="absolute left-3 top-3 inline-flex items-center gap-2 rounded-full border border-white/25 bg-black/60 px-3 py-1 text-[11px] font-semibold text-white shadow-md">
+                <span className="absolute left-3 top-3 inline-flex items-center gap-2 rounded-full border border-white/25 bg-black/60 px-3 py-1 text-xs font-semibold text-white shadow-md">
                   <statusMeta.icon className="h-3.5 w-3.5 text-white/80" aria-hidden="true" />
                   <span>{statusMeta.label}</span>
                   <span className={cx("h-2 w-2 rounded-full", statusMeta.dot)} />
@@ -1125,7 +1143,7 @@ function CharacterCard({ char, onOpen, onFacet, onUseInSim, highlight }) {
         </div>
         <div className="flex flex-1 flex-col justify-between px-4 pb-4 pt-3 text-white/80">
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <span className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-3 py-1 text-[11px] font-semibold text-white">
+            <span className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-3 py-1 text-xs font-semibold text-white">
               <span>{alignmentLabel}</span>
               {statusMeta && (
                 <span className="flex items-center gap-1 text-white/70">
@@ -1159,13 +1177,13 @@ function CharacterCard({ char, onOpen, onFacet, onUseInSim, highlight }) {
                   event.stopPropagation();
                   onFacet?.(item);
                 }}
-                className="rounded-full border border-white/25 bg-white/10 px-3 py-1 text-[11px] font-semibold text-white/80 transition hover:bg-white/20"
+                className="rounded-full border border-white/25 bg-white/10 px-3 py-1 text-xs font-semibold text-white/80 transition hover:bg-white/20"
               >
                 {item.value}
               </button>
             ))}
             {!minimalFilters.length && !!highlightFacts.length && (
-              <span className="rounded-full border border-white/15 bg-white/10 px-3 py-1 text-[11px] font-semibold text-white/70">
+              <span className="rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs font-semibold text-white/70">
                 {highlightFacts.join(" • ")}
               </span>
             )}
@@ -1282,7 +1300,7 @@ function Gallery({ images, cover, name }) {
           aria-label="Open full-size gallery"
           data-gallery-control
         >
-          <span className="rounded-full border border-white/30 bg-black/60 px-3 py-1 text-[11px] font-semibold text-white/80 shadow-lg">
+          <span className="rounded-full border border-white/30 bg-black/60 px-3 py-1 text-xs font-semibold text-white/80 shadow-lg">
             Tap to expand
           </span>
         </button>
@@ -1361,7 +1379,7 @@ function Gallery({ images, cover, name }) {
                   fallbackLabel={name}
                   className="mx-auto max-h-[70vh] w-auto max-w-full rounded-[32px] border border-white/20 object-contain shadow-[0_40px_140px_rgba(0,0,0,0.6)]"
                 />
-                <div className="absolute bottom-4 left-1/2 flex -translate-x-1/2 items-center gap-3 rounded-full bg-black/60 px-4 py-2 text-[11px] font-semibold text-white/80">
+                <div className="absolute bottom-4 left-1/2 flex -translate-x-1/2 items-center gap-3 rounded-full bg-black/60 px-4 py-2 text-xs font-semibold text-white/80">
                   <span>
                     {index + 1} / {sources.length}
                   </span>
@@ -1699,32 +1717,43 @@ function CharacterModal({ open, onClose, char, onFacet, onUseInSim, onNavigate }
 const PAGE_SIZE = 24;
 function CharacterGrid({ data, onOpen, onFacet, onUseInSim, highlightId }) {
   const [page, setPage] = useState(1);
+  const sentinelRef = useRef(null);
   useEffect(() => setPage(1), [data]);
   useEffect(() => {
-    const handler = () => {
-      const { scrollTop, clientHeight, scrollHeight } = document.documentElement;
-      if (scrollTop + clientHeight >= scrollHeight - 320) {
-        setPage((current) => (current * PAGE_SIZE < data.length ? current + 1 : current));
-      }
-    };
-    window.addEventListener("scroll", handler);
-    return () => window.removeEventListener("scroll", handler);
-  }, [data.length]);
+    const sentinel = sentinelRef.current;
+    if (!sentinel) return undefined;
+    if (page * PAGE_SIZE >= data.length) return undefined;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            setPage((current) => (current * PAGE_SIZE < data.length ? current + 1 : current));
+          }
+        });
+      },
+      { root: null, rootMargin: "320px 0px" }
+    );
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [data.length, page]);
   const slice = data.slice(0, page * PAGE_SIZE);
   return (
-    <div className="grid grid-cols-2 gap-4 pb-24 sm:grid-cols-3 sm:gap-5 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6">
-      {slice.map((c) => (
-        <CharacterCard
-          key={c.id}
-          char={c}
-          onOpen={onOpen}
-          onFacet={onFacet}
-          onUseInSim={onUseInSim}
-          highlight={highlightId === c.id}
-        />
-      ))}
-      {!slice.length && <div className="text-lg font-black text-white">No characters match your filters… yet.</div>}
-    </div>
+    <>
+      <div className="grid grid-cols-2 gap-4 pb-24 sm:grid-cols-3 sm:gap-5 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6">
+        {slice.map((c) => (
+          <CharacterCard
+            key={c.id}
+            char={c}
+            onOpen={onOpen}
+            onFacet={onFacet}
+            onUseInSim={onUseInSim}
+            highlight={highlightId === c.id}
+          />
+        ))}
+        {!slice.length && <div className="text-lg font-black text-white">No characters match your filters… yet.</div>}
+      </div>
+      <div ref={sentinelRef} className="h-1" aria-hidden="true" />
+    </>
   );
 }
 
@@ -1931,12 +1960,12 @@ function ArenaCard({ char, position, onRelease, onOpen, health, isWinner, showX,
           X
         </motion.div>
       )}
-      <div className="flex flex-wrap items-center justify-between gap-2 text-[9px] sm:text-xs">
+      <div className="flex flex-wrap items-center justify-between gap-2 text-xs sm:text-sm">
         <div className="flex flex-col gap-1">
-          <Badge className="bg-slate-800/80 px-3 py-1 text-[10px] tracking-[0.28em] text-slate-200 sm:text-xs">
+          <Badge className="bg-slate-800/80 px-3 py-1 text-xs tracking-[0.28em] text-slate-200 sm:text-sm">
             {char.name}
           </Badge>
-          <span className="text-[9px] font-semibold uppercase tracking-[0.35em] text-slate-500 sm:text-[10px]">
+          <span className="text-xs font-semibold uppercase tracking-[0.3em] text-slate-500 sm:text-sm">
             {descriptor}
           </span>
         </div>
@@ -1944,7 +1973,7 @@ function ArenaCard({ char, position, onRelease, onOpen, health, isWinner, showX,
           <Button
             variant="ghost"
             size="sm"
-            className="h-9 px-3 text-[9px] sm:h-auto sm:text-[11px]"
+              className="h-9 px-3 text-xs sm:h-auto sm:text-sm"
             onClick={() => onRandomize?.()}
             aria-label="Randomise combatant"
           >
@@ -1954,7 +1983,7 @@ function ArenaCard({ char, position, onRelease, onOpen, health, isWinner, showX,
           <Button
             variant="ghost"
             size="sm"
-            className="h-9 px-3 text-[9px] sm:h-auto sm:text-[11px]"
+              className="h-9 px-3 text-xs sm:h-auto sm:text-sm"
             onClick={() => onOpen(char)}
             aria-label="View combatant details"
           >
@@ -1964,7 +1993,7 @@ function ArenaCard({ char, position, onRelease, onOpen, health, isWinner, showX,
           <Button
             variant="outline"
             size="sm"
-            className="h-9 px-3 text-[9px] sm:h-auto sm:text-[11px]"
+              className="h-9 px-3 text-xs sm:h-auto sm:text-sm"
             onClick={() => onRelease(char.id)}
             aria-label="Remove combatant"
           >
@@ -1978,7 +2007,7 @@ function ArenaCard({ char, position, onRelease, onOpen, health, isWinner, showX,
         <div className="text-base font-black text-white">{char.name}</div>
       </div>
       <button onClick={() => onOpen(char)} className="mt-3 block w-full text-left">
-        <div className="text-[9px] font-bold tracking-wide text-slate-400 sm:text-xs">Health</div>
+        <div className="text-xs font-bold tracking-wide text-slate-400 sm:text-sm">Health</div>
         <div className="mt-1 h-3 w-full overflow-hidden rounded-full bg-slate-800">
           <motion.div
             key={health}
@@ -1996,40 +2025,40 @@ function ArenaCard({ char, position, onRelease, onOpen, health, isWinner, showX,
           fallbackLabel={char.name}
           className="hidden h-24 w-24 rounded-2xl border border-slate-700 object-cover sm:block sm:h-32 sm:w-32"
         />
-        <div className="flex-1 space-y-3 text-[10px] sm:text-xs">
+        <div className="flex-1 space-y-3 text-xs sm:text-sm">
           <div className="hidden text-lg font-black text-white sm:block sm:text-xl">{char.name}</div>
           <div className="grid grid-cols-2 gap-2">
             {char.gender && (
               <div>
-                <div className="text-[9px] font-bold tracking-wide text-slate-400 sm:text-[10px]">Gender</div>
+                <div className="text-xs font-bold tracking-wide text-slate-400 sm:text-sm">Gender</div>
                 <div className="text-xs font-extrabold text-white sm:text-sm">{char.gender}</div>
               </div>
             )}
             {char.alignment && (
               <div className="hidden sm:block">
-                <div className="text-[9px] font-bold tracking-wide text-slate-400 sm:text-[10px]">Alignment</div>
+                <div className="text-xs font-bold tracking-wide text-slate-400 sm:text-sm">Alignment</div>
                 <div className="text-xs font-extrabold text-white sm:text-sm">{char.alignment}</div>
               </div>
             )}
             {char.status && (
               <div className="hidden sm:block">
-                <div className="text-[9px] font-bold tracking-wide text-slate-400 sm:text-[10px]">Status</div>
+                <div className="text-xs font-bold tracking-wide text-slate-400 sm:text-sm">Status</div>
                 <div className="text-xs font-extrabold text-white sm:text-sm">{char.status}</div>
               </div>
             )}
             {char.era && (
               <div>
-                <div className="text-[9px] font-bold tracking-wide text-slate-400 sm:text-[10px]">Era</div>
+                <div className="text-xs font-bold tracking-wide text-slate-400 sm:text-sm">Era</div>
                 <div className="text-xs font-extrabold text-white sm:text-sm">{char.era}</div>
               </div>
             )}
           </div>
           {!!topLocations.length && (
             <div className="hidden sm:block">
-              <div className="text-[9px] font-bold tracking-wide text-slate-400 sm:text-[10px]">Locations</div>
+            <div className="text-xs font-bold tracking-wide text-slate-400 sm:text-sm">Locations</div>
               <div className="flex flex-wrap gap-1">
                 {topLocations.map((loc) => (
-                  <span key={loc} className="rounded-full bg-slate-800/80 px-2 py-1 text-[9px] font-bold tracking-wide text-white sm:text-[10px]">
+                  <span key={loc} className="rounded-full bg-slate-800/80 px-2 py-1 text-xs font-bold tracking-wide text-white sm:text-sm">
                     {loc}
                   </span>
                 ))}
@@ -2038,10 +2067,10 @@ function ArenaCard({ char, position, onRelease, onOpen, health, isWinner, showX,
           )}
           {!!topFactions.length && (
             <div>
-              <div className="text-[9px] font-bold tracking-wide text-slate-400 sm:text-[10px]">Factions</div>
+            <div className="text-xs font-bold tracking-wide text-slate-400 sm:text-sm">Factions</div>
               <div className="flex flex-wrap gap-1">
                 {topFactions.map((faction) => (
-                  <span key={faction} className="rounded-full bg-slate-800/80 px-2 py-1 text-[9px] font-bold tracking-wide text-white sm:text-[10px]">
+                  <span key={faction} className="rounded-full bg-slate-800/80 px-2 py-1 text-xs font-bold tracking-wide text-white sm:text-sm">
                     {faction}
                   </span>
                 ))}
@@ -2050,10 +2079,10 @@ function ArenaCard({ char, position, onRelease, onOpen, health, isWinner, showX,
           )}
           {!!topTags.length && (
             <div className="hidden sm:block">
-              <div className="text-[9px] font-bold tracking-wide text-slate-400 sm:text-[10px]">Tags</div>
+            <div className="text-xs font-bold tracking-wide text-slate-400 sm:text-sm">Tags</div>
               <div className="flex flex-wrap gap-1">
                 {topTags.map((tag) => (
-                  <span key={tag} className="rounded-full bg-slate-800/80 px-2 py-1 text-[9px] font-bold tracking-wide text-white sm:text-[10px]">
+                  <span key={tag} className="rounded-full bg-slate-800/80 px-2 py-1 text-xs font-bold tracking-wide text-white sm:text-sm">
                     {tag}
                   </span>
                 ))}
@@ -2065,7 +2094,7 @@ function ArenaCard({ char, position, onRelease, onOpen, health, isWinner, showX,
       <div className="mt-4 space-y-2">
         {visiblePowers.map((power) => (
           <div key={power.name}>
-            <div className="mb-1 flex items-center justify-between text-[10px] font-bold text-slate-200 sm:text-xs">
+            <div className="mb-1 flex items-center justify-between text-xs font-bold text-slate-200 sm:text-sm">
               <span className="truncate pr-2">{power.name}</span>
               <span>{power.level}/10</span>
             </div>
@@ -2076,7 +2105,7 @@ function ArenaCard({ char, position, onRelease, onOpen, health, isWinner, showX,
           <button
             type="button"
             onClick={() => setExpanded((state) => !state)}
-            className="w-full rounded-full border border-slate-700/70 bg-slate-900/80 px-3 py-1.5 text-[10px] font-bold tracking-wide text-slate-200 transition hover:bg-slate-800"
+      className="w-full rounded-full border border-slate-700/70 bg-slate-900/80 px-3 py-1.5 text-xs font-bold tracking-wide text-slate-200 transition hover:bg-slate-800"
           >
             {expanded ? "Hide extended powers" : `Reveal all ${powers.length} powers`}
           </button>
@@ -2084,8 +2113,8 @@ function ArenaCard({ char, position, onRelease, onOpen, health, isWinner, showX,
       </div>
       {!!(char.stories || []).length && (
         <div className="mt-4">
-          <div className="text-[9px] font-bold tracking-wide text-slate-400 sm:text-[10px]">Stories</div>
-          <div className="mt-1 flex flex-wrap gap-1.5 text-[10px] font-semibold text-slate-300 sm:text-[11px]">
+    <div className="text-xs font-bold tracking-wide text-slate-400 sm:text-sm">Stories</div>
+          <div className="mt-1 flex flex-wrap gap-1.5 text-xs font-semibold text-slate-300 sm:text-sm">
             {(char.stories || []).map((story) => (
               <span key={story} className="rounded-full bg-slate-800/60 px-2 py-1">
                 {story}
@@ -2294,11 +2323,11 @@ function BattleArena({ characters, slots, setSlots, onOpenCharacter, pulseKey, o
               >
                 <Swords className="h-10 w-10" />
               </motion.button>
-              <div className="flex flex-col gap-2 text-[10px] font-bold text-slate-200 sm:text-xs">
-                <Button variant="gradient" size="sm" onClick={runBattle} className="text-[10px] sm:text-[11px]">
+              <div className="flex flex-col gap-2 text-xs font-bold text-slate-200 sm:text-sm">
+                <Button variant="gradient" size="sm" onClick={runBattle} className="text-xs sm:text-sm">
                   Fight
                 </Button>
-                <Button variant="destructive" size="sm" onClick={reset} className="text-[10px] sm:text-[11px]">
+                <Button variant="destructive" size="sm" onClick={reset} className="text-xs sm:text-sm">
                   Reset Arena
                 </Button>
                 {onClose && (
@@ -2306,12 +2335,12 @@ function BattleArena({ characters, slots, setSlots, onOpenCharacter, pulseKey, o
                     variant="outline"
                     size="sm"
                     onClick={onClose}
-                    className="text-[10px] sm:text-[11px]"
+                    className="text-xs sm:text-sm"
                   >
                     Close Arena
                   </Button>
                 )}
-                <span className="text-[10px] font-semibold tracking-[0.3em] text-slate-400">
+                <span className="text-xs font-semibold tracking-[0.3em] text-slate-400">
                   Tap combatants to view dossiers
                 </span>
               </div>
@@ -2334,7 +2363,7 @@ function BattleArena({ characters, slots, setSlots, onOpenCharacter, pulseKey, o
               <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3">
                 {timeline.map((phase) => (
                   <div key={phase.round} className="rounded-xl border border-white/10 bg-[#141a38]/80 p-3 text-slate-200">
-                    <div className="text-[11px] font-bold tracking-wide text-slate-400">Round {phase.round}</div>
+                    <div className="text-xs font-bold tracking-wide text-slate-400">Round {phase.round}</div>
                     <div className="mt-2 space-y-1">
                       <div>A Strike: {phase.strikeA}</div>
                       <div>A Luck: {phase.luckA}</div>
@@ -2405,11 +2434,11 @@ function SidebarFilters({ data, filters, setFilters, combineAND, setCombineAND, 
           <Switch checked={combineAND} onCheckedChange={setCombineAND} aria-describedby={blendTooltipId} />
         </div>
       </div>
-      <p className="text-[11px] font-semibold leading-relaxed text-white/65">
+      <p className="text-sm font-semibold leading-relaxed text-white/70">
         Use the global search above the codex for anything specific. These filters stay open so you can tap through factions,
         locations, powers, and more without losing your place.
       </p>
-      <p id={blendTooltipId} className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-[11px] font-semibold leading-relaxed text-white/70">
+      <p id={blendTooltipId} className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm font-semibold leading-relaxed text-white/70">
         Blend finds legends that match any of your selections. Switch to AND for precise dossiers that match every chosen filter.
       </p>
       <Button variant="destructive" className="w-full" onClick={onClear}>
@@ -2821,7 +2850,7 @@ function ToolsBar({
               >
                 <RefreshCcw className="h-4 w-4" aria-hidden="true" />
               </button>
-              <div className="ml-1 flex flex-none items-center gap-1 rounded-lg border border-white/15 bg-white/10 px-2 py-1 text-[10px] font-semibold text-white/80">
+              <div className="ml-1 flex flex-none items-center gap-1 rounded-lg border border-white/15 bg-white/10 px-2 py-1 text-xs font-semibold text-white/80">
                 <Users className="h-3.5 w-3.5 text-amber-200" aria-hidden="true" />
                 <span>{shortCountLabel}</span>
               </div>
@@ -2997,7 +3026,7 @@ function ToolsBar({
                 >
                   <RefreshCcw className="h-4 w-4" aria-hidden="true" />
                 </button>
-                <div className="ml-1 inline-flex flex-none items-center gap-1 rounded-lg border border-white/20 bg-black/60 px-3 py-1.5 text-[11px] font-semibold text-white/80">
+                <div className="ml-1 inline-flex flex-none items-center gap-1 rounded-lg border border-white/20 bg-black/60 px-3 py-1.5 text-xs font-semibold text-white/80">
                   <Users className="h-3.5 w-3.5 text-amber-200" aria-hidden="true" />
                   <span>{shortCountLabel}</span>
                 </div>
@@ -3172,7 +3201,7 @@ function FilterSection({ title, values, single, activeValues, onToggle, searchTe
             ))}
           </div>
         ) : (
-          <p className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-[11px] font-semibold tracking-wide text-white/60">
+          <p className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs font-semibold tracking-wide text-white/60">
             No matches
           </p>
         )}
@@ -3584,7 +3613,10 @@ function HeroSection({
     const openProfile = () => onOpenCharacter?.(char);
     const handleFacetClick = (event, payload) => {
       event.stopPropagation();
-      if (payload?.value) onFacet?.(payload);
+      if (payload?.value) {
+        onFacet?.(payload);
+        setTimeout(() => onScrollToCharacters?.(), 80);
+      }
       openProfile();
     };
     const dossierAria = activeSnippet
@@ -3630,7 +3662,7 @@ function HeroSection({
           )}
           <div className="absolute inset-0 bg-gradient-to-b from-black/85 via-[#080d22]/72 to-[#050811]/55" />
           <div className="relative z-10 space-y-3">
-            <Badge className="bg-white/15 text-[10px] font-semibold uppercase tracking-[0.3em] text-white/80">{slide.label}</Badge>
+            <Badge className="bg-white/15 text-xs font-semibold uppercase tracking-[0.3em] text-white/80">{slide.label}</Badge>
             <div className="space-y-1">
               <h2 className="text-3xl font-black leading-tight">{char.name}</h2>
               {primaryAlias && <p className="text-sm font-semibold text-white/75">also known as {primaryAlias}</p>}
@@ -3640,14 +3672,14 @@ function HeroSection({
                 type="button"
                 onClick={(event) => handleFacetClick(event, { key: "locations", value: primaryLocation })}
                 data-hero-control="true"
-                className="rounded-full border border-white/25 bg-white/10 px-3 py-1 text-[11px] font-semibold text-white/85"
+                className="rounded-full border border-white/25 bg-white/10 px-3 py-1 text-xs font-semibold text-white/85"
               >
                 {primaryLocation}
               </button>
             )}
             {mobileSnippet && <p className="text-sm font-semibold text-white/80">{mobileSnippet}</p>}
             {topPowers[0] && (
-              <div className="flex items-center gap-2 text-[11px] font-semibold text-white/75">
+              <div className="flex items-center gap-2 text-xs font-semibold text-white/75">
                 <Atom className="h-4 w-4" aria-hidden="true" /> {topPowers[0].name} • {topPowers[0].level}/10
               </div>
             )}
@@ -3724,7 +3756,7 @@ function HeroSection({
         )}
         <div className="absolute inset-0 bg-gradient-to-r from-black/85 via-[#080d22]/70 to-[#050811]/45" />
         <div className="relative z-10 flex max-w-4xl flex-col gap-6">
-          <Badge className="w-max bg-white/15 px-4 py-1 text-[11px] font-semibold uppercase tracking-[0.35em] text-white/80">
+          <Badge className="w-max bg-white/15 px-4 py-1 text-xs font-semibold uppercase tracking-[0.35em] text-white/80">
             {slide.label}
           </Badge>
           <div className="space-y-3">
@@ -3734,7 +3766,7 @@ function HeroSection({
           <p className="max-w-3xl text-base font-semibold text-white/80 lg:text-lg">
             {activeSnippet || char.shortDesc || char.longDesc?.slice(0, 220) || "A legend awaits their tale to be told."}
           </p>
-          <div className="flex flex-wrap gap-2 text-[11px] sm:text-xs">
+          <div className="flex flex-wrap gap-2 text-xs sm:text-sm">
             {char.gender && (
               <FacetChip onClick={(event) => handleFacetClick(event, { key: "gender", value: char.gender })}>
                 {char.gender}
@@ -3781,6 +3813,7 @@ function HeroSection({
                 openProfile();
               }}
               aria-label={dossierAria}
+              data-hero-control="true"
               className="inline-flex items-center gap-3 rounded-full px-6 py-3 text-sm font-semibold shadow-[0_18px_48px_rgba(253,230,138,0.35)]"
             >
               Quick view
@@ -3792,6 +3825,7 @@ function HeroSection({
               variant="subtle"
               size="md"
               onClick={(event) => event.stopPropagation()}
+              data-hero-control="true"
               className="inline-flex items-center gap-3 rounded-full px-6 py-3 text-sm font-semibold"
             >
               Full profile
@@ -3966,6 +4000,7 @@ function HeroSection({
             facetKey="faction"
             onFacet={onFacet}
             onOpenCharacter={onOpenCharacter}
+            onScrollToCharacters={onScrollToCharacters}
             limit={isCompact ? 3 : 6}
             background={sharedBackground}
           />
@@ -3978,6 +4013,7 @@ function HeroSection({
             facetKey="locations"
             onFacet={onFacet}
             onOpenCharacter={onOpenCharacter}
+            onScrollToCharacters={onScrollToCharacters}
             limit={isCompact ? 3 : 6}
             background={sharedBackground}
           />
@@ -3990,6 +4026,7 @@ function HeroSection({
             facetKey="powers"
             onFacet={onFacet}
             onOpenCharacter={onOpenCharacter}
+            onScrollToCharacters={onScrollToCharacters}
             limit={isCompact ? 3 : 6}
             background={sharedBackground}
           />
@@ -4038,14 +4075,28 @@ function HeroSection({
       <HeroDynamicBackground pointer={pointer} ripples={ripples} />
       <HeroHalo />
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.18),transparent_55%)]" />
-      <div className="absolute inset-x-0 top-0 h-32 bg-gradient-to-b from-black/50 to-transparent" />
       <div className="absolute -left-24 bottom-0 h-72 w-72 rounded-full bg-amber-400/15 blur-3xl" />
       <div className="absolute -right-20 -top-10 h-72 w-72 rounded-full bg-fuchsia-500/15 blur-3xl" />
       <div className="relative z-10 flex min-h-screen w-full flex-col px-4 pb-[var(--toolbar-offset,9rem)] pt-10 sm:px-8 sm:pt-14 lg:px-16 xl:px-20 2xl:px-24">
         <header
           id="lore-header"
-          className="relative w-full overflow-hidden rounded-[32px] border border-white/30 bg-black/40 px-6 py-4 backdrop-blur-3xl shadow-[0_24px_80px_rgba(8,10,26,0.6)]"
+          className="relative w-full overflow-hidden rounded-[32px] border border-white/20 bg-black/35 px-6 py-4 backdrop-blur-3xl shadow-[0_24px_80px_rgba(8,10,26,0.6)]"
+          style={
+            sharedBackground
+              ? {
+                  backgroundImage: `linear-gradient(90deg, rgba(0,0,0,0.85) 0%, rgba(8,12,33,0.74) 50%, rgba(4,6,15,0.78) 100%), url(${JSON.stringify(
+                    sharedBackground
+                  )})`,
+                  backgroundSize: "cover",
+                  backgroundPosition: "70% center",
+                  backgroundRepeat: "no-repeat",
+                }
+              : undefined
+          }
         >
+          {!sharedBackground && (
+            <div className="pointer-events-none absolute inset-0 -z-10 bg-gradient-to-r from-black/85 via-[#080d22]/70 to-[#050811]/80" aria-hidden="true" />
+          )}
           <div className="relative z-10 flex w-full flex-wrap items-center justify-between gap-4">
             <div className="flex items-center gap-3">
               <LoreShield onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })} />
@@ -4260,6 +4311,28 @@ export default function LoremakerApp({ initialCharacters = [], initialError = nu
     setCurrentCharacter(null);
     setModalIndex(-1);
   }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return undefined;
+    const handleKeyDown = (event) => {
+      if (event.key !== "Escape") return;
+      let handled = false;
+      if (openModal) {
+        closeCharacter();
+        handled = true;
+      }
+      if (filtersOpen) {
+        setFiltersOpen(false);
+        handled = true;
+      }
+      if (handled) {
+        event.preventDefault();
+        event.stopPropagation();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [filtersOpen, openModal, closeCharacter]);
 
   const handleFacet = useCallback(({ key, value }) => {
     setFilters((prev) => {
@@ -4926,10 +4999,10 @@ export default function LoremakerApp({ initialCharacters = [], initialError = nu
           <div className="grid gap-8 md:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)]">
             <div className="space-y-4">
               <p className="text-xs font-black tracking-[0.35em] text-white/70">LoreMaker Universe</p>
-              <p className="text-[11px] font-semibold tracking-[0.3em] text-white/60">
+              <p className="text-sm font-semibold tracking-[0.3em] text-white/70">
                 © {currentYear} Menelek Makonnen.
               </p>
-              <p className="text-[11px] font-semibold tracking-[0.3em] text-white/60">
+              <p className="text-sm font-semibold tracking-[0.3em] text-white/70">
                 All characters, stories, lore, and artwork from the LoreMaker Universe are protected by copyright.
               </p>
             </div>
@@ -4941,7 +5014,7 @@ export default function LoremakerApp({ initialCharacters = [], initialError = nu
                   href="#arena-anchor"
                   variant="subtle"
                   size="sm"
-                  className="justify-start gap-2 px-4 text-[10px] tracking-[0.3em]"
+                  className="justify-start gap-2 px-4 text-xs tracking-[0.3em]"
                 >
                   <Swords className="h-4 w-4" aria-hidden="true" />
                   Battle Arena
@@ -4951,7 +5024,7 @@ export default function LoremakerApp({ initialCharacters = [], initialError = nu
                   onClick={handleRandomCharacter}
                   variant="subtle"
                   size="sm"
-                  className="justify-start gap-2 px-4 text-[10px] tracking-[0.3em]"
+                  className="justify-start gap-2 px-4 text-xs tracking-[0.3em]"
                 >
                   <Sparkles className="h-4 w-4" aria-hidden="true" />
                   Random Character
@@ -4961,10 +5034,50 @@ export default function LoremakerApp({ initialCharacters = [], initialError = nu
                   href="#characters-grid"
                   variant="subtle"
                   size="sm"
-                  className="justify-start gap-2 px-4 text-[10px] tracking-[0.3em]"
+                  className="justify-start gap-2 px-4 text-xs tracking-[0.3em]"
                 >
                   <Users className="h-4 w-4" aria-hidden="true" />
                   Character Archive
+                </Button>
+                <Button
+                  as="a"
+                  href="/factions"
+                  variant="subtle"
+                  size="sm"
+                  className="justify-start gap-2 px-4 text-xs tracking-[0.3em]"
+                >
+                  <Crown className="h-4 w-4" aria-hidden="true" />
+                  Factions Directory
+                </Button>
+                <Button
+                  as="a"
+                  href="/powers"
+                  variant="subtle"
+                  size="sm"
+                  className="justify-start gap-2 px-4 text-xs tracking-[0.3em]"
+                >
+                  <Atom className="h-4 w-4" aria-hidden="true" />
+                  Power Index
+                </Button>
+                <Button
+                  as="a"
+                  href="/locations"
+                  variant="subtle"
+                  size="sm"
+                  className="justify-start gap-2 px-4 text-xs tracking-[0.3em]"
+                >
+                  <MapPin className="h-4 w-4" aria-hidden="true" />
+                  World Footprints
+                </Button>
+                <Button
+                  as="a"
+                  href="/timelines"
+                  variant="subtle"
+                  size="sm"
+                  className="justify-start gap-2 px-4 text-xs tracking-[0.3em]"
+                >
+                  <Library className="h-4 w-4" aria-hidden="true" />
+                  Era Timelines
                 </Button>
               </div>
             </div>
@@ -4978,17 +5091,17 @@ export default function LoremakerApp({ initialCharacters = [], initialError = nu
                   rel="noreferrer"
                   variant="subtle"
                   size="sm"
-              className="justify-start gap-2 px-4 text-[10px] tracking-[0.3em]"
-            >
-              <ArrowRight className="h-4 w-4" aria-hidden="true" />
-              Menelek Makonnen
-            </Button>
+                  className="justify-start gap-2 px-4 text-xs tracking-[0.3em]"
+                >
+                  <ArrowRight className="h-4 w-4" aria-hidden="true" />
+                  Menelek Makonnen
+                </Button>
                 <Button
                   type="button"
                   onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
                   variant="ghost"
                   size="sm"
-                  className="justify-start gap-2 px-4 text-[10px] tracking-[0.3em] text-white/70 hover:text-white"
+                  className="justify-start gap-2 px-4 text-xs tracking-[0.3em] text-white/70 hover:text-white"
                 >
                   <ArrowUp className="h-4 w-4" aria-hidden="true" />
                   Back to Top

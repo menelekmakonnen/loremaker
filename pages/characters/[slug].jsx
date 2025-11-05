@@ -472,7 +472,7 @@ function GalleryCarousel({ images = [], name = "LoreMaker legend", onActiveChang
             </button>
           </>
         )}
-        <div className="pointer-events-none absolute inset-x-0 bottom-0 flex items-center justify-between bg-gradient-to-t from-black/85 via-black/40 to-transparent px-5 pb-4 pt-12 text-[11px] font-semibold uppercase tracking-[0.3em] text-white/80">
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 flex items-center justify-between bg-gradient-to-t from-black/85 via-black/40 to-transparent px-5 pb-4 pt-12 text-xs font-semibold uppercase tracking-[0.3em] text-white/80">
           <span>
             {activeIndex + 1} / {length}
           </span>
@@ -709,6 +709,20 @@ export default function CharacterProfilePage({ character, canonicalUrl, related,
     { title: "World footprint", icon: MapPin, groups: safeConnections.locations || [] },
     { title: "Power constellation", icon: Atom, groups: safeConnections.powers || [] },
   ].filter((section) => section.groups && section.groups.length);
+  const navSections = useMemo(() => {
+    const sections = [
+      { id: "story", label: "Story" },
+      { id: "identity", label: "Identity" },
+    ];
+    if (allyGroups.length) sections.push({ id: "allies", label: "Allies" });
+    if (tags.length) sections.push({ id: "motifs", label: "Motifs" });
+    if (powers.length) sections.push({ id: "powers", label: "Powers" });
+    if (stories.length) sections.push({ id: "appearances", label: "Appearances" });
+    if ((character.eraTags || []).length) sections.push({ id: "timelines", label: "Timelines" });
+    if (connectionSections.length) sections.push({ id: "connections", label: "Connections" });
+    if (related.length) sections.push({ id: "related", label: "More legends", shortLabel: "More" });
+    return sections;
+  }, [allyGroups.length, tags.length, powers.length, stories.length, character.eraTags, connectionSections.length, related.length]);
 
   return (
     <>
@@ -759,7 +773,7 @@ export default function CharacterProfilePage({ character, canonicalUrl, related,
             </AnimatePresence>
           </div>
           <div className="relative z-10 mx-auto max-w-7xl px-4 pb-24 pt-20 sm:px-6 lg:px-8">
-            <nav className="mb-10 flex w-full max-w-5xl items-center gap-3 text-[11px] font-semibold uppercase tracking-[0.35em] text-white/70">
+            <nav className="mb-10 flex w-full max-w-5xl items-center gap-3 text-xs font-semibold uppercase tracking-[0.35em] text-white/70">
               <Link
                 href="/"
                 className="inline-flex items-center gap-2 text-white transition hover:text-amber-200"
@@ -773,7 +787,7 @@ export default function CharacterProfilePage({ character, canonicalUrl, related,
             <div className="flex flex-col gap-12 lg:grid lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] lg:items-end">
               <div className="space-y-8">
                 <div className="space-y-4">
-                  <span className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-4 py-1 text-[11px] font-semibold uppercase tracking-[0.4em] text-white/75">
+                  <span className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-4 py-1 text-xs font-semibold uppercase tracking-[0.4em] text-white/75">
                     <Sparkles className="h-4 w-4 text-amber-200" aria-hidden="true" />
                     Featured legend
                   </span>
@@ -811,7 +825,7 @@ export default function CharacterProfilePage({ character, canonicalUrl, related,
                       <Link
                         key={era}
                         href={filterHref("era", era)}
-                        className="rounded-full border border-white/20 bg-white/10 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.35em] text-white/70 transition hover:border-amber-300/60 hover:text-amber-100"
+                    className="rounded-full border border-white/20 bg-white/10 px-3 py-1 text-[0.7rem] font-semibold uppercase tracking-[0.35em] text-white/70 transition hover:border-amber-300/60 hover:text-amber-100"
                         prefetch={false}
                       >
                         {era}
@@ -847,7 +861,33 @@ export default function CharacterProfilePage({ character, canonicalUrl, related,
           </div>
         </section>
         <main className="mx-auto max-w-7xl space-y-20 px-4 py-16 sm:px-6 lg:px-8">
-          <section className="grid gap-10 lg:grid-cols-12">
+          {navSections.length > 1 && (
+            <nav className="sticky top-24 z-10 mb-10 hidden flex-wrap gap-2 rounded-3xl border border-white/10 bg-black/40 px-4 py-3 backdrop-blur-xl sm:flex">
+              {navSections.map((item) => (
+                <a
+                  key={item.id}
+                  href={`#${item.id}`}
+                  className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1.5 text-xs font-semibold text-white/80 transition hover:border-amber-300/60 hover:text-amber-100"
+                >
+                  {item.label}
+                </a>
+              ))}
+            </nav>
+          )}
+          {navSections.length > 1 && (
+            <nav className="mb-8 flex flex-wrap gap-2 rounded-2xl border border-white/10 bg-black/40 px-3 py-3 backdrop-blur-xl sm:hidden">
+              {navSections.map((item) => (
+                <a
+                  key={item.id}
+                  href={`#${item.id}`}
+                  className="rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs font-semibold text-white/80 transition hover:border-amber-300/60 hover:text-amber-100"
+                >
+                  {item.shortLabel || item.label}
+                </a>
+              ))}
+            </nav>
+          )}
+          <section id="story" className="grid gap-10 lg:grid-cols-12">
             <article className="rounded-3xl border border-white/12 bg-white/5 p-8 shadow-[0_30px_120px_rgba(7,10,25,0.45)] backdrop-blur-xl lg:col-span-5">
               <h2 className="text-2xl font-black text-white">Story so far</h2>
               <p className="mt-2 text-sm font-semibold text-white/70">
@@ -859,7 +899,10 @@ export default function CharacterProfilePage({ character, canonicalUrl, related,
                 ))}
               </div>
             </article>
-            <article className="rounded-3xl border border-white/12 bg-white/5 p-8 backdrop-blur-xl lg:col-span-7 lg:col-start-6">
+            <article
+              id="identity"
+              className="rounded-3xl border border-white/12 bg-white/5 p-8 backdrop-blur-xl lg:col-span-7 lg:col-start-6"
+            >
               <h2 className="text-2xl font-black text-white">Identity &amp; allegiances</h2>
               <p className="mt-2 text-sm font-semibold text-white/70">
                 Essential identifiers, allegiances, and touchpoints.
@@ -867,14 +910,14 @@ export default function CharacterProfilePage({ character, canonicalUrl, related,
               <dl className="mt-6 grid gap-6 sm:grid-cols-2">
                 {dossierEntries.map((entry) => (
                   <div key={entry.label} className="space-y-2">
-                    <dt className="text-[11px] font-semibold uppercase tracking-[0.28em] text-white/60">{entry.label}</dt>
+                    <dt className="text-xs font-semibold uppercase tracking-[0.28em] text-white/60">{entry.label}</dt>
                     <dd className="flex flex-wrap gap-2 text-sm font-semibold text-white/85">
                       {(entry.values || []).map((value) =>
                         entry.key ? (
                           <Link
                             key={`${entry.label}-${value}`}
                             href={filterHref(entry.key, value)}
-                            className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-3 py-1 text-[11px] font-semibold text-white transition hover:border-amber-300/60 hover:text-amber-100"
+                            className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-3 py-1 text-xs font-semibold text-white transition hover:border-amber-300/60 hover:text-amber-100"
                             prefetch={false}
                           >
                             {value}
@@ -889,8 +932,11 @@ export default function CharacterProfilePage({ character, canonicalUrl, related,
               </dl>
             </article>
             {!!allyGroups.length && (
-              <article className="space-y-4 rounded-3xl border border-white/12 bg-white/5 p-6 backdrop-blur-xl lg:col-span-5 lg:col-start-1">
-                <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.35em] text-white/70">
+              <article
+                id="allies"
+                className="space-y-4 rounded-3xl border border-white/12 bg-white/5 p-6 backdrop-blur-xl lg:col-span-5 lg:col-start-1"
+              >
+                <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.35em] text-white/70">
                   <Crown className="h-4 w-4 text-amber-200" aria-hidden="true" /> Allies &amp; Enclaves
                 </div>
                 <p className="text-sm font-semibold text-white/70">
@@ -899,9 +945,9 @@ export default function CharacterProfilePage({ character, canonicalUrl, related,
                 <div className="space-y-3">
                   {allyGroups.map((group) => (
                     <div key={group.label} className="space-y-3 rounded-2xl border border-white/12 bg-black/35 p-3">
-                      <div className="flex items-center justify-between text-[11px] font-bold text-white">
+                      <div className="flex items-center justify-between text-xs font-bold text-white">
                         <span>{group.label}</span>
-                        <span className="text-[9px] font-semibold uppercase tracking-[0.35em] text-white/50">
+                        <span className="text-[0.7rem] font-semibold uppercase tracking-[0.3em] text-white/60">
                           {group.characters.length} dossier{group.characters.length === 1 ? "" : "s"}
                         </span>
                       </div>
@@ -923,14 +969,14 @@ export default function CharacterProfilePage({ character, canonicalUrl, related,
                               />
                             </div>
                             <div className="mt-1 space-y-0.5 text-left">
-                              <p className="text-[11px] font-bold text-white">{entry.name}</p>
+                              <p className="text-xs font-bold text-white">{entry.name}</p>
                               {(entry.alignment || entry.status) && (
-                                <p className="text-[9px] font-semibold uppercase tracking-[0.3em] text-white/55">
+                                <p className="text-[0.7rem] font-semibold uppercase tracking-[0.3em] text-white/60">
                                   {[entry.alignment, entry.status].filter(Boolean).join(" • ")}
                                 </p>
                               )}
                             </div>
-                            <span className="mt-1 inline-flex items-center gap-1 text-[10px] font-semibold text-amber-200">
+                            <span className="mt-1 inline-flex items-center gap-1 text-[0.7rem] font-semibold text-amber-200">
                               View dossier
                               <ArrowUpRight className="h-3 w-3" aria-hidden="true" />
                             </span>
@@ -943,7 +989,10 @@ export default function CharacterProfilePage({ character, canonicalUrl, related,
               </article>
             )}
             {!!tags.length && (
-              <article className="rounded-3xl border border-white/12 bg-white/5 p-8 backdrop-blur-xl lg:col-span-7 lg:col-start-6">
+              <article
+                id="motifs"
+                className="rounded-3xl border border-white/12 bg-white/5 p-8 backdrop-blur-xl lg:col-span-7 lg:col-start-6"
+              >
                 <h3 className="text-xl font-black text-white">Motifs &amp; Themes</h3>
                 <p className="mt-2 text-sm font-semibold text-white/70">
                   Recurring symbols and resonant ideas that define this legend.
@@ -963,7 +1012,10 @@ export default function CharacterProfilePage({ character, canonicalUrl, related,
               </article>
             )}
             {!!powers.length && (
-              <article className="rounded-3xl border border-white/12 bg-white/5 p-8 backdrop-blur-xl lg:col-span-7 lg:col-start-6">
+              <article
+                id="powers"
+                className="rounded-3xl border border-white/12 bg-white/5 p-8 backdrop-blur-xl lg:col-span-7 lg:col-start-6"
+              >
                 <h2 className="text-xl font-black text-white">Power index</h2>
                 <p className="mt-2 text-sm font-semibold text-white/70">
                   How {character.name} channels their gifts across the universe.
@@ -990,7 +1042,10 @@ export default function CharacterProfilePage({ character, canonicalUrl, related,
               </article>
             )}
             {!!stories.length && (
-              <article className="rounded-3xl border border-white/12 bg-white/5 p-8 backdrop-blur-xl lg:col-span-7 lg:col-start-6">
+              <article
+                id="appearances"
+                className="rounded-3xl border border-white/12 bg-white/5 p-8 backdrop-blur-xl lg:col-span-7 lg:col-start-6"
+              >
                 <h3 className="text-xl font-black text-white">Key appearances</h3>
                 <p className="mt-2 text-sm font-semibold text-white/70">
                   Notable stories and sightings featuring this character.
@@ -1006,7 +1061,10 @@ export default function CharacterProfilePage({ character, canonicalUrl, related,
               </article>
             )}
             {!!character.eraTags?.length && (
-              <article className="rounded-3xl border border-white/12 bg-white/5 p-8 backdrop-blur-xl lg:col-span-5">
+              <article
+                id="timelines"
+                className="rounded-3xl border border-white/12 bg-white/5 p-8 backdrop-blur-xl lg:col-span-5"
+              >
                 <h3 className="text-xl font-black text-white">Era timeline</h3>
                 <p className="mt-2 text-sm font-semibold text-white/70">
                   Where this legend fits within the LoreMaker ages.
@@ -1027,7 +1085,7 @@ export default function CharacterProfilePage({ character, canonicalUrl, related,
             )}
           </section>
           {connectionSections.length > 0 && (
-            <section className="space-y-8">
+            <section id="connections" className="space-y-8">
               <div>
                 <h2 className="text-2xl font-black text-white">Connected legends</h2>
                 <p className="mt-2 max-w-2xl text-sm font-semibold text-white/70">
@@ -1047,7 +1105,7 @@ export default function CharacterProfilePage({ character, canonicalUrl, related,
                     >
                       <div className="flex items-center justify-between gap-2">
                         <h3 className="text-base font-black text-white">{group.label}</h3>
-                        <span className="text-[9px] font-semibold uppercase tracking-[0.35em] text-white/50">
+                        <span className="text-[0.7rem] font-semibold uppercase tracking-[0.3em] text-white/60">
                           {group.characters.length} dossier{group.characters.length === 1 ? "" : "s"}
                         </span>
                       </div>
@@ -1068,14 +1126,14 @@ export default function CharacterProfilePage({ character, canonicalUrl, related,
                               />
                             </div>
                             <div className="mt-2 space-y-0.5">
-                              <p className="text-[12px] font-bold text-white">{entry.name}</p>
+                              <p className="text-sm font-bold text-white">{entry.name}</p>
                               {(entry.alignment || entry.status) && (
-                                <p className="text-[9px] font-semibold uppercase tracking-[0.35em] text-white/55">
+                                <p className="text-[0.7rem] font-semibold uppercase tracking-[0.3em] text-white/60">
                                   {[entry.alignment, entry.status].filter(Boolean).join(" • ")}
                                 </p>
                               )}
                             </div>
-                            <span className="mt-2 inline-flex items-center gap-1 text-[10px] font-semibold text-amber-200">
+                            <span className="mt-2 inline-flex items-center gap-1 text-[0.7rem] font-semibold text-amber-200">
                               View dossier
                               <ArrowUpRight className="h-3 w-3" aria-hidden="true" />
                             </span>
@@ -1089,7 +1147,7 @@ export default function CharacterProfilePage({ character, canonicalUrl, related,
             </section>
           )}
           {!!related.length && (
-            <section className="space-y-6">
+            <section id="related" className="space-y-6">
               <div className="flex items-center justify-between gap-3">
                 <h2 className="text-2xl font-black text-white">Discover more legends</h2>
                 <Link
@@ -1137,7 +1195,7 @@ export default function CharacterProfilePage({ character, canonicalUrl, related,
               window.scrollTo({ top: 0, behavior: "smooth" });
             }
           }}
-          className="fixed bottom-6 right-6 z-40 inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.35em] text-white transition hover:bg-white/20"
+          className="fixed bottom-6 right-6 z-40 inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-4 py-2 text-xs font-semibold uppercase tracking-[0.35em] text-white transition hover:bg-white/20"
           aria-label="Back to top"
         >
           <ArrowUp className="h-4 w-4" aria-hidden="true" />

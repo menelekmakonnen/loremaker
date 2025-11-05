@@ -1,5 +1,4 @@
-import fallbackCharacters from "../data/fallback-characters.json";
-import { fetchCharactersFromSheets, characterSlug, ensureUniqueSlugs } from "../lib/characters";
+import { loadCharacterLibrary, characterSlug, buildTaxonomies } from "../lib/characters";
 
 const DEFAULT_SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL || "https://loremaker.app").replace(/\/$/, "");
 
@@ -49,6 +48,40 @@ function buildSitemap(characters, siteUrl) {
     );
   });
 
+  const taxonomies = buildTaxonomies(characters);
+
+  const indexEntries = [
+    { path: "factions", changefreq: "weekly" },
+    { path: "powers", changefreq: "weekly" },
+    { path: "locations", changefreq: "weekly" },
+    { path: "timelines", changefreq: "weekly" },
+  ];
+
+  indexEntries.forEach(({ path, changefreq }) => {
+    urls.push(
+      buildUrlNode({
+        loc: `${siteUrl}/${path}`,
+        changefreq,
+        priority: "0.6",
+        lastmod: today,
+      })
+    );
+  });
+
+  Object.entries(taxonomies).forEach(([key, entries]) => {
+    const basePath = key;
+    entries.forEach((entry) => {
+      urls.push(
+        buildUrlNode({
+          loc: `${siteUrl}/${basePath}/${entry.slug}`,
+          changefreq: "weekly",
+          priority: "0.6",
+          lastmod: today,
+        })
+      );
+    });
+  });
+
   return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls.join("\n")}\n</urlset>`;
 }
 
@@ -57,16 +90,7 @@ export default function Sitemap() {
 }
 
 export async function getServerSideProps({ res }) {
-  let characters = ensureUniqueSlugs(fallbackCharacters.slice());
-
-  try {
-    const fetched = await fetchCharactersFromSheets();
-    if (Array.isArray(fetched) && fetched.length) {
-      characters = ensureUniqueSlugs(fetched.slice());
-    }
-  } catch (error) {
-    console.warn("[sitemap] Falling back to bundled characters", error);
-  }
+  const characters = await loadCharacterLibrary();
 
   const xml = buildSitemap(characters, DEFAULT_SITE_URL);
   res.setHeader("Content-Type", "application/xml");
