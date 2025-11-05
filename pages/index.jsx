@@ -3438,11 +3438,24 @@ function HeroSection({
     return () => clearInterval(timer);
   }, [featureSequence.length, heroVisible]);
 
+  const fallbackBackground = useMemo(() => {
+    if (backgroundSources.length > 0) return backgroundSources[0];
+    const featuredBackgrounds = (featured?.backgrounds || []).filter(Boolean);
+    if (featuredBackgrounds.length > 0) return featuredBackgrounds[0];
+    const characterGallery = [featured?.character?.cover, ...(featured?.character?.gallery || [])].filter(Boolean);
+    if (characterGallery.length > 0) return characterGallery[0];
+    return null;
+  }, [backgroundSources, featured?.backgrounds, featured?.character?.cover, featured?.character?.gallery]);
+
   const backgroundOrder = featureSequence.length ? featureSequence : backgroundSources;
   const sharedBackground =
-    backgroundOrder.length > 0 ? backgroundOrder[featureImageIndex % backgroundOrder.length] : null;
+    backgroundOrder.length > 0
+      ? backgroundOrder[featureImageIndex % backgroundOrder.length]
+      : fallbackBackground;
 
-  const heroBackdropKey = sharedBackground ? `${featureImageIndex}-${sharedBackground}` : null;
+  const heroBackdropKey = sharedBackground
+    ? `${backgroundOrder.length ? featureImageIndex : "fallback"}-${sharedBackground}`
+    : null;
 
   const goPrev = useCallback(() => {
     if (slides.length <= 1) return;
