@@ -6,7 +6,7 @@ const META_TITLE = "Timelines of the LoreMaker Universe | Menelek Makonnen";
 const META_DESCRIPTION =
   "Chart the eras and mythic ages that shape the LoreMaker Universe's evolving history.";
 
-export default function TimelinesIndexPage({ entries }) {
+export default function TimelinesIndexPage({ entries, characters }) {
   return (
     <>
       <Head>
@@ -24,6 +24,7 @@ export default function TimelinesIndexPage({ entries }) {
         description="Trace the epochs — from ancient pantheons to emerging futures — that connect heroes across Menelek Makonnen's LoreMaker Universe."
         entries={entries}
         basePath="/timelines"
+        characters={characters}
       />
     </>
   );
@@ -36,6 +37,7 @@ export async function getStaticProps() {
   return {
     props: {
       entries: timelines,
+      characters,
     },
     revalidate: 600,
   };

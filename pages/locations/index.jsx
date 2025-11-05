@@ -6,7 +6,7 @@ const META_TITLE = "Locations of the LoreMaker Universe | Menelek Makonnen";
 const META_DESCRIPTION =
   "Tour the cities, sanctums, and hidden realms that anchor the LoreMaker Universe's greatest legends.";
 
-export default function LocationsIndexPage({ entries }) {
+export default function LocationsIndexPage({ entries, characters }) {
   return (
     <>
       <Head>
@@ -24,6 +24,7 @@ export default function LocationsIndexPage({ entries }) {
         description="Discover the regions, fortresses, and mythic crossroads tied to heroes and villains across the LoreMaker Universe."
         entries={entries}
         basePath="/locations"
+        characters={characters}
       />
     </>
   );
@@ -36,6 +37,7 @@ export async function getStaticProps() {
   return {
     props: {
       entries: locations,
+      characters,
     },
     revalidate: 600,
   };

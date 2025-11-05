@@ -49,6 +49,7 @@ import {
 } from "../lib/characters";
 import ImageSafe, { characterAltText, Insignia } from "../components/image-safe";
 import SiteFooter from "../components/site-footer";
+import ScrollShortcuts from "../components/scroll-shortcuts";
 
 /**
  * Ultra interactive Loremaker experience
@@ -1279,14 +1280,15 @@ function Gallery({ images, cover, name }) {
   return (
     <>
       <div
-        className="group relative overflow-hidden rounded-[32px] border border-white/12 bg-black/40 shadow-[0_24px_80px_rgba(8,10,20,0.45)] touch-pan-y"
+        className="group relative flex w-full overflow-hidden rounded-[32px] border border-white/12 bg-black/40 shadow-[0_24px_80px_rgba(8,10,20,0.45)] touch-pan-y"
         data-gallery-root
         onPointerDown={handlePointerDown}
         onPointerUp={handlePointerUp}
         onPointerLeave={resetPointer}
         onPointerCancel={resetPointer}
+        style={{ maxHeight: "min(70vh, 520px)" }}
       >
-        <div className="aspect-[3/4] w-full">
+        <div className="relative w-full" style={{ aspectRatio: "3 / 4" }}>
           <ImageSafe
             src={activeSrc}
             alt={characterAltText(name)}
@@ -1519,6 +1521,15 @@ function CharacterModal({ open, onClose, char, onFacet, onUseInSim, onNavigate }
     pointerStart.current = null;
   }, []);
   if (!open || !char) return null;
+  const synopsis = char.shortDesc || char.longDesc || "";
+  const quickSummary = synopsis
+    ? synopsis.length > 260
+      ? `${synopsis.slice(0, 257).trimEnd()}…`
+      : synopsis
+    : "—";
+  const chroniclePreview = char.longDesc
+    ? `${char.longDesc.slice(0, 420).trimEnd()}${char.longDesc.length > 420 ? "…" : ""}`
+    : null;
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby={titleId}>
       <Aurora className="opacity-70" />
@@ -1573,14 +1584,28 @@ function CharacterModal({ open, onClose, char, onFacet, onUseInSim, onNavigate }
         <div className="grid max-h-[75vh] grid-cols-1 gap-6 overflow-y-auto p-6 text-white lg:grid-cols-2">
           <div className="space-y-5">
             <Gallery images={char.gallery} cover={char.cover} name={char.name} />
-            <div className="space-y-3 text-sm font-semibold text-white/80">
+            <div className="space-y-4 text-sm font-semibold text-white/80">
               <div>
-                <div className="text-xs font-extrabold tracking-wide text-white">Short Description</div>
-                <div className="mt-1 text-white/80">{char.shortDesc || "—"}</div>
+                <div className="text-xs font-extrabold uppercase tracking-[0.3em] text-white/70">Snapshot</div>
+                <p className="mt-2 text-sm leading-relaxed text-white/80 line-clamp-5">{quickSummary}</p>
               </div>
               <div>
-                <div className="text-xs font-extrabold tracking-wide text-white">Bio</div>
-                <div className="mt-1 whitespace-pre-wrap text-white/80">{char.longDesc || "—"}</div>
+                <div className="text-xs font-extrabold uppercase tracking-[0.3em] text-white/70">Chronicle Preview</div>
+                <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-white/75 line-clamp-6">
+                  {chroniclePreview || "Explore the full dossier to unlock their saga."}
+                </p>
+                {char.slug && (
+                  <Button
+                    as={Link}
+                    href={`/characters/${char.slug}`}
+                    variant="ghost"
+                    size="sm"
+                    className="mt-3 gap-2 px-4 text-xs font-semibold text-amber-200 hover:text-amber-100"
+                  >
+                    Continue in dossier
+                    <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
+                  </Button>
+                )}
               </div>
             </div>
           </div>
@@ -1849,6 +1874,23 @@ function duel(c1, c2) {
   };
 }
 
+function pickRandomPair(roster = []) {
+  if (!Array.isArray(roster) || roster.length < 2) return [];
+  const firstIndex = Math.floor(Math.random() * roster.length);
+  let secondIndex = Math.floor(Math.random() * (roster.length - 1));
+  if (secondIndex >= firstIndex) {
+    secondIndex += 1;
+  }
+  const a = roster[firstIndex];
+  const b = roster[secondIndex];
+  if (!a || !b || a.id === b.id) {
+    const fallback = roster.filter((entry) => entry && entry.id !== a?.id);
+    const replacement = fallback[Math.floor(Math.random() * fallback.length)] || null;
+    return replacement ? [a, replacement] : [a, b].filter(Boolean);
+  }
+  return [a, b];
+}
+
 function computeBattleTimeline(charA, charB) {
   const summary = duel(charA, charB);
   const timeline = summary.logs.map((phase) => ({
@@ -1873,6 +1915,162 @@ function computeBattleTimeline(charA, charB) {
     finalHealthB: summary.h2,
     breakdown: summary.breakdown,
   };
+}
+
+function GuessTheVictor({ characters, onOpenCharacter }) {
+  const roster = useMemo(() => (characters || []).filter((entry) => hasIllustration(entry)), [characters]);
+  const [pair, setPair] = useState(() => pickRandomPair(roster));
+  const [guess, setGuess] = useState(null);
+  const [outcome, setOutcome] = useState(null);
+  const [timeline, setTimeline] = useState([]);
+
+  useEffect(() => {
+    setPair(pickRandomPair(roster));
+    setGuess(null);
+    setOutcome(null);
+    setTimeline([]);
+  }, [roster]);
+
+  const startNext = useCallback(() => {
+    setPair(pickRandomPair(roster));
+    setGuess(null);
+    setOutcome(null);
+    setTimeline([]);
+  }, [roster]);
+
+  const choose = useCallback(
+    (candidate) => {
+      if (!pair || pair.length < 2 || outcome) return;
+      setGuess(candidate);
+      const [left, right] = pair;
+      if (!left || !right) return;
+      const result = computeBattleTimeline(left, right);
+      setOutcome(result);
+      setTimeline(result.timeline || []);
+    },
+    [pair, outcome]
+  );
+
+  if (!roster.length || pair.length < 2) {
+    return null;
+  }
+
+  const guessedCorrect = outcome && guess && outcome.winner?.id === guess;
+  const [left, right] = pair;
+
+  const renderFighter = (fighter) => {
+    if (!fighter) return null;
+    const active = outcome && outcome.winner?.id === fighter.id;
+    const isGuess = guess === fighter.id;
+    const disabled = Boolean(outcome);
+    const descriptor =
+      fighter.alias?.[0] || fighter.identity || fighter.alignment || fighter.primaryLocation || "LoreMaker legend";
+    return (
+      <Card
+        key={fighter.id}
+        className={cx(
+          "flex h-full flex-col overflow-hidden border-white/15 bg-white/5 p-4 text-left shadow-[0_20px_60px_rgba(7,10,24,0.55)] transition",
+          active ? "ring-4 ring-emerald-300" : isGuess ? "ring-2 ring-amber-300/70" : "ring-1 ring-white/10"
+        )}
+      >
+        <button
+          type="button"
+          onClick={() => onOpenCharacter?.(fighter)}
+          className="relative w-full overflow-hidden rounded-3xl border border-white/15"
+          aria-label={`Open ${fighter.name} quick view`}
+        >
+          <ImageSafe
+            src={fighter.cover || fighter.gallery?.[0]}
+            alt={characterAltText(fighter.name)}
+            fallbackLabel={fighter.name}
+            className="h-full w-full object-cover"
+          />
+          <span className="absolute inset-x-0 bottom-0 flex flex-col gap-1 bg-gradient-to-t from-black/90 via-black/40 to-transparent p-4 text-left">
+            <span className="text-xs font-semibold uppercase tracking-[0.3em] text-white/70">{descriptor}</span>
+            <span className="text-lg font-black text-white">{fighter.name}</span>
+          </span>
+        </button>
+        <div className="mt-4 flex flex-1 flex-col gap-4 text-sm text-white/70">
+          <div className="flex flex-wrap gap-2">
+            {(fighter.faction || []).slice(0, 2).map((label) => (
+              <span key={label} className="rounded-full border border-white/20 bg-white/10 px-3 py-1 text-xs font-semibold">
+                {label}
+              </span>
+            ))}
+            {(fighter.locations || [fighter.primaryLocation]).filter(Boolean).slice(0, 1).map((label) => (
+              <span key={label} className="rounded-full border border-white/20 bg-white/10 px-3 py-1 text-xs font-semibold">
+                {label}
+              </span>
+            ))}
+          </div>
+          <Button
+            variant={active ? "gradient" : "subtle"}
+            size="sm"
+            onClick={() => choose(fighter.id)}
+            disabled={disabled}
+            className="mt-auto justify-center"
+            aria-pressed={isGuess}
+          >
+            {outcome ? (active ? "Victor" : "Battle complete") : `I choose ${fighter.alias?.[0] || fighter.name}`}
+          </Button>
+        </div>
+      </Card>
+    );
+  };
+
+  return (
+    <section className="space-y-6 rounded-3xl border border-white/12 bg-white/5 p-6 backdrop-blur-2xl">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h2 className="text-2xl font-black text-white">Predict the Victor</h2>
+          <p className="text-sm font-semibold text-white/70">
+            Choose who wins before the clash. Guess correctly to earn bragging rights across the codex.
+          </p>
+        </div>
+        {outcome && (
+          <div
+            className={cx(
+              "rounded-full border px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em]",
+              guessedCorrect ? "border-emerald-300/70 bg-emerald-300/15 text-emerald-100" : "border-rose-400/60 bg-rose-400/15 text-rose-100"
+            )}
+          >
+            {guessedCorrect ? "Prophecy fulfilled" : "Fate disagreed"}
+          </div>
+        )}
+      </div>
+      <div className="grid gap-4 sm:grid-cols-2">
+        {renderFighter(left)}
+        {renderFighter(right)}
+      </div>
+      {outcome && (
+        <div className="space-y-3 rounded-2xl border border-white/10 bg-black/40 p-4 text-sm text-white/80">
+          <div className="flex flex-wrap items-center gap-2 text-sm font-semibold">
+            <span className="text-white/70">Winner:</span>
+            <span className="text-base font-black text-white">{outcome.winner?.name}</span>
+          </div>
+          <div className="grid gap-2 sm:grid-cols-2">
+            {timeline.map((step) => (
+              <div key={step.round} className="rounded-xl border border-white/10 bg-white/5 px-3 py-2">
+                <div className="text-xs font-semibold uppercase tracking-[0.3em] text-white/50">Round {step.round}</div>
+                <div className="mt-1 flex items-center justify-between text-xs text-white/70">
+                  <span>
+                    {left?.name}: <strong className="text-white">{step.healthA}</strong>
+                  </span>
+                  <span>
+                    {right?.name}: <strong className="text-white">{step.healthB}</strong>
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+          <Button variant="subtle" size="sm" onClick={startNext} className="justify-center gap-2">
+            <RefreshCcw className="h-4 w-4" aria-hidden="true" />
+            Play another round
+          </Button>
+        </div>
+      )}
+    </section>
+  );
 }
 
 function ArenaCard({ char, position, onRelease, onOpen, health, isWinner, showX, onAutoFill, onRandomize }) {
@@ -2508,65 +2706,6 @@ function SidebarFilters({ data, filters, setFilters, combineAND, setCombineAND, 
         onToggle={(value) => toggle("stories", value)}
       />
     </div>
-  );
-}
-
-function ScrollShortcuts() {
-  const [showTop, setShowTop] = useState(false);
-  const [showBottom, setShowBottom] = useState(false);
-
-  useEffect(() => {
-    const handler = () => {
-      const { scrollTop, scrollHeight, clientHeight } = document.documentElement;
-      setShowTop(scrollTop > 240);
-      setShowBottom(scrollTop + clientHeight < scrollHeight - 240);
-    };
-    handler();
-    window.addEventListener("scroll", handler, { passive: true });
-    return () => window.removeEventListener("scroll", handler);
-  }, []);
-
-  return (
-    <>
-      <AnimatePresence>
-        {showTop && (
-          <motion.button
-            key="scroll-top"
-            type="button"
-            onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
-            initial={{ opacity: 0, y: 24 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 24 }}
-            whileHover={{ scale: 1.08, rotate: [-2, 2, 0] }}
-            whileTap={{ scale: 0.92, rotate: 0 }}
-            transition={{ duration: 0.35 }}
-            className="fixed bottom-5 right-5 z-40 rounded-full border border-amber-300/60 bg-black/80 p-3 text-white shadow-xl"
-            aria-label="Back to top"
-          >
-            <ArrowUp className="h-4 w-4" />
-          </motion.button>
-        )}
-      </AnimatePresence>
-      <AnimatePresence>
-        {showBottom && (
-          <motion.button
-            key="scroll-bottom"
-            type="button"
-            onClick={() => window.scrollTo({ top: document.documentElement.scrollHeight, behavior: "smooth" })}
-            initial={{ opacity: 0, y: 24 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 24 }}
-            whileHover={{ scale: 1.08, rotate: [2, -2, 0] }}
-            whileTap={{ scale: 0.92, rotate: 0 }}
-            transition={{ duration: 0.35 }}
-            className="fixed bottom-5 right-20 z-40 rounded-full border border-white/30 bg-black/80 p-3 text-white shadow-xl"
-            aria-label="Skip to bottom"
-          >
-            <ArrowDown className="h-4 w-4" />
-          </motion.button>
-        )}
-      </AnimatePresence>
-    </>
   );
 }
 
@@ -4974,6 +5113,8 @@ export default function LoremakerApp({ initialCharacters = [], initialError = nu
               />
             </div>
           )}
+
+          <GuessTheVictor characters={sorted} onOpenCharacter={openCharacter} />
 
           <section className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex flex-wrap items-center gap-2 text-xs font-semibold text-white/70">

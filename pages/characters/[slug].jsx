@@ -26,6 +26,7 @@ import {
 } from "../../lib/characters";
 import ImageSafe, { characterAltText, imageCandidates } from "../../components/image-safe";
 import SiteFooter from "../../components/site-footer";
+import ScrollShortcuts from "../../components/scroll-shortcuts";
 
 const DEFAULT_SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL || "https://loremaker.app").replace(/\/$/, "");
 
@@ -908,7 +909,7 @@ export default function CharacterProfilePage({ character, canonicalUrl, related,
               <p className="mt-2 text-sm font-semibold text-white/70">
                 Catch up on {character.name}'s journey before diving deeper.
               </p>
-              <div className="mt-6 space-y-4 text-base leading-relaxed text-white/80">
+              <div className="mt-6 max-h-[420px] space-y-4 overflow-y-auto pr-1 text-base leading-relaxed text-white/80">
                 {storyParagraphs.map((paragraph, index) => (
                   <p key={index}>{paragraph}</p>
                 ))}
@@ -1204,6 +1205,7 @@ export default function CharacterProfilePage({ character, canonicalUrl, related,
           )}
         </main>
         <SiteFooter onRandomCharacter={handleRandomCharacter} arenaHref="/#arena-anchor" />
+        <ScrollShortcuts />
         <button
           type="button"
           onClick={() => {

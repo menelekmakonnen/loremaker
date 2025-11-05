@@ -6,7 +6,7 @@ const META_TITLE = "Powers of the LoreMaker Universe | Menelek Makonnen";
 const META_DESCRIPTION =
   "Search abilities, arcane talents, and mythic gifts wielded by heroes and villains across the LoreMaker Universe.";
 
-export default function PowersIndexPage({ entries }) {
+export default function PowersIndexPage({ entries, characters }) {
   return (
     <>
       <Head>
@@ -24,6 +24,7 @@ export default function PowersIndexPage({ entries }) {
         description="Survey the signature abilities and rare talents that course through Menelek Makonnen's LoreMaker Universe."
         entries={entries}
         basePath="/powers"
+        characters={characters}
       />
     </>
   );
@@ -36,6 +37,7 @@ export async function getStaticProps() {
   return {
     props: {
       entries: powers,
+      characters,
     },
     revalidate: 600,
   };

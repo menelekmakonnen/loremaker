@@ -6,7 +6,7 @@ const META_TITLE = "Factions of the LoreMaker Universe | Menelek Makonnen";
 const META_DESCRIPTION =
   "Explore the alliances, enclaves, and secret societies that shape Menelek Makonnen's LoreMaker Universe.";
 
-export default function FactionsIndexPage({ entries }) {
+export default function FactionsIndexPage({ entries, characters }) {
   return (
     <>
       <Head>
@@ -25,6 +25,7 @@ export default function FactionsIndexPage({ entries }) {
         entries={entries}
         basePath="/factions"
         enableArena
+        characters={characters}
       />
     </>
   );
@@ -37,6 +38,7 @@ export async function getStaticProps() {
   return {
     props: {
       entries: factions,
+      characters,
     },
     revalidate: 600,
   };

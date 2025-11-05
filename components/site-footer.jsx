@@ -6,6 +6,8 @@ import {
   Crown,
   Library,
   MapPin,
+  ShieldCheck,
+  Shuffle,
   Sparkles,
   Swords,
   Users,
@@ -45,24 +47,25 @@ export default function SiteFooter({
 
   return (
     <footer className="border-t border-white/10 bg-black/50 backdrop-blur-2xl">
-      <div className="mx-auto max-w-7xl px-3 py-10 sm:px-4">
-        <div className="grid gap-8 md:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)]">
+      <div className="mx-auto max-w-7xl px-4 py-10 sm:px-6">
+        <div className="grid gap-10 md:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
           <div className="space-y-4">
             <p className="text-xs font-black tracking-[0.35em] text-white/70">LoreMaker Universe</p>
-            <p className="text-sm font-semibold tracking-[0.3em] text-white/70">© {currentYear} Menelek Makonnen.</p>
-            <p className="text-sm font-semibold tracking-[0.3em] text-white/70">
-              All characters, stories, lore, and artwork from the LoreMaker Universe are protected by copyright.
+            <p className="text-sm font-semibold text-white/80">
+              © {currentYear} Menelek Makonnen. All characters, stories, lore, and artwork from the LoreMaker Universe are
+              protected by copyright.
             </p>
+            <div className="flex flex-wrap items-center gap-3 text-xs font-semibold text-white/60">
+              <Sparkles className="h-4 w-4 text-amber-200" aria-hidden="true" />
+              Crafted for dreamers, archivists, and cosmic tacticians.
+            </div>
           </div>
           <div className="space-y-4">
-            <p className="text-xs font-black tracking-[0.35em] text-white/70">Explore</p>
-            <div className="flex flex-col gap-2">
+            <p className="text-xs font-black tracking-[0.35em] text-white/70">Navigate</p>
+            <div className="flex flex-wrap gap-2">
               <Link
                 href={arenaHref}
-                className={buttonClasses({
-                  variant: "subtle",
-                  className: "justify-start gap-2 text-xs tracking-[0.3em]",
-                })}
+                className={buttonClasses({ variant: "subtle", className: "gap-2 text-[0.65rem] tracking-[0.25em]" })}
               >
                 <Swords className="h-4 w-4" aria-hidden="true" />
                 Battle Arena
@@ -71,95 +74,72 @@ export default function SiteFooter({
                 <button
                   type="button"
                   onClick={handleRandom}
-                  className={buttonClasses({
-                    variant: "subtle",
-                    className: "justify-start gap-2 text-xs tracking-[0.3em]",
-                  })}
+                  className={buttonClasses({ variant: "subtle", className: "gap-2 text-[0.65rem] tracking-[0.25em]" })}
                 >
-                  <Sparkles className="h-4 w-4" aria-hidden="true" />
-                  Random Character
+                  <Shuffle aria-hidden="true" className="h-4 w-4" />
+                  Surprise Me
                 </button>
               )}
               <Link
                 href="/#characters-grid"
-                className={buttonClasses({
-                  variant: "subtle",
-                  className: "justify-start gap-2 text-xs tracking-[0.3em]",
-                })}
+                className={buttonClasses({ variant: "subtle", className: "gap-2 text-[0.65rem] tracking-[0.25em]" })}
               >
                 <Users className="h-4 w-4" aria-hidden="true" />
-                Character Archive
+                Characters
               </Link>
               <Link
                 href="/factions"
-                className={buttonClasses({
-                  variant: "subtle",
-                  className: "justify-start gap-2 text-xs tracking-[0.3em]",
-                })}
+                className={buttonClasses({ variant: "subtle", className: "gap-2 text-[0.65rem] tracking-[0.25em]" })}
               >
                 <Crown className="h-4 w-4" aria-hidden="true" />
-                Factions Directory
+                Factions
               </Link>
               <Link
                 href="/powers"
-                className={buttonClasses({
-                  variant: "subtle",
-                  className: "justify-start gap-2 text-xs tracking-[0.3em]",
-                })}
+                className={buttonClasses({ variant: "subtle", className: "gap-2 text-[0.65rem] tracking-[0.25em]" })}
               >
                 <Atom className="h-4 w-4" aria-hidden="true" />
-                Power Index
+                Powers
               </Link>
               <Link
                 href="/locations"
-                className={buttonClasses({
-                  variant: "subtle",
-                  className: "justify-start gap-2 text-xs tracking-[0.3em]",
-                })}
+                className={buttonClasses({ variant: "subtle", className: "gap-2 text-[0.65rem] tracking-[0.25em]" })}
               >
                 <MapPin className="h-4 w-4" aria-hidden="true" />
-                World Footprints
+                Locations
               </Link>
               <Link
                 href="/timelines"
-                className={buttonClasses({
-                  variant: "subtle",
-                  className: "justify-start gap-2 text-xs tracking-[0.3em]",
-                })}
+                className={buttonClasses({ variant: "subtle", className: "gap-2 text-[0.65rem] tracking-[0.25em]" })}
               >
                 <Library className="h-4 w-4" aria-hidden="true" />
-                Era Timelines
+                Timelines
               </Link>
-            </div>
-          </div>
-          <div className="space-y-4">
-            <p className="text-xs font-black tracking-[0.35em] text-white/70">Connect</p>
-            <div className="flex flex-col gap-2">
               <a
                 href="https://menelekmakonnen.com"
                 target="_blank"
                 rel="noreferrer"
-                className={buttonClasses({
-                  variant: "subtle",
-                  className: "justify-start gap-2 text-xs tracking-[0.3em]",
-                })}
+                className={buttonClasses({ variant: "subtle", className: "gap-2 text-[0.65rem] tracking-[0.25em]" })}
               >
                 <ArrowRight className="h-4 w-4" aria-hidden="true" />
                 Menelek Makonnen
               </a>
-              <button
-                type="button"
-                onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
-                className={buttonClasses({
-                  variant: "ghost",
-                  className: "justify-start gap-2 text-xs tracking-[0.3em] text-white/70 hover:text-white",
-                })}
-              >
-                <ArrowUp className="h-4 w-4" aria-hidden="true" />
-                Back to Top
-              </button>
             </div>
           </div>
+        </div>
+        <div className="mt-10 flex flex-wrap items-center justify-between gap-4 text-xs font-semibold text-white/60">
+          <button
+            type="button"
+            onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+            className={buttonClasses({ variant: "ghost", className: "gap-2 text-[0.65rem] tracking-[0.25em]" })}
+          >
+            <ArrowUp className="h-4 w-4" aria-hidden="true" />
+            Back to top
+          </button>
+          <span className="flex items-center gap-2">
+            <ShieldCheck aria-hidden="true" className="h-4 w-4 text-emerald-300" />
+            Secure & SSL optimised
+          </span>
         </div>
       </div>
     </footer>
