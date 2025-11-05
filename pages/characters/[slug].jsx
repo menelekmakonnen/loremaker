@@ -13,7 +13,6 @@ import {
   Swords,
   X,
   ArrowUpRight,
-  ArrowUp,
 } from "lucide-react";
 import fallbackCharacters from "../../data/fallback-characters.json";
 import {
@@ -1206,19 +1205,6 @@ export default function CharacterProfilePage({ character, canonicalUrl, related,
         </main>
         <SiteFooter onRandomCharacter={handleRandomCharacter} arenaHref="/#arena-anchor" />
         <ScrollShortcuts />
-        <button
-          type="button"
-          onClick={() => {
-            if (typeof window !== "undefined") {
-              window.scrollTo({ top: 0, behavior: "smooth" });
-            }
-          }}
-          className="fixed bottom-6 right-6 z-40 inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-4 py-2 text-xs font-semibold uppercase tracking-[0.35em] text-white transition hover:bg-white/20"
-          aria-label="Back to top"
-        >
-          <ArrowUp className="h-4 w-4" aria-hidden="true" />
-          Back to top
-        </button>
       </div>
     </>
   );
