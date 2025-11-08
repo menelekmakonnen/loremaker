@@ -217,6 +217,7 @@ export function GuessTheVictorSection({ roster, onOpen }) {
   const [result, setResult] = useState(null);
   const [expanded, setExpanded] = useState(false);
   const [mode, setMode] = useState("duel");
+  const [championshipSlots, setChampionshipSlots] = useState(3);
   const [animating, setAnimating] = useState(false);
   const [portraitStep, setPortraitStep] = useState({});
   const [message, setMessage] = useState(null);
@@ -246,6 +247,21 @@ export function GuessTheVictorSection({ roster, onOpen }) {
     setMessage(null);
   }, []);
 
+  const isChampionship = mode === "championship";
+
+  const toggleChampionship = useCallback(() => {
+    setBattleMode(isChampionship ? "duel" : "championship");
+  }, [isChampionship, setBattleMode]);
+
+  const selectChampionshipSlots = useCallback(
+    (slots) => {
+      setChampionshipSlots(slots);
+      setAnimating(false);
+      setBattleMode("championship");
+    },
+    [setBattleMode]
+  );
+
   const cyclePortrait = useCallback((fighter) => {
     if (!fighter) return;
     const sources = [fighter.cover, ...(fighter.gallery || [])].filter(Boolean);
@@ -259,8 +275,8 @@ export function GuessTheVictorSection({ roster, onOpen }) {
   const queueOpponents = useCallback(
     (champion, rival) => {
       const base = rival ? [rival] : [];
-      if (mode === "duel") return base;
-      const desired = mode === "championship-3" ? 3 : 4;
+      if (!isChampionship) return base;
+      const desired = Math.max(1, championshipSlots);
       const needed = Math.max(0, desired - base.length);
       const pool = contenders.filter(
         (entry) => entry.id !== champion.id && !base.some((item) => item.id === entry.id)
@@ -274,7 +290,7 @@ export function GuessTheVictorSection({ roster, onOpen }) {
       }
       return [...base, ...extras];
     },
-    [mode, contenders]
+    [isChampionship, championshipSlots, contenders]
   );
 
   const choose = useCallback(
@@ -328,10 +344,17 @@ export function GuessTheVictorSection({ roster, onOpen }) {
   const challengerName = lastMatch?.opponent?.name || right?.name;
 
   const summaryBar = (
-    <button
-      type="button"
+    <div
+      role="button"
+      tabIndex={0}
       onClick={toggleExpanded}
-      className="group flex w-full items-center justify-between gap-3 rounded-full border border-white/12 bg-black/40 px-4 py-2 text-left text-xs font-semibold uppercase tracking-[0.35em] text-white/70 transition hover:border-amber-300/60 hover:text-white"
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          toggleExpanded();
+        }
+      }}
+      className="group flex w-full items-center justify-between gap-3 rounded-full border border-white/12 bg-black/40 px-4 py-2 text-left text-xs font-semibold uppercase tracking-[0.35em] text-white/70 transition hover:border-amber-300/60 hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-200/70"
       aria-expanded={expanded}
     >
       <span className="flex items-center gap-2">
@@ -348,10 +371,10 @@ export function GuessTheVictorSection({ roster, onOpen }) {
           aria-hidden="true"
         />
       </span>
-    </button>
+    </div>
   );
 
-  const fighterCard = (fighter) => {
+  const fighterCard = (fighter, slotIndex = 0) => {
     if (!fighter) return null;
     const descriptor = fighter.alias?.[0] || fighter.identity || fighter.alignment || fighter.primaryLocation || "Legend";
     const imageSources = [fighter.cover, ...(fighter.gallery || [])].filter(Boolean);
@@ -360,6 +383,7 @@ export function GuessTheVictorSection({ roster, onOpen }) {
     const isWinner = result && result.finalWinner?.id === fighter.id;
     const isLoser = result && result.finalLoser?.id === fighter.id;
     const isChosen = guess === fighter.id;
+    const jitterClass = animating ? (slotIndex % 2 === 0 ? "animate-duel-shake-left" : "animate-duel-shake-right") : "";
     const handleSelect = () => {
       if (result) return;
       choose(fighter.id);
@@ -379,7 +403,7 @@ export function GuessTheVictorSection({ roster, onOpen }) {
         onKeyDown={handleKey}
         className={classNames(
           "relative flex h-full flex-col overflow-hidden rounded-3xl border border-white/12 bg-black/40 backdrop-blur-xl transition",
-          animating ? "animate-duel-shake" : "",
+          jitterClass,
           isWinner
             ? "ring-4 ring-emerald-300"
             : isLoser
@@ -438,7 +462,9 @@ export function GuessTheVictorSection({ roster, onOpen }) {
               ))}
           </div>
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold uppercase tracking-[0.3em] text-white/50">{mode === "duel" ? "Single clash" : "Championship"}</span>
+            <span className="text-xs font-semibold uppercase tracking-[0.3em] text-white/50">
+              {mode === "duel" ? "Single clash" : `Championship • ${championshipSlots}`}
+            </span>
             {fighter.slug && (
               <Link
                 href={`/characters/${fighter.slug}`}
@@ -450,6 +476,7 @@ export function GuessTheVictorSection({ roster, onOpen }) {
             )}
           </div>
         </div>
+        {isLoser && <div className="pointer-events-none absolute inset-0 bg-black/55" aria-hidden="true" />}
       </div>
     );
   };
@@ -460,48 +487,68 @@ export function GuessTheVictorSection({ roster, onOpen }) {
 
   return (
     <section className="space-y-6 rounded-3xl border border-white/12 bg-white/5 p-6 backdrop-blur-2xl">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="space-y-2">
           <h2 className="text-2xl font-black text-white">Predict the victor</h2>
           <p className="text-sm font-semibold text-white/70">
             Call the duel, or stage a championship run across three or four challengers. Every guess shapes your legend.
           </p>
         </div>
-        <div className="flex flex-col items-end gap-2 sm:flex-row sm:items-center">
-          <button
-            type="button"
-            onClick={nextOpponents}
-            className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-4 py-1 text-[0.65rem] font-semibold uppercase tracking-[0.3em] text-white transition hover:bg-white/20"
-          >
-            <RefreshCcw className="h-3.5 w-3.5" aria-hidden="true" /> Reload
-          </button>
-          <div className="flex items-center gap-1 rounded-full border border-white/15 bg-white/10 p-1 text-[0.6rem] font-semibold uppercase tracking-[0.3em] text-white/70">
-            <span className="hidden px-2 text-white/60 sm:inline">Championship</span>
-            {[
-              { id: "duel", label: "Duel" },
-              { id: "championship-3", label: "3 Legends" },
-              { id: "championship-4", label: "4 Legends" },
-            ].map((entry) => (
-              <button
-                key={entry.id}
-                type="button"
-                onClick={() => setBattleMode(entry.id)}
-                className={classNames(
-                  "rounded-full px-3 py-1 transition",
-                  mode === entry.id ? "bg-amber-300/20 text-amber-100" : "text-white/60 hover:text-white"
-                )}
-              >
-                {entry.label}
-              </button>
-            ))}
+        <div className="flex flex-col items-end gap-3 sm:flex-row sm:items-center">
+          <div className="flex items-center gap-2 rounded-full border border-white/15 bg-white/10 p-1 text-[0.6rem] font-semibold uppercase tracking-[0.3em] text-white/70">
+            <button
+              type="button"
+              onClick={nextOpponents}
+              className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-3 py-1 text-white transition hover:bg-white/20"
+            >
+              <RefreshCcw className="h-3.5 w-3.5" aria-hidden="true" /> Reload
+            </button>
+            <button
+              type="button"
+              onClick={() => setBattleMode("duel")}
+              className={classNames(
+                "rounded-full px-3 py-1 transition",
+                !isChampionship ? "bg-amber-300/20 text-amber-100" : "text-white/60 hover:text-white"
+              )}
+            >
+              Duel
+            </button>
+            <button
+              type="button"
+              onClick={toggleChampionship}
+              className={classNames(
+                "rounded-full px-3 py-1 transition",
+                isChampionship ? "bg-amber-300/20 text-amber-100" : "text-white/60 hover:text-white"
+              )}
+            >
+              Championship
+            </button>
           </div>
+          {isChampionship && (
+            <div className="flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1 text-[0.6rem] font-semibold uppercase tracking-[0.3em] text-white/70">
+              <span className="hidden text-white/60 sm:inline">Legends</span>
+              {[3, 4].map((slots) => (
+                <button
+                  key={slots}
+                  type="button"
+                  onClick={() => selectChampionshipSlots(slots)}
+                  className={classNames(
+                    "rounded-full px-3 py-1 transition",
+                    championshipSlots === slots ? "bg-amber-300/25 text-amber-100" : "text-white/60 hover:text-white"
+                  )}
+                >
+                  {slots}
+                </button>
+              ))}
+            </div>
+          )}
           {summaryBar}
         </div>
       </div>
       <div className="relative">
         <div className="grid grid-cols-2 gap-4">
-          {fighterCard(left)}
-          {fighterCard(right)}
+          {fighterCard(left, 0)}
+          {fighterCard(right, 1)}
         </div>
         {animating && (
           <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
@@ -510,59 +557,41 @@ export function GuessTheVictorSection({ roster, onOpen }) {
             </div>
           </div>
         )}
-        {roundLogs.length > 0 && championName && challengerName && (
-          <div className="pointer-events-none absolute inset-y-0 left-1/2 flex -translate-x-1/2 flex-col items-center justify-center gap-2">
-            {roundLogs.map((log) => (
-              <div
-                key={log.swing}
-                className="rounded-full border border-white/20 bg-black/70 px-4 py-1 text-[0.65rem] font-semibold uppercase tracking-[0.3em] text-white/75"
-              >
-                Round {log.swing}: {championName?.split(" ")[0]} {log.h1} • {challengerName?.split(" ")[0]} {log.h2}
-              </div>
-            ))}
-          </div>
-        )}
-        {result && (
-          <div className="pointer-events-none absolute inset-x-0 top-1/2 flex -translate-y-1/2 justify-center">
-            <div className="pointer-events-auto flex flex-wrap items-center gap-2 rounded-full border border-white/20 bg-black/85 px-5 py-3 text-[0.65rem] font-semibold uppercase tracking-[0.3em] text-white shadow-xl">
-              <button
-                type="button"
-                onClick={rematch}
-                className="rounded-full border border-white/20 bg-white/10 px-3 py-1 text-white transition hover:bg-white/20"
-              >
-                Rematch
-              </button>
-              <button
-                type="button"
-                onClick={nextOpponents}
-                className="rounded-full border border-white/20 bg-white/10 px-3 py-1 text-white transition hover:bg-white/20"
-              >
-                New duel
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setBattleMode("championship-3");
-                  rematch();
-                }}
-                className="rounded-full border border-amber-300/50 bg-amber-300/15 px-3 py-1 text-amber-100 transition hover:bg-amber-300/25"
-              >
-                3 legends
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setBattleMode("championship-4");
-                  rematch();
-                }}
-                className="rounded-full border border-amber-300/50 bg-amber-300/15 px-3 py-1 text-amber-100 transition hover:bg-amber-300/25"
-              >
-                4 legends
-              </button>
-            </div>
-          </div>
-        )}
       </div>
+      {roundLogs.length > 0 && championName && challengerName && (
+        <div className="flex flex-wrap items-center justify-center gap-2 text-[0.65rem] font-semibold uppercase tracking-[0.3em] text-white/75">
+          {roundLogs.map((log) => (
+            <div key={log.swing} className="rounded-full border border-white/20 bg-black/70 px-4 py-1">
+              Round {log.swing}: {championName?.split(" ")[0]} {log.h1} • {challengerName?.split(" ")[0]} {log.h2}
+            </div>
+          ))}
+        </div>
+      )}
+      {result && (
+        <div className="flex flex-wrap items-center justify-center gap-3 text-[0.65rem] font-semibold uppercase tracking-[0.3em]">
+          <button
+            type="button"
+            onClick={rematch}
+            className="rounded-full border border-white/20 bg-white/10 px-4 py-2 text-white transition hover:bg-white/20"
+          >
+            Rematch
+          </button>
+          <button
+            type="button"
+            onClick={nextOpponents}
+            className="rounded-full border border-white/20 bg-white/10 px-4 py-2 text-white transition hover:bg-white/20"
+          >
+            New duel
+          </button>
+          <button
+            type="button"
+            onClick={() => selectChampionshipSlots(championshipSlots === 4 ? 3 : 4)}
+            className="rounded-full border border-amber-300/50 bg-amber-300/15 px-4 py-2 text-amber-100 transition hover:bg-amber-300/25"
+          >
+            Adjust lineup
+          </button>
+        </div>
+      )}
       {result && (
         <div className="rounded-2xl border border-white/10 bg-black/45 p-5 text-sm text-white/80">
           <div className="flex flex-wrap items-center gap-2 text-base font-black text-white">
@@ -914,7 +943,7 @@ export function TaxonomyIndexLayout({
       </section>
       <main className="relative z-10 mx-auto max-w-7xl space-y-16 px-4 py-16 sm:px-6 lg:px-8">
         {enableArena && entries.length > 1 && <FactionArena entries={entries} basePath={basePath} />}
-        <GuessTheVictorSection roster={guessRoster} />
+        {enableArena && <GuessTheVictorSection roster={guessRoster} />}
         <section className="space-y-6">
           <div className="flex flex-wrap items-center justify-between gap-4">
             <h2 className="text-2xl font-black text-white">Archive dossiers</h2>
