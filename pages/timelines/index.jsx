@@ -1,12 +1,12 @@
 import Head from "next/head";
-import { loadCharacterLibrary, buildTaxonomies } from "../../lib/characters";
+import { loadCharacterLibrary, buildTaxonomies, todayKey } from "../../lib/characters";
 import { TaxonomyIndexLayout } from "../../components/taxonomy-layout";
 
 const META_TITLE = "Timelines of the LoreMaker Universe | Menelek Makonnen";
 const META_DESCRIPTION =
   "Chart the eras and mythic ages that shape the LoreMaker Universe's evolving history.";
 
-export default function TimelinesIndexPage({ entries, characters }) {
+export default function TimelinesIndexPage({ entries, characters, dayKey }) {
   return (
     <>
       <Head>
@@ -25,6 +25,7 @@ export default function TimelinesIndexPage({ entries, characters }) {
         entries={entries}
         basePath="/timelines"
         characters={characters}
+        dayKey={dayKey}
       />
     </>
   );
@@ -38,6 +39,7 @@ export async function getStaticProps() {
     props: {
       entries: timelines,
       characters,
+      dayKey: todayKey(),
     },
     revalidate: 600,
   };

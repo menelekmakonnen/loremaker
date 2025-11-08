@@ -86,9 +86,187 @@ function sampleMembers(members = [], count = 6) {
   return results;
 }
 
-function HeroRosterGrid({ members = [], onOpen }) {
-  const [activeId, setActiveId] = useState(null);
+function hashString(value = "") {
+  let hash = 0;
+  const str = String(value);
+  for (let i = 0; i < str.length; i += 1) {
+    hash = (hash * 31 + str.charCodeAt(i)) % 2147483647;
+  }
+  return hash;
+}
+
+function seededValue(identifier, channel, { min = 0, max = 100, dayKey = "" } = {}) {
+  const base = `${identifier}|${channel}|${dayKey}`;
+  const seed = hashString(base);
+  const radians = seed % Math.PI;
+  const normalised = (Math.sin(radians) + 1) / 2; // 0..1
+  const span = max - min;
+  return Math.round(min + normalised * span);
+}
+
+function collageSourcesForEntry(entry = {}, limit = 4) {
+  if (!entry) return [];
+  const gallery = [];
+  if (entry.primaryImage) gallery.push(entry.primaryImage);
+  const members = Array.isArray(entry.members) ? entry.members : [];
+  for (const member of members) {
+    if (gallery.length >= limit) break;
+    if (member?.cover) {
+      gallery.push(member.cover);
+    } else if (Array.isArray(member?.gallery)) {
+      const alt = member.gallery.find(Boolean);
+      if (alt) gallery.push(alt);
+    }
+  }
+  return Array.from(new Set(gallery.filter(Boolean))).slice(0, limit);
+}
+
+function resolveCharacterForMember(member, characterMap) {
+  if (!member || !characterMap) return null;
+  const key = member.id || member.slug;
+  if (!key) return null;
+  return characterMap.get(key) || null;
+}
+
+function combatScore(entity = {}, characterMap, dayKey) {
+  if (!entity) return 1;
+  if (entity.type === "faction") {
+    const members = Array.isArray(entity.members) ? entity.members : [];
+    const memberScores = members
+      .map((member) => {
+        const full = resolveCharacterForMember(member, characterMap) || member;
+        return scoreCharacter(full);
+      })
+      .filter((value) => Number.isFinite(value));
+    const average = memberScores.length
+      ? memberScores.reduce((sum, value) => sum + value, 0) / memberScores.length
+      : 40;
+    const strength = Math.min(100, entity.memberCount * 6 + 30);
+    const mystique = seededValue(entity.slug || entity.name, "mystique", { min: 25, max: 85, dayKey });
+    return Math.round(average * 0.6 + strength * 0.25 + mystique * 0.15);
+  }
+  return scoreCharacter(entity);
+}
+
+function computeFactionStats(entry = {}, characterMap, dayKey) {
+  if (!entry || entry.type !== "faction") return null;
+  const identifier = entry.slug || entry.name;
+  const members = Array.isArray(entry.members) ? entry.members : [];
+  const memberScores = members
+    .map((member) => {
+      const full = resolveCharacterForMember(member, characterMap) || member;
+      return scoreCharacter(full);
+    })
+    .filter((value) => Number.isFinite(value));
+  const averagePower = memberScores.length
+    ? memberScores.reduce((sum, value) => sum + value, 0) / memberScores.length
+    : 40;
+  const strength = Math.min(100, entry.memberCount * 6 + 20);
+  const discipline = seededValue(identifier, "discipline", { min: 35, max: 95, dayKey });
+  const mystique = seededValue(identifier, "mystique", { min: 30, max: 90, dayKey });
+  const fortune = seededValue(identifier, "fortune", { min: 10, max: 100, dayKey });
+  return {
+    strength,
+    power: Math.min(100, Math.round(averagePower)),
+    discipline,
+    mystique,
+    fortune,
+  };
+}
+
+function computeLocationStats(entry = {}, dayKey) {
+  if (!entry || entry.type !== "location") return null;
+  const identifier = entry.slug || entry.name;
+  return {
+    notoriety: seededValue(identifier, "notoriety", { min: 40, max: 98, dayKey }),
+    sanctity: seededValue(identifier, "sanctity", { min: 20, max: 85, dayKey }),
+    volatility: seededValue(identifier, "volatility", { min: 25, max: 90, dayKey }),
+  };
+}
+
+function computePowerStats(entry = {}, dayKey) {
+  if (!entry || entry.type !== "power") return null;
+  const identifier = entry.slug || entry.name;
+  const average = Number(entry.metrics?.averageLevel) || 0;
+  return {
+    mastery: Math.round((average / 10) * 100),
+    volatility: seededValue(identifier, "volatility", { min: 25, max: 95, dayKey }),
+    rarity: seededValue(identifier, "rarity", { min: 30, max: 90, dayKey }),
+  };
+}
+
+function computeTimelineStats(entry = {}, dayKey) {
+  if (!entry || entry.type !== "timeline") return null;
+  const identifier = entry.slug || entry.name;
+  return {
+    upheaval: seededValue(identifier, "upheaval", { min: 20, max: 95, dayKey }),
+    innovation: seededValue(identifier, "innovation", { min: 30, max: 90, dayKey }),
+    secrecy: seededValue(identifier, "secrecy", { min: 25, max: 85, dayKey }),
+  };
+}
+
+function buildVisualMetrics(entry = {}, characterMap, dayKey) {
+  if (!entry) return [];
+  if (entry.type === "faction") {
+    const stats = computeFactionStats(entry, characterMap, dayKey);
+    if (!stats) return [];
+    return [
+      { key: "strength", label: "Strength", value: stats.strength, type: "bar" },
+      { key: "power", label: "Power", value: stats.power, type: "bar" },
+      { key: "discipline", label: "Discipline", value: stats.discipline, type: "bar" },
+      { key: "mystique", label: "Mystique", value: stats.mystique, type: "bar" },
+      { key: "fortune", label: "Fortune", value: stats.fortune, type: "bar" },
+    ];
+  }
+  if (entry.type === "power") {
+    const stats = computePowerStats(entry, dayKey);
+    if (!stats) return [];
+    return [
+      { key: "mastery", label: "Mastery", value: stats.mastery, type: "pie" },
+      { key: "volatility", label: "Volatility", value: stats.volatility, type: "pie" },
+      { key: "rarity", label: "Rarity", value: stats.rarity, type: "pie" },
+    ];
+  }
+  if (entry.type === "location") {
+    const stats = computeLocationStats(entry, dayKey);
+    if (!stats) return [];
+    return [
+      { key: "notoriety", label: "Notoriety", value: stats.notoriety, type: "pie" },
+      { key: "sanctity", label: "Sanctity", value: stats.sanctity, type: "pie" },
+      { key: "volatility", label: "Volatility", value: stats.volatility, type: "pie" },
+    ];
+  }
+  if (entry.type === "timeline") {
+    const stats = computeTimelineStats(entry, dayKey);
+    if (!stats) return [];
+    return [
+      { key: "upheaval", label: "Upheaval", value: stats.upheaval, type: "pie" },
+      { key: "innovation", label: "Innovation", value: stats.innovation, type: "pie" },
+      { key: "secrecy", label: "Secrecy", value: stats.secrecy, type: "pie" },
+    ];
+  }
+  return [];
+}
+
+function HeroRosterGrid({ members = [], onOpen, activeId: controlledActiveId, onHighlight }) {
+  const [internalActive, setInternalActive] = useState(null);
+  const activeId = controlledActiveId ?? internalActive;
+
+  useEffect(() => {
+    if (controlledActiveId == null && members.length) {
+      const first = members[0]?.id || members[0]?.slug || null;
+      setInternalActive(first);
+    }
+  }, [members, controlledActiveId]);
+
   if (!members.length) return null;
+
+  const setActive = (nextId) => {
+    onHighlight?.(nextId);
+    if (controlledActiveId === undefined) {
+      setInternalActive(nextId);
+    }
+  };
 
   return (
     <div className="rounded-3xl border border-white/12 bg-white/5 p-4 backdrop-blur-2xl">
@@ -101,18 +279,24 @@ function HeroRosterGrid({ members = [], onOpen }) {
             member.alignment ||
             member.primaryLocation ||
             "Legend";
-          const isDimmed = activeId && activeId !== member.id;
-          const handleEnter = () => setActiveId(member.id || member.slug || null);
-          const handleLeave = () => setActiveId(null);
+          const key = member.id || member.slug;
+          const isDimmed = activeId && key && activeId !== key;
+          const highlight = () => setActive(key);
+          const clear = () => {
+            if (controlledActiveId === undefined) {
+              setInternalActive(null);
+              onHighlight?.(null);
+            }
+          };
           return (
             <button
-              key={member.id || member.slug}
+              key={key}
               type="button"
               onClick={() => onOpen?.(member)}
-              onMouseEnter={handleEnter}
-              onMouseLeave={handleLeave}
-              onFocus={handleEnter}
-              onBlur={handleLeave}
+              onMouseEnter={highlight}
+              onMouseLeave={clear}
+              onFocus={highlight}
+              onBlur={clear}
               className={classNames(
                 "group relative overflow-hidden rounded-2xl border border-white/15 bg-black/40 text-left transition",
                 isDimmed ? "opacity-40" : "opacity-100"
@@ -176,9 +360,9 @@ function rngLuck(max) {
   return Math.round((Math.random() * 2 - 1) * 0.18 * span);
 }
 
-function simulateDuel(c1, c2) {
-  const s1 = scoreCharacter(c1);
-  const s2 = scoreCharacter(c2);
+function simulateDuel(c1, c2, characterMap, dayKey) {
+  const s1 = combatScore(c1, characterMap, dayKey);
+  const s2 = combatScore(c2, characterMap, dayKey);
   const maxBase = Math.max(s1, s2) || 1;
   const swings = 3;
   let h1 = 100;
@@ -198,7 +382,7 @@ function simulateDuel(c1, c2) {
     const dmg2 = Math.round((delta2 / combined) * 48);
     h2 = Math.max(0, h2 - dmg1);
     h1 = Math.max(0, h1 - dmg2);
-    logs.push({ swing: i + 1, h1, h2 });
+    logs.push({ swing: i + 1, h1, h2, luck1, luck2, offensive1, offensive2, dmg1, dmg2 });
   }
   let winner;
   if (h1 === h2) {
@@ -207,11 +391,70 @@ function simulateDuel(c1, c2) {
     winner = h1 > h2 ? c1 : c2;
   }
   const loser = winner === c1 ? c2 : c1;
-  return { winner, loser, h1, h2, logs };
+  return { winner, loser, h1, h2, logs, breakdown: { s1, s2 } };
 }
 
-export function GuessTheVictorSection({ roster, onOpen }) {
-  const contenders = useMemo(() => (roster || []).filter((item) => hasPortrait(item)), [roster]);
+function entityDescriptor(entity) {
+  if (!entity) return "Legend";
+  if (entity.type === "faction") {
+    return `${entity.memberCount || 0} legends`;
+  }
+  return (
+    (Array.isArray(entity.alias) && entity.alias[0]) ||
+    entity.identity ||
+    [entity.alignment, entity.status].filter(Boolean).join(" • ") ||
+    entity.primaryLocation ||
+    "Legend"
+  );
+}
+
+function FactionCollage({ sources = [] }) {
+  const tiles = sources.slice(0, 4);
+  if (!tiles.length) {
+    return (
+      <div className="flex h-full w-full items-center justify-center bg-black/50">
+        <Sparkles className="h-8 w-8 text-amber-200" aria-hidden="true" />
+      </div>
+    );
+  }
+  const gridClass = tiles.length === 1 ? "grid-cols-1" : tiles.length <= 2 ? "grid-cols-2" : "grid-cols-2";
+  return (
+    <div className={classNames("grid h-full w-full", gridClass)}>
+      {tiles.map((src, index) => (
+        <div key={`${src}-${index}`} className="relative overflow-hidden border border-white/10">
+          <ImageSafe src={src} alt="" className="h-full w-full object-cover" loading="lazy" aria-hidden="true" />
+          <div className="absolute inset-0 bg-gradient-to-b from-black/20 via-black/20 to-black/65" aria-hidden="true" />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function entityKey(entity) {
+  if (!entity) return null;
+  return entity.id || entity.slug || null;
+}
+
+function sameEntity(a, b) {
+  const keyA = entityKey(a);
+  const keyB = entityKey(b);
+  if (!keyA || !keyB) return false;
+  return keyA === keyB;
+}
+
+export function GuessTheVictorSection({ roster, onOpen, characterMap, dayKey, contextType }) {
+  const rosterType = contextType || (roster?.[0]?.type || "character");
+  const dateKey = dayKey || new Date().toISOString().slice(0, 10);
+  const contenders = useMemo(() => {
+    if (!Array.isArray(roster)) return [];
+    return roster.filter((item) => {
+      if (!item) return false;
+      if (rosterType === "faction") {
+        return (item.memberCount || 0) > 0 || collageSourcesForEntry(item).length > 0;
+      }
+      return hasPortrait(item);
+    });
+  }, [roster, rosterType]);
   const [pair, setPair] = useState(() => pickRandomPair(contenders));
   const [guess, setGuess] = useState(null);
   const [result, setResult] = useState(null);
@@ -221,6 +464,8 @@ export function GuessTheVictorSection({ roster, onOpen }) {
   const [animating, setAnimating] = useState(false);
   const [portraitStep, setPortraitStep] = useState({});
   const [message, setMessage] = useState(null);
+  const [revealedRounds, setRevealedRounds] = useState(0);
+  const [showSummary, setShowSummary] = useState(false);
 
   const shufflePair = useCallback(() => {
     const fresh = pickRandomPair(contenders);
@@ -229,6 +474,8 @@ export function GuessTheVictorSection({ roster, onOpen }) {
     setResult(null);
     setMessage(null);
     setPortraitStep({});
+    setRevealedRounds(0);
+    setShowSummary(false);
   }, [contenders]);
 
   useEffect(() => {
@@ -264,11 +511,16 @@ export function GuessTheVictorSection({ roster, onOpen }) {
 
   const cyclePortrait = useCallback((fighter) => {
     if (!fighter) return;
-    const sources = [fighter.cover, ...(fighter.gallery || [])].filter(Boolean);
+    const sources =
+      fighter.type === "faction"
+        ? collageSourcesForEntry(fighter)
+        : [fighter.cover, ...(fighter.gallery || [])].filter(Boolean);
     if (!sources.length) return;
     setPortraitStep((current) => {
-      const index = current[fighter.id] ?? 0;
-      return { ...current, [fighter.id]: (index + 1) % sources.length };
+      const key = entityKey(fighter);
+      if (!key) return current;
+      const index = current[key] ?? 0;
+      return { ...current, [key]: (index + 1) % sources.length };
     });
   }, []);
 
@@ -278,9 +530,12 @@ export function GuessTheVictorSection({ roster, onOpen }) {
       if (!isChampionship) return base;
       const desired = Math.max(1, championshipSlots);
       const needed = Math.max(0, desired - base.length);
-      const pool = contenders.filter(
-        (entry) => entry.id !== champion.id && !base.some((item) => item.id === entry.id)
-      );
+      const pool = contenders.filter((entry) => {
+        const key = entry.id || entry.slug;
+        const championKey = champion.id || champion.slug;
+        if (key === championKey) return false;
+        return !base.some((item) => (item.id || item.slug) === key);
+      });
       const extras = [];
       const mutable = [...pool];
       while (extras.length < needed && mutable.length) {
@@ -296,30 +551,47 @@ export function GuessTheVictorSection({ roster, onOpen }) {
   const choose = useCallback(
     (candidateId) => {
       if (!pair.length || result || animating) return;
-      const champion = pair.find((entry) => entry.id === candidateId);
-      const rival = pair.find((entry) => entry.id !== candidateId);
+      const champion = pair.find((entry) => entityKey(entry) === candidateId);
+      const rival = pair.find((entry) => entityKey(entry) !== candidateId);
       if (!champion || !rival) return;
       setGuess(candidateId);
       const opponents = queueOpponents(champion, rival);
       setAnimating(true);
       const matches = [];
       let championWins = true;
+      let finalLoser = rival;
       for (const opponent of opponents) {
-        const outcome = simulateDuel(champion, opponent);
+        const outcome = simulateDuel(champion, opponent, characterMap, dateKey);
         matches.push({ opponent, outcome });
-        if (outcome.winner?.id !== champion.id) {
-          championWins = false;
-          break;
+        if (sameEntity(outcome.winner, champion)) {
+          finalLoser = opponent;
+          continue;
         }
+        championWins = false;
+        finalLoser = champion;
+        break;
       }
       const finalMatch = matches[matches.length - 1] || null;
-      const finalWinner = finalMatch?.outcome?.winner || champion;
-      const finalLoser = finalMatch?.outcome?.loser || rival;
-      setResult({ champion, matches, championWins, finalWinner, finalLoser, mode });
+      const finalWinner = championWins
+        ? champion
+        : finalMatch?.outcome?.winner && sameEntity(finalMatch.outcome.winner, champion)
+        ? champion
+        : finalMatch?.outcome?.winner || finalLoser;
+      setResult({
+        champion,
+        matches,
+        championWins,
+        finalWinner,
+        finalLoser,
+        mode,
+        roundLogs: finalMatch?.outcome?.logs || [],
+      });
       setMessage(championWins ? `${champion.name} Wins` : `${champion.name} Loses`);
+      setRevealedRounds(0);
+      setShowSummary(false);
       setTimeout(() => setAnimating(false), 1200);
     },
-    [pair, result, animating, queueOpponents, mode]
+    [pair, result, animating, queueOpponents, mode, characterMap, dateKey]
   );
 
   const rematch = useCallback(() => {
@@ -327,6 +599,8 @@ export function GuessTheVictorSection({ roster, onOpen }) {
     setResult(null);
     setMessage(null);
     setAnimating(false);
+    setRevealedRounds(0);
+    setShowSummary(false);
   }, []);
 
   const nextOpponents = useCallback(() => {
@@ -339,9 +613,33 @@ export function GuessTheVictorSection({ roster, onOpen }) {
 
   const [left, right] = pair;
   const lastMatch = result?.matches?.[result.matches.length - 1] || null;
-  const roundLogs = lastMatch?.outcome?.logs || [];
+  const roundLogs = result?.roundLogs || [];
   const championName = result?.champion?.name || left?.name;
   const challengerName = lastMatch?.opponent?.name || right?.name;
+
+  useEffect(() => {
+    if (!roundLogs.length || !result) {
+      setRevealedRounds(0);
+      setShowSummary(false);
+      return undefined;
+    }
+    setRevealedRounds(0);
+    setShowSummary(false);
+    const timers = [];
+    roundLogs.forEach((_, index) => {
+      timers.push(
+        setTimeout(() => {
+          setRevealedRounds(index + 1);
+          if (index + 1 === roundLogs.length) {
+            setTimeout(() => setShowSummary(true), 350);
+          }
+        }, (index + 1) * 420)
+      );
+    });
+    return () => {
+      timers.forEach(clearTimeout);
+    };
+  }, [roundLogs, result]);
 
   const summaryBar = (
     <div
@@ -376,17 +674,19 @@ export function GuessTheVictorSection({ roster, onOpen }) {
 
   const fighterCard = (fighter, slotIndex = 0) => {
     if (!fighter) return null;
-    const descriptor = fighter.alias?.[0] || fighter.identity || fighter.alignment || fighter.primaryLocation || "Legend";
-    const imageSources = [fighter.cover, ...(fighter.gallery || [])].filter(Boolean);
-    const portraitIndex = portraitStep[fighter.id] ?? 0;
+    const key = entityKey(fighter);
+    const descriptor = entityDescriptor(fighter);
+    const collage = fighter.type === "faction" ? collageSourcesForEntry(fighter) : null;
+    const imageSources = fighter.type === "faction" ? collage : [fighter.cover, ...(fighter.gallery || [])].filter(Boolean);
+    const portraitIndex = portraitStep[key] ?? 0;
     const portrait = imageSources.length ? imageSources[portraitIndex % imageSources.length] : fighter.cover;
-    const isWinner = result && result.finalWinner?.id === fighter.id;
-    const isLoser = result && result.finalLoser?.id === fighter.id;
-    const isChosen = guess === fighter.id;
+    const isWinner = result && sameEntity(result.finalWinner, fighter);
+    const isLoser = result && sameEntity(result.finalLoser, fighter);
+    const isChosen = guess === key;
     const jitterClass = animating ? (slotIndex % 2 === 0 ? "animate-duel-shake-left" : "animate-duel-shake-right") : "";
     const handleSelect = () => {
       if (result) return;
-      choose(fighter.id);
+      choose(key);
     };
     const handleKey = (event) => {
       if (event.key === "Enter" || event.key === " ") {
@@ -396,7 +696,7 @@ export function GuessTheVictorSection({ roster, onOpen }) {
     };
     return (
       <div
-        key={fighter.id}
+        key={key}
         role="button"
         tabIndex={0}
         onClick={handleSelect}
@@ -414,13 +714,17 @@ export function GuessTheVictorSection({ roster, onOpen }) {
         )}
       >
         <div className="relative aspect-square overflow-hidden">
-          <ImageSafe
-            src={portrait || fighter.cover || fighter.gallery?.[0]}
-            alt={characterAltText(fighter.name)}
-            fallbackLabel={fighter.name}
-            className="h-full w-full object-cover"
-            loading="lazy"
-          />
+          {fighter.type === "faction" ? (
+            <FactionCollage sources={collage?.length ? collage : imageSources} />
+          ) : (
+            <ImageSafe
+              src={portrait || fighter.cover || fighter.gallery?.[0]}
+              alt={characterAltText(fighter.name)}
+              fallbackLabel={fighter.name}
+              className="h-full w-full object-cover"
+              loading="lazy"
+            />
+          )}
           <div className="absolute inset-0 bg-gradient-to-b from-black/10 via-black/10 to-black/75" aria-hidden="true" />
           <div className="absolute inset-x-4 bottom-4 flex flex-col gap-1 text-left">
             <span className="text-[0.6rem] font-semibold uppercase tracking-[0.35em] text-white/65">{descriptor}</span>
@@ -560,14 +864,14 @@ export function GuessTheVictorSection({ roster, onOpen }) {
       </div>
       {roundLogs.length > 0 && championName && challengerName && (
         <div className="flex flex-wrap items-center justify-center gap-2 text-[0.65rem] font-semibold uppercase tracking-[0.3em] text-white/75">
-          {roundLogs.map((log) => (
+          {roundLogs.slice(0, revealedRounds).map((log) => (
             <div key={log.swing} className="rounded-full border border-white/20 bg-black/70 px-4 py-1">
               Round {log.swing}: {championName?.split(" ")[0]} {log.h1} • {challengerName?.split(" ")[0]} {log.h2}
             </div>
           ))}
         </div>
       )}
-      {result && (
+      {result && showSummary && (
         <div className="flex flex-wrap items-center justify-center gap-3 text-[0.65rem] font-semibold uppercase tracking-[0.3em]">
           <button
             type="button"
@@ -592,7 +896,7 @@ export function GuessTheVictorSection({ roster, onOpen }) {
           </button>
         </div>
       )}
-      {result && (
+      {result && showSummary && (
         <div className="rounded-2xl border border-white/10 bg-black/45 p-5 text-sm text-white/80">
           <div className="flex flex-wrap items-center gap-2 text-base font-black text-white">
             {message}
@@ -653,14 +957,36 @@ export function TaxonomyIndexLayout({
   badgeLabel = "LoreMaker Universe",
   enableArena = false,
   characters = [],
+  dayKey,
 }) {
-  const slides = useMemo(() => normaliseSlides(entries), [entries]);
+  const dateKey = dayKey || new Date().toISOString().slice(0, 10);
+  const characterMap = useMemo(() => {
+    const map = new Map();
+    (characters || []).forEach((character) => {
+      if (!character) return;
+      const key = character.id || character.slug;
+      if (key) map.set(key, character);
+    });
+    return map;
+  }, [characters]);
+  const preparedEntries = useMemo(
+    () =>
+      (entries || []).map((entry) => ({
+        ...entry,
+        collage: collageSourcesForEntry(entry),
+        visualMetrics: buildVisualMetrics(entry, characterMap, dateKey),
+        combatProfile: entry.type === "faction" ? computeFactionStats(entry, characterMap, dateKey) : null,
+      })),
+    [entries, characterMap, dateKey]
+  );
+  const slides = useMemo(() => normaliseSlides(preparedEntries), [preparedEntries]);
   const [index, setIndex] = useState(0);
   const [direction, setDirection] = useState(0);
   const guessRoster = useMemo(() => {
+    if (basePath === "/factions") return preparedEntries;
     if (characters && characters.length) return characters;
-    return entries.flatMap((entry) => entry.members || []);
-  }, [characters, entries]);
+    return preparedEntries.flatMap((entry) => entry.members || []);
+  }, [characters, preparedEntries, basePath]);
 
   useEffect(() => {
     if (!slides.length) {
@@ -695,12 +1021,40 @@ export function TaxonomyIndexLayout({
   const sharedBackground =
     background ||
     firstMemberPortrait(current?.members || []) ||
-    entries.reduce((acc, entry) => acc || firstMemberPortrait(entry.members || []), null) ||
+    preparedEntries.reduce((acc, entry) => acc || firstMemberPortrait(entry.members || []), null) ||
     null;
   const heroMembers = useMemo(() => {
     if (!current) return [];
     return sampleMembers(current.members || [], 6);
   }, [current?.slug]);
+  const [heroHighlight, setHeroHighlight] = useState(null);
+  useEffect(() => {
+    if (!heroMembers.length) {
+      setHeroHighlight(null);
+      return;
+    }
+    const firstKey = entityKey(heroMembers[0]);
+    setHeroHighlight((prev) => {
+      if (prev && heroMembers.some((member) => entityKey(member) === prev)) {
+        return prev;
+      }
+      return firstKey || null;
+    });
+  }, [current?.slug, heroMembers]);
+  const activeHero = useMemo(() => {
+    if (!heroMembers.length) return null;
+    if (heroHighlight) {
+      const match = heroMembers.find((member) => entityKey(member) === heroHighlight);
+      if (match) return match;
+    }
+    return heroMembers[0];
+  }, [heroMembers, heroHighlight]);
+  const activeQuote =
+    activeHero?.shortDesc ||
+    activeHero?.summary ||
+    (current?.snippets && current.snippets[0]) ||
+    current?.summary ||
+    description;
   const navLinks = useMemo(
     () => [
       { href: "/factions", label: "Factions" },
@@ -783,14 +1137,7 @@ export function TaxonomyIndexLayout({
                 <h1 className="text-4xl font-black leading-tight text-balance sm:text-5xl lg:text-6xl">{title}</h1>
                 <p className="max-w-xl text-sm font-semibold text-white/75 sm:text-base">{description}</p>
               </div>
-              {heroMembers.length ? (
-                <>
-                  <HeroRosterGrid members={heroMembers} />
-                  <p className="text-xs font-semibold uppercase tracking-[0.3em] text-white/55">
-                    Hover or tap to spotlight legends tied to this focus.
-                  </p>
-                </>
-              ) : (
+              {!heroMembers.length && (
                 <p className="rounded-3xl border border-white/12 bg-white/5 p-4 text-sm font-semibold text-white/75 backdrop-blur-2xl">
                   {description}
                 </p>
@@ -838,23 +1185,45 @@ export function TaxonomyIndexLayout({
                       animate="center"
                       exit="exit"
                       transition={{ duration: 0.6, ease: "easeInOut" }}
-                      className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center"
+                      className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center"
                     >
-                      <div className="space-y-3 text-sm font-semibold text-white/70">
-                        {(current.snippets || []).slice(0, 3).map((snippet, idx) => (
-                          <p key={idx} className="rounded-2xl border border-white/10 bg-black/40 p-3">
-                            “{snippet}”
-                          </p>
-                        ))}
-                        {!current.snippets?.length && (
-                          <p className="rounded-2xl border border-white/10 bg-black/40 p-3">
-                            Fresh intelligence incoming from the LoreMaker archives.
-                          </p>
+                      <div className="space-y-4">
+                        {heroMembers.length ? (
+                          <HeroRosterGrid
+                            members={heroMembers}
+                            activeId={heroHighlight}
+                            onHighlight={(id) => {
+                              if (id) setHeroHighlight(id);
+                            }}
+                          />
+                        ) : (
+                          <div className="rounded-3xl border border-white/12 bg-white/5 p-4 text-sm font-semibold text-white/70">
+                            The archives are preparing illustrated legends for this focus.
+                          </div>
                         )}
+                        <div className="rounded-3xl border border-white/12 bg-black/40 p-5 text-sm font-semibold text-white/80">
+                          <p className="text-base font-semibold text-white/85 sm:text-lg">“{activeQuote}”</p>
+                          <div className="mt-4 flex flex-wrap items-center justify-between gap-3 text-[0.65rem] uppercase tracking-[0.3em] text-white/60">
+                            <span>— {activeHero?.name || current?.name}</span>
+                            {activeHero?.slug && (
+                              <Link
+                                href={`/characters/${activeHero.slug}`}
+                                className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-4 py-1 text-white transition hover:bg-white/20"
+                              >
+                                View profile
+                              </Link>
+                            )}
+                          </div>
+                        </div>
+                        <p className="text-xs font-semibold uppercase tracking-[0.3em] text-white/55">
+                          Hover or tap portraits to reveal whispers from the dossier.
+                        </p>
                       </div>
                       <div className="flex flex-col items-center gap-3">
                         <div className="h-24 w-24 overflow-hidden rounded-2xl border border-white/20 bg-black/60 shadow-[0_12px_40px_rgba(8,10,26,0.55)]">
-                          {current.primaryImage ? (
+                          {current.collage?.length ? (
+                            <FactionCollage sources={current.collage} />
+                          ) : current.primaryImage ? (
                             <ImageSafe
                               src={current.primaryImage}
                               alt={characterAltText(current.name)}
@@ -942,17 +1311,26 @@ export function TaxonomyIndexLayout({
         </div>
       </section>
       <main className="relative z-10 mx-auto max-w-7xl space-y-16 px-4 py-16 sm:px-6 lg:px-8">
-        {enableArena && entries.length > 1 && <FactionArena entries={entries} basePath={basePath} />}
-        {enableArena && <GuessTheVictorSection roster={guessRoster} />}
+        {enableArena && preparedEntries.length > 1 && (
+          <FactionArena entries={preparedEntries} basePath={basePath} characterMap={characterMap} dayKey={dateKey} />
+        )}
+        {enableArena && (
+          <GuessTheVictorSection
+            roster={guessRoster}
+            characterMap={characterMap}
+            dayKey={dateKey}
+            contextType={basePath === "/factions" ? "faction" : "character"}
+          />
+        )}
         <section className="space-y-6">
           <div className="flex flex-wrap items-center justify-between gap-4">
             <h2 className="text-2xl font-black text-white">Archive dossiers</h2>
             <span className="text-sm font-semibold text-white/60">
-              {entries.length} dossier{entries.length === 1 ? "" : "s"} documented
+              {preparedEntries.length} dossier{preparedEntries.length === 1 ? "" : "s"} documented
             </span>
           </div>
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6">
-            {entries.map((entry) => (
+            {preparedEntries.map((entry) => (
               <Link
                 key={entry.slug}
                 href={`${basePath}/${entry.slug}`}
@@ -992,6 +1370,39 @@ export function TaxonomyIndexLayout({
                     ))}
                   </ul>
                 )}
+                {entry.visualMetrics?.length > 0 && (
+                  <div className="mt-4 space-y-2">
+                    {entry.visualMetrics.slice(0, 3).map((metric) =>
+                      metric.type === "bar" ? (
+                        <div key={metric.key} className="space-y-1">
+                          <div className="flex items-center justify-between text-[0.6rem] font-semibold uppercase tracking-[0.3em] text-white/55">
+                            <span>{metric.label}</span>
+                            <span>{Math.round(metric.value)}</span>
+                          </div>
+                          <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/10">
+                            <div
+                              className="h-full rounded-full bg-gradient-to-r from-amber-200 via-amber-300 to-amber-500"
+                              style={{ width: `${Math.min(100, Math.max(0, metric.value))}%` }}
+                            />
+                          </div>
+                        </div>
+                      ) : (
+                        <div key={metric.key} className="flex items-center gap-3">
+                          <div
+                            className="h-12 w-12 rounded-full border border-white/15"
+                            style={{
+                              backgroundImage: `conic-gradient(rgba(250,204,21,0.9) ${Math.min(100, Math.max(0, metric.value)) * 3.6}deg, rgba(148,163,184,0.2) 0deg)`,
+                            }}
+                          />
+                          <div className="text-xs font-semibold uppercase tracking-[0.3em] text-white/65">
+                            <div>{metric.label}</div>
+                            <div className="text-white/80">{Math.round(metric.value)}%</div>
+                          </div>
+                        </div>
+                      )
+                    )}
+                  </div>
+                )}
                 <span className="mt-5 inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.3em] text-amber-200">
                   Explore dossier
                   <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
@@ -1007,13 +1418,41 @@ export function TaxonomyIndexLayout({
   );
 }
 
-function FactionArena({ entries, basePath }) {
+function FactionArena({ entries, basePath, characterMap, dayKey }) {
+  const dateKey = dayKey || new Date().toISOString().slice(0, 10);
   const roster = useMemo(() => entries.filter((entry) => entry && entry.slug), [entries]);
   const [left, setLeft] = useState(() => roster[0] || null);
   const [right, setRight] = useState(() => roster[1] || roster[0] || null);
   const [result, setResult] = useState(null);
 
   const selectBySlug = useCallback((slug) => roster.find((entry) => entry.slug === slug) || null, [roster]);
+
+  const statsFor = useCallback(
+    (entry) => {
+      if (!entry) return null;
+      return entry.combatProfile || computeFactionStats(entry, characterMap, dateKey) || {
+        strength: 40,
+        power: 40,
+        discipline: 40,
+        mystique: 40,
+        fortune: 50,
+      };
+    },
+    [characterMap, dateKey]
+  );
+
+  const duelScore = useCallback(
+    (entry) => {
+      const stats = statsFor(entry);
+      if (!stats) return 0;
+      const base =
+        stats.strength * 0.28 + stats.power * 0.32 + stats.discipline * 0.16 + stats.mystique * 0.14 + stats.fortune * 0.1;
+      const swing = (Math.random() - 0.5) * 2; // -1..1
+      const luck = Math.sign(swing) * Math.pow(Math.abs(swing), 0.45) * (stats.fortune / 100) * base * 0.65;
+      return base + luck;
+    },
+    [statsFor]
+  );
 
   const chooseRandom = useCallback(
     (excludeSlug) => {
@@ -1037,24 +1476,65 @@ function FactionArena({ entries, basePath }) {
   const resolveDuel = useCallback(
     (l = left, r = right) => {
       if (!l || !r) return;
-      const leftWeight = Math.max(1, l.memberCount || 1);
-      const rightWeight = Math.max(1, r.memberCount || 1);
-      const total = leftWeight + rightWeight;
-      const roll = Math.random() * total;
-      const winner = roll <= leftWeight ? l : r;
+      const scoreLeft = duelScore(l);
+      const scoreRight = duelScore(r);
+      let winner;
+      if (scoreLeft === scoreRight) {
+        winner = Math.random() > 0.5 ? l : r;
+      } else {
+        winner = scoreLeft > scoreRight ? l : r;
+      }
       const loser = winner === l ? r : l;
+      const winnerStats = statsFor(winner);
+      const loserStats = statsFor(loser);
+      const advantage = Math.max(0, Math.round((scoreLeft - scoreRight) || (scoreRight - scoreLeft)));
       setResult({
         winner,
         loser,
-        narrative: `${winner.name} orchestrate a decisive maneuver, outclassing ${loser.name} on the LoreMaker stage.`,
+        narrative: `${winner.name} marshal their forces with precision, overtaking ${loser.name} despite volatile fortunes.`,
+        scores: { left: Math.round(scoreLeft), right: Math.round(scoreRight) },
+        detail: { winnerStats, loserStats, advantage },
       });
     },
-    [left, right]
+    [left, right, duelScore, statsFor]
   );
 
   const duel = useCallback(() => {
     resolveDuel();
   }, [resolveDuel]);
+
+  const renderMetricRow = (metric) => {
+    if (!metric) return null;
+    if (metric.type === "bar") {
+      return (
+        <div key={metric.key} className="space-y-1">
+          <div className="flex items-center justify-between text-[0.6rem] font-semibold uppercase tracking-[0.3em] text-white/55">
+            <span>{metric.label}</span>
+            <span>{Math.round(metric.value)}</span>
+          </div>
+          <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/10">
+            <div
+              className="h-full rounded-full bg-gradient-to-r from-amber-200 via-amber-300 to-amber-500"
+              style={{ width: `${Math.min(100, Math.max(0, metric.value))}%` }}
+            />
+          </div>
+        </div>
+      );
+    }
+    const percentage = Math.min(100, Math.max(0, metric.value));
+    return (
+      <div key={metric.key} className="flex items-center gap-3">
+        <div
+          className="h-12 w-12 rounded-full border border-white/15 bg-[radial-gradient(circle_at_center,rgba(250,204,21,0.85)_0%,rgba(17,24,39,0.2)_55%,rgba(17,24,39,0.8)_100%)]"
+          style={{ backgroundImage: `conic-gradient(rgba(250,204,21,0.9) ${percentage * 3.6}deg, rgba(148,163,184,0.2) 0deg)` }}
+        />
+        <div className="text-xs font-semibold uppercase tracking-[0.3em] text-white/65">
+          <div>{metric.label}</div>
+          <div className="text-white/80">{Math.round(metric.value)}%</div>
+        </div>
+      </div>
+    );
+  };
 
   const renderSlot = (label, value, setter, rival) => (
     <div className="space-y-4 rounded-3xl border border-white/12 bg-white/5 p-6 backdrop-blur-2xl">
@@ -1088,7 +1568,9 @@ function FactionArena({ entries, basePath }) {
         <div className="space-y-3">
           <div className="flex items-center gap-3">
             <div className="h-16 w-16 overflow-hidden rounded-2xl border border-white/20 bg-black/40">
-              {value.primaryImage ? (
+              {value.collage?.length ? (
+                <FactionCollage sources={value.collage} />
+              ) : value.primaryImage ? (
                 <ImageSafe
                   src={value.primaryImage}
                   alt={characterAltText(value.name)}
@@ -1110,6 +1592,7 @@ function FactionArena({ entries, basePath }) {
             </div>
           </div>
           {value.summary && <p className="text-sm font-semibold text-white/70">{value.summary}</p>}
+          {value.visualMetrics?.length > 0 && <div className="space-y-2">{value.visualMetrics.map(renderMetricRow)}</div>}
           <Link
             href={`${basePath}/${value.slug}`}
             className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.3em] text-amber-200 transition hover:text-amber-100"
@@ -1162,9 +1645,40 @@ function FactionArena({ entries, basePath }) {
           Commence duel
         </button>
         {result && (
-          <div className="flex-1 rounded-3xl border border-amber-300/50 bg-amber-200/10 px-5 py-4 text-sm font-semibold text-amber-100">
-            <div className="text-lg font-black uppercase tracking-[0.35em] text-amber-200">{result.winner.name} prevail</div>
-            <p className="mt-2 text-sm text-amber-100">{result.narrative}</p>
+          <div className="flex-1 space-y-4 rounded-3xl border border-amber-300/50 bg-amber-200/10 px-5 py-4 text-sm font-semibold text-amber-100">
+            <div className="flex flex-wrap items-center justify-between gap-2 text-lg font-black uppercase tracking-[0.35em] text-amber-200">
+              <span>{result.winner.name} prevail</span>
+              <span>
+                {result.scores.left} – {result.scores.right}
+              </span>
+            </div>
+            <p className="text-sm text-amber-100">{result.narrative}</p>
+            <div className="grid gap-3 sm:grid-cols-2">
+              {[result.winner, result.loser].map((team) => {
+                const isWinner = sameEntity(team, result.winner);
+                const detail = result.detail || {};
+                const stats = isWinner ? detail.winnerStats : detail.loserStats;
+                const metrics = stats || { strength: 0, power: 0, discipline: 0, mystique: 0, fortune: 0 };
+                return (
+                  <div
+                    key={team.slug}
+                    className={classNames(
+                      "space-y-2 rounded-2xl border px-4 py-3",
+                      isWinner ? "border-emerald-300/50 bg-emerald-300/10" : "border-white/20 bg-black/20"
+                    )}
+                    >
+                      <div className="text-sm font-black uppercase tracking-[0.3em] text-white/80">{team.name}</div>
+                      <div className="grid gap-1 text-[0.6rem] font-semibold uppercase tracking-[0.3em] text-white/60">
+                        <span>Strength {Math.round(metrics.strength)}</span>
+                        <span>Power {Math.round(metrics.power)}</span>
+                        <span>Discipline {Math.round(metrics.discipline)}</span>
+                        <span>Mystique {Math.round(metrics.mystique)}</span>
+                        <span>Fortune {Math.round(metrics.fortune)}</span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
           </div>
         )}
       </div>

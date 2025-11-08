@@ -1,12 +1,12 @@
 import Head from "next/head";
-import { loadCharacterLibrary, buildTaxonomies } from "../../lib/characters";
+import { loadCharacterLibrary, buildTaxonomies, todayKey } from "../../lib/characters";
 import { TaxonomyIndexLayout } from "../../components/taxonomy-layout";
 
 const META_TITLE = "Factions of the LoreMaker Universe | Menelek Makonnen";
 const META_DESCRIPTION =
   "Explore the alliances, teams, and secret societies that shape Menelek Makonnen's LoreMaker Universe.";
 
-export default function FactionsIndexPage({ entries, characters }) {
+export default function FactionsIndexPage({ entries, characters, dayKey }) {
   return (
     <>
       <Head>
@@ -26,6 +26,7 @@ export default function FactionsIndexPage({ entries, characters }) {
         basePath="/factions"
         enableArena
         characters={characters}
+        dayKey={dayKey}
       />
     </>
   );
@@ -39,6 +40,7 @@ export async function getStaticProps() {
     props: {
       entries: factions,
       characters,
+      dayKey: todayKey(),
     },
     revalidate: 600,
   };

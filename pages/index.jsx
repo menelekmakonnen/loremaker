@@ -1901,8 +1901,16 @@ function computeBattleTimeline(charA, charB) {
   };
 }
 
-function GuessTheVictor({ characters, onOpenCharacter }) {
-  return <GuessTheVictorSection roster={characters} onOpen={onOpenCharacter} />;
+function GuessTheVictor({ characters, onOpenCharacter, characterMap, dayKey }) {
+  return (
+    <GuessTheVictorSection
+      roster={characters}
+      onOpen={onOpenCharacter}
+      characterMap={characterMap}
+      dayKey={dayKey}
+      contextType="character"
+    />
+  );
 }
 
 function ArenaCard({ char, position, onRelease, onOpen, health, isWinner, showX, onAutoFill, onRandomize }) {
@@ -4251,7 +4259,7 @@ function HeroSection({
 }
 
 /** -------------------- Page -------------------- */
-export default function LoremakerApp({ initialCharacters = [], initialError = null }) {
+export default function LoremakerApp({ initialCharacters = [], initialError = null, dayKey }) {
   const { data, loading, error, refetch } = useCharacters(initialCharacters, initialError);
   const router = useRouter();
   const [query, setQuery] = useState("");
@@ -4284,6 +4292,16 @@ export default function LoremakerApp({ initialCharacters = [], initialError = nu
     () => [arenaSlots.left, arenaSlots.right].filter(Boolean),
     [arenaSlots.left, arenaSlots.right]
   );
+
+  const characterMap = useMemo(() => {
+    const map = new Map();
+    (data || []).forEach((char) => {
+      if (!char) return;
+      const key = char.id || char.slug;
+      if (key) map.set(key, char);
+    });
+    return map;
+  }, [data]);
 
   const openCharacter = useCallback((char) => {
     if (!char) return;
@@ -4974,7 +4992,12 @@ export default function LoremakerApp({ initialCharacters = [], initialError = nu
           )}
 
           <div id="predict-the-victor" className="scroll-mt-40">
-            <GuessTheVictor characters={sorted} onOpenCharacter={openCharacter} />
+            <GuessTheVictor
+              characters={sorted}
+              onOpenCharacter={openCharacter}
+              characterMap={characterMap}
+              dayKey={dayKey}
+            />
           </div>
 
           <section className="flex flex-wrap items-center justify-between gap-3">
@@ -5030,6 +5053,7 @@ export async function getStaticProps() {
       props: {
         initialCharacters: characters,
         initialError: null,
+        dayKey: todayKey(),
       },
       revalidate: 600,
     };
@@ -5039,6 +5063,7 @@ export async function getStaticProps() {
       props: {
         initialCharacters: [],
         initialError: publicCharactersError(error),
+        dayKey: todayKey(),
       },
       revalidate: 300,
     };

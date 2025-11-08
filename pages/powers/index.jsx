@@ -1,12 +1,12 @@
 import Head from "next/head";
-import { loadCharacterLibrary, buildTaxonomies } from "../../lib/characters";
+import { loadCharacterLibrary, buildTaxonomies, todayKey } from "../../lib/characters";
 import { TaxonomyIndexLayout } from "../../components/taxonomy-layout";
 
 const META_TITLE = "Powers of the LoreMaker Universe | Menelek Makonnen";
 const META_DESCRIPTION =
   "Search abilities, arcane talents, and mythic gifts wielded by heroes and villains across the LoreMaker Universe.";
 
-export default function PowersIndexPage({ entries, characters }) {
+export default function PowersIndexPage({ entries, characters, dayKey }) {
   return (
     <>
       <Head>
@@ -25,6 +25,7 @@ export default function PowersIndexPage({ entries, characters }) {
         entries={entries}
         basePath="/powers"
         characters={characters}
+        dayKey={dayKey}
       />
     </>
   );
@@ -38,6 +39,7 @@ export async function getStaticProps() {
     props: {
       entries: powers,
       characters,
+      dayKey: todayKey(),
     },
     revalidate: 600,
   };

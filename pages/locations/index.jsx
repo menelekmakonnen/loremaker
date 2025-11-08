@@ -1,12 +1,12 @@
 import Head from "next/head";
-import { loadCharacterLibrary, buildTaxonomies } from "../../lib/characters";
+import { loadCharacterLibrary, buildTaxonomies, todayKey } from "../../lib/characters";
 import { TaxonomyIndexLayout } from "../../components/taxonomy-layout";
 
 const META_TITLE = "Locations of the LoreMaker Universe | Menelek Makonnen";
 const META_DESCRIPTION =
   "Tour the cities, sanctums, and hidden realms that anchor the LoreMaker Universe's greatest legends.";
 
-export default function LocationsIndexPage({ entries, characters }) {
+export default function LocationsIndexPage({ entries, characters, dayKey }) {
   return (
     <>
       <Head>
@@ -25,6 +25,7 @@ export default function LocationsIndexPage({ entries, characters }) {
         entries={entries}
         basePath="/locations"
         characters={characters}
+        dayKey={dayKey}
       />
     </>
   );
@@ -38,6 +39,7 @@ export async function getStaticProps() {
     props: {
       entries: locations,
       characters,
+      dayKey: todayKey(),
     },
     revalidate: 600,
   };
