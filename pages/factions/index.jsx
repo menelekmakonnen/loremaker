@@ -4,7 +4,7 @@ import { TaxonomyIndexLayout } from "../../components/taxonomy-layout";
 
 const META_TITLE = "Factions of the LoreMaker Universe | Menelek Makonnen";
 const META_DESCRIPTION =
-  "Explore the alliances, enclaves, and secret societies that shape Menelek Makonnen's LoreMaker Universe.";
+  "Explore the alliances, teams, and secret societies that shape Menelek Makonnen's LoreMaker Universe.";
 
 export default function FactionsIndexPage({ entries, characters }) {
   return (
@@ -20,7 +20,7 @@ export default function FactionsIndexPage({ entries, characters }) {
         <meta name="twitter:description" content={META_DESCRIPTION} />
       </Head>
       <TaxonomyIndexLayout
-        title="Factions & Enclaves"
+        title="Factions & Teams"
         description="Meet the alliances who command territories, uphold ancient vows, and influence the cosmic balance of the LoreMaker Universe."
         entries={entries}
         basePath="/factions"

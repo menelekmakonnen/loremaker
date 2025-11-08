@@ -50,6 +50,7 @@ import {
 import ImageSafe, { characterAltText, Insignia } from "../components/image-safe";
 import SiteFooter from "../components/site-footer";
 import ScrollShortcuts from "../components/scroll-shortcuts";
+import { GuessTheVictorSection } from "../components/taxonomy-layout";
 
 /**
  * Ultra interactive Loremaker experience
@@ -1874,23 +1875,6 @@ function duel(c1, c2) {
   };
 }
 
-function pickRandomPair(roster = []) {
-  if (!Array.isArray(roster) || roster.length < 2) return [];
-  const firstIndex = Math.floor(Math.random() * roster.length);
-  let secondIndex = Math.floor(Math.random() * (roster.length - 1));
-  if (secondIndex >= firstIndex) {
-    secondIndex += 1;
-  }
-  const a = roster[firstIndex];
-  const b = roster[secondIndex];
-  if (!a || !b || a.id === b.id) {
-    const fallback = roster.filter((entry) => entry && entry.id !== a?.id);
-    const replacement = fallback[Math.floor(Math.random() * fallback.length)] || null;
-    return replacement ? [a, replacement] : [a, b].filter(Boolean);
-  }
-  return [a, b];
-}
-
 function computeBattleTimeline(charA, charB) {
   const summary = duel(charA, charB);
   const timeline = summary.logs.map((phase) => ({
@@ -1918,239 +1902,7 @@ function computeBattleTimeline(charA, charB) {
 }
 
 function GuessTheVictor({ characters, onOpenCharacter }) {
-  const roster = useMemo(() => (characters || []).filter((entry) => hasIllustration(entry)), [characters]);
-  const [pair, setPair] = useState(() => pickRandomPair(roster));
-  const [guess, setGuess] = useState(null);
-  const [outcome, setOutcome] = useState(null);
-  const [timeline, setTimeline] = useState([]);
-  const [expanded, setExpanded] = useState(false);
-
-  useEffect(() => {
-    setPair(pickRandomPair(roster));
-    setGuess(null);
-    setOutcome(null);
-    setTimeline([]);
-    setExpanded(false);
-  }, [roster]);
-
-  const startNext = useCallback(() => {
-    setPair(pickRandomPair(roster));
-    setGuess(null);
-    setOutcome(null);
-    setTimeline([]);
-  }, [roster]);
-
-  const choose = useCallback(
-    (candidate) => {
-      if (!pair || pair.length < 2 || outcome) return;
-      setGuess(candidate);
-      const [left, right] = pair;
-      if (!left || !right) return;
-      const result = computeBattleTimeline(left, right);
-      setOutcome(result);
-      setTimeline(result.timeline || []);
-    },
-    [pair, outcome]
-  );
-
-  if (!roster.length || pair.length < 2) {
-    return null;
-  }
-
-  const guessedCorrect = outcome && guess && outcome.winner?.id === guess;
-  const [left, right] = pair;
-
-  const toggleExpanded = useCallback(() => {
-    setExpanded((value) => !value);
-  }, []);
-
-  const summaryBar = (
-    <button
-      type="button"
-      onClick={toggleExpanded}
-      className="group flex w-full items-center justify-between gap-3 rounded-full border border-white/12 bg-black/40 px-4 py-2 text-left text-xs font-semibold uppercase tracking-[0.35em] text-white/70 transition hover:border-amber-300/60 hover:text-white"
-      aria-expanded={expanded}
-    >
-      <span className="flex items-center gap-2">
-        <Sparkles className="h-3.5 w-3.5 text-amber-200" aria-hidden="true" />
-        Predict the victor
-      </span>
-      <span className="flex items-center gap-2 text-[0.65rem] font-bold text-white/60">
-        {outcome ? (guessedCorrect ? "Prophecy fulfilled" : "Fate disagreed") : expanded ? "Collapse" : "Unfold"}
-        <ChevronDown
-          className={cx(
-            "h-3.5 w-3.5 transition-transform",
-            expanded ? "rotate-180 text-amber-200" : "text-white/50 group-hover:text-amber-200"
-          )}
-          aria-hidden="true"
-        />
-      </span>
-    </button>
-  );
-
-  const renderFighter = (fighter) => {
-    if (!fighter) return null;
-    const active = outcome && outcome.winner?.id === fighter.id;
-    const isGuess = guess === fighter.id;
-    const disabled = Boolean(outcome);
-    const descriptor =
-      fighter.alias?.[0] || fighter.identity || fighter.alignment || fighter.primaryLocation || "LoreMaker legend";
-    const openProfile = () => onOpenCharacter?.(fighter);
-    const handleKey = (event) => {
-      if (event.key === "Enter" || event.key === " ") {
-        event.preventDefault();
-        openProfile();
-      }
-    };
-    return (
-      <Card
-        key={fighter.id}
-        className={cx(
-          "flex h-full flex-col gap-4 overflow-hidden border-white/12 bg-white/5 p-4 text-left shadow-[0_20px_60px_rgba(7,10,24,0.55)]",
-          active ? "ring-4 ring-emerald-300/80" : isGuess ? "ring-2 ring-amber-300/70" : "ring-1 ring-white/12"
-        )}
-      >
-        <div
-          className={cx(
-            "relative isolate overflow-hidden rounded-[26px] border border-white/15",
-            active ? "ring-2 ring-emerald-200/70" : isGuess ? "ring-2 ring-amber-200/60" : ""
-          )}
-          role="button"
-          tabIndex={0}
-          onClick={openProfile}
-          onKeyDown={handleKey}
-          aria-label={`Open ${fighter.name} quick view`}
-        >
-          <div className="aspect-square">
-            <ImageSafe
-              src={fighter.cover || fighter.gallery?.[0]}
-              alt={characterAltText(fighter.name)}
-              fallbackLabel={fighter.name}
-              className="h-full w-full object-cover"
-            />
-          </div>
-          <div className="absolute inset-0 bg-gradient-to-b from-black/10 via-transparent to-black/70" aria-hidden="true" />
-          <div className="absolute inset-x-4 bottom-4 flex flex-col gap-1 text-left">
-            <span className="text-[0.65rem] font-semibold uppercase tracking-[0.35em] text-white/70">{descriptor}</span>
-            <span className="text-xl font-black text-white drop-shadow">{fighter.name}</span>
-          </div>
-          <button
-            type="button"
-            onClick={(event) => {
-              event.stopPropagation();
-              choose(fighter.id);
-            }}
-            disabled={disabled}
-            className={cx(
-              "absolute left-4 top-4 inline-flex items-center gap-2 rounded-full px-4 py-1 text-xs font-semibold uppercase tracking-[0.35em] shadow-lg transition",
-              outcome && active
-                ? "border border-emerald-300/80 bg-emerald-300/20 text-emerald-100"
-                : outcome
-                ? "border border-white/20 bg-black/40 text-white/60"
-                : "border border-white/20 bg-black/50 text-white hover:bg-black/70"
-            )}
-            aria-pressed={isGuess}
-          >
-            {outcome ? (active ? "Victor" : "Resolved") : `I choose ${fighter.alias?.[0] || fighter.name}`}
-          </button>
-        </div>
-        <div className="flex flex-1 flex-col gap-3 text-sm text-white/70">
-          <div className="flex flex-wrap gap-2">
-            {(fighter.faction || []).slice(0, 2).map((label) => (
-              <span key={label} className="rounded-full border border-white/20 bg-white/10 px-3 py-1 text-xs font-semibold">
-                {label}
-              </span>
-            ))}
-            {(fighter.locations || [fighter.primaryLocation]).filter(Boolean).slice(0, 1).map((label) => (
-              <span key={label} className="rounded-full border border-white/20 bg-white/10 px-3 py-1 text-xs font-semibold">
-                {label}
-              </span>
-            ))}
-          </div>
-          <div className="text-xs font-semibold uppercase tracking-[0.3em] text-white/50">
-            Tap image for dossier overview
-          </div>
-        </div>
-      </Card>
-    );
-  };
-
-  if (!expanded) {
-    return <section className="rounded-3xl border border-white/12 bg-white/5 p-2 backdrop-blur-2xl">{summaryBar}</section>;
-  }
-
-  return (
-    <section className="space-y-6 rounded-3xl border border-white/12 bg-white/5 p-6 backdrop-blur-2xl">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="min-w-[14rem] flex-1 space-y-2">
-          <div className="flex items-center justify-between gap-3">
-            <h2 className="text-2xl font-black text-white">Predict the Victor</h2>
-            {outcome && (
-              <div
-                className={cx(
-                  "hidden rounded-full border px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] sm:inline-flex",
-                  guessedCorrect
-                    ? "border-emerald-300/70 bg-emerald-300/15 text-emerald-100"
-                    : "border-rose-400/60 bg-rose-400/15 text-rose-100"
-                )}
-              >
-                {guessedCorrect ? "Prophecy fulfilled" : "Fate disagreed"}
-              </div>
-            )}
-          </div>
-          <p className="text-sm font-semibold text-white/70">
-            Choose who wins before the clash. Guess correctly to earn bragging rights across the codex.
-          </p>
-        </div>
-        <div className="flex w-full flex-col items-end gap-2 sm:w-auto sm:flex-none">
-          {summaryBar}
-          {outcome && (
-            <div
-              className={cx(
-                "mt-1 inline-flex rounded-full border px-4 py-1 text-[0.65rem] font-semibold uppercase tracking-[0.35em]",
-                guessedCorrect
-                  ? "border-emerald-300/70 bg-emerald-300/15 text-emerald-100"
-                  : "border-rose-400/60 bg-rose-400/15 text-rose-100"
-              )}
-            >
-              {guessedCorrect ? "Prophecy fulfilled" : "Fate disagreed"}
-            </div>
-          )}
-        </div>
-      </div>
-      <div className="grid gap-4 sm:grid-cols-2">
-        {renderFighter(left)}
-        {renderFighter(right)}
-      </div>
-      {outcome && (
-        <div className="space-y-3 rounded-2xl border border-white/10 bg-black/40 p-4 text-sm text-white/80">
-          <div className="flex flex-wrap items-center gap-2 text-sm font-semibold">
-            <span className="text-white/70">Winner:</span>
-            <span className="text-base font-black text-white">{outcome.winner?.name}</span>
-          </div>
-          <div className="grid gap-2 sm:grid-cols-2">
-            {timeline.map((step) => (
-              <div key={step.round} className="rounded-xl border border-white/10 bg-white/5 px-3 py-2">
-                <div className="text-xs font-semibold uppercase tracking-[0.3em] text-white/50">Round {step.round}</div>
-                <div className="mt-1 flex items-center justify-between text-xs text-white/70">
-                  <span>
-                    {left?.name}: <strong className="text-white">{step.healthA}</strong>
-                  </span>
-                  <span>
-                    {right?.name}: <strong className="text-white">{step.healthB}</strong>
-                  </span>
-                </div>
-              </div>
-            ))}
-          </div>
-          <Button variant="subtle" size="sm" onClick={startNext} className="justify-center gap-2">
-            <RefreshCcw className="h-4 w-4" aria-hidden="true" />
-            Play another round
-          </Button>
-        </div>
-      )}
-    </section>
-  );
+  return <GuessTheVictorSection roster={characters} onOpen={onOpenCharacter} />;
 }
 
 function ArenaCard({ char, position, onRelease, onOpen, health, isWinner, showX, onAutoFill, onRandomize }) {
@@ -2879,6 +2631,7 @@ function ToolsBar({
   onOpenFilters,
   onClearFilters,
   onArenaToggle,
+  onFocusGame,
   onSync,
   showArena,
   totalCount,
@@ -3040,6 +2793,14 @@ function ToolsBar({
               >
                 <Filter className="h-4 w-4" aria-hidden="true" />
               </button>
+              <button
+                type="button"
+                onClick={onFocusGame}
+                className="inline-flex h-9 w-9 flex-none items-center justify-center rounded-lg border border-white/20 bg-white/10 text-white transition hover:bg-white/20"
+                aria-label="Jump to prediction game"
+              >
+                <Sparkles className="h-4 w-4" aria-hidden="true" />
+              </button>
               {hasActiveFilters && (
                 <button
                   type="button"
@@ -3118,6 +2879,15 @@ function ToolsBar({
                 aria-label="Open filters"
               >
                 <Filter className="h-4 w-4" aria-hidden="true" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={onFocusGame}
+                className="inline-flex h-10 w-10 flex-none items-center justify-center rounded-lg border border-white/15 bg-white/10 p-0 text-white hover:bg-white/20"
+                aria-label="Jump to prediction game"
+              >
+                <Sparkles className="h-4 w-4" aria-hidden="true" />
               </Button>
               {hasActiveFilters && (
                 <Button
@@ -5091,6 +4861,14 @@ export default function LoremakerApp({ initialCharacters = [], initialError = nu
     window.scrollTo({ top, behavior: "smooth" });
   }, []);
 
+  const scrollToPredict = useCallback(() => {
+    if (typeof window === "undefined") return;
+    const target = document.getElementById("predict-the-victor");
+    if (!target) return;
+    const top = target.getBoundingClientRect().top + window.scrollY - 24;
+    window.scrollTo({ top, behavior: "smooth" });
+  }, []);
+
   return (
     <>
       <Head>
@@ -5164,6 +4942,7 @@ export default function LoremakerApp({ initialCharacters = [], initialError = nu
           onOpenFilters={() => setFiltersOpen(true)}
           onClearFilters={clearFilters}
           onArenaToggle={toggleArena}
+          onFocusGame={scrollToPredict}
           onSync={refetch}
           showArena={showArena}
           totalCount={data.length}
@@ -5194,7 +4973,9 @@ export default function LoremakerApp({ initialCharacters = [], initialError = nu
             </div>
           )}
 
-          <GuessTheVictor characters={sorted} onOpenCharacter={openCharacter} />
+          <div id="predict-the-victor" className="scroll-mt-40">
+            <GuessTheVictor characters={sorted} onOpenCharacter={openCharacter} />
+          </div>
 
           <section className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex flex-wrap items-center gap-2 text-xs font-semibold text-white/70">

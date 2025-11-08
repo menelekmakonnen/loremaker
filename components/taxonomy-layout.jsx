@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { AnimatePresence, motion } from "framer-motion";
-import { ArrowRight, RefreshCcw, Shuffle, Swords, Users, Sparkles, ChevronDown } from "lucide-react";
+import { ArrowRight, RefreshCcw, Shuffle, Swords, Users, Sparkles, ChevronDown, Image as ImageIcon } from "lucide-react";
 
 import ImageSafe, { characterAltText, Insignia } from "./image-safe";
 import SiteFooter from "./site-footer";
@@ -58,6 +58,86 @@ function pickRandomPair(roster = []) {
     return replacement ? [a, replacement] : [a, b].filter(Boolean);
   }
   return [a, b];
+}
+
+function firstMemberPortrait(members = []) {
+  if (!Array.isArray(members)) return null;
+  for (const member of members) {
+    if (member?.cover) return member.cover;
+  }
+  return null;
+}
+
+function sampleMembers(members = [], count = 6) {
+  if (!Array.isArray(members) || !members.length) return [];
+  const pool = members.filter((member) => member && (member.cover || member.gallery?.length));
+  if (!pool.length) return [];
+  const limit = Math.min(count, pool.length);
+  const used = new Set();
+  const results = [];
+  while (results.length < limit) {
+    const index = Math.floor(Math.random() * pool.length);
+    const candidate = pool[index];
+    const key = candidate?.id || candidate?.slug || index;
+    if (used.has(key)) continue;
+    used.add(key);
+    results.push(candidate);
+  }
+  return results;
+}
+
+function HeroRosterGrid({ members = [], onOpen }) {
+  const [activeId, setActiveId] = useState(null);
+  if (!members.length) return null;
+
+  return (
+    <div className="rounded-3xl border border-white/12 bg-white/5 p-4 backdrop-blur-2xl">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+        {members.map((member) => {
+          if (!member) return null;
+          const descriptor =
+            (Array.isArray(member.alias) && member.alias[0]) ||
+            member.identity ||
+            member.alignment ||
+            member.primaryLocation ||
+            "Legend";
+          const isDimmed = activeId && activeId !== member.id;
+          const handleEnter = () => setActiveId(member.id || member.slug || null);
+          const handleLeave = () => setActiveId(null);
+          return (
+            <button
+              key={member.id || member.slug}
+              type="button"
+              onClick={() => onOpen?.(member)}
+              onMouseEnter={handleEnter}
+              onMouseLeave={handleLeave}
+              onFocus={handleEnter}
+              onBlur={handleLeave}
+              className={classNames(
+                "group relative overflow-hidden rounded-2xl border border-white/15 bg-black/40 text-left transition",
+                isDimmed ? "opacity-40" : "opacity-100"
+              )}
+            >
+              <div className="aspect-[4/5] w-full overflow-hidden">
+                <ImageSafe
+                  src={member.cover || member.gallery?.[0]}
+                  alt={characterAltText(member.name)}
+                  fallbackLabel={member.name}
+                  className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
+                  loading="lazy"
+                />
+              </div>
+              <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" aria-hidden="true" />
+              <div className="pointer-events-none absolute inset-x-3 bottom-3 flex flex-col gap-1">
+                <span className="text-[0.6rem] font-semibold uppercase tracking-[0.35em] text-white/65">{descriptor}</span>
+                <span className="text-lg font-black text-white drop-shadow">{member.name}</span>
+              </div>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
 }
 
 function powerOriginProfile(entry = {}) {
@@ -130,48 +210,122 @@ function simulateDuel(c1, c2) {
   return { winner, loser, h1, h2, logs };
 }
 
-function GuessTheVictorSection({ roster, onOpen }) {
+export function GuessTheVictorSection({ roster, onOpen }) {
   const contenders = useMemo(() => (roster || []).filter((item) => hasPortrait(item)), [roster]);
   const [pair, setPair] = useState(() => pickRandomPair(contenders));
   const [guess, setGuess] = useState(null);
   const [result, setResult] = useState(null);
   const [expanded, setExpanded] = useState(false);
+  const [mode, setMode] = useState("duel");
+  const [animating, setAnimating] = useState(false);
+  const [portraitStep, setPortraitStep] = useState({});
+  const [message, setMessage] = useState(null);
+
+  const shufflePair = useCallback(() => {
+    const fresh = pickRandomPair(contenders);
+    setPair(fresh);
+    setGuess(null);
+    setResult(null);
+    setMessage(null);
+    setPortraitStep({});
+  }, [contenders]);
 
   useEffect(() => {
-    setPair(pickRandomPair(contenders));
-    setGuess(null);
-    setResult(null);
+    shufflePair();
     setExpanded(false);
-  }, [contenders]);
+  }, [shufflePair]);
 
-  const choose = useCallback(
-    (candidate) => {
-      if (!pair || pair.length < 2 || result) return;
-      setGuess(candidate);
-      const [left, right] = pair;
-      if (!left || !right) return;
-      const duelResult = simulateDuel(left, right);
-      setResult(duelResult);
+  const toggleExpanded = useCallback(() => {
+    setExpanded((value) => !value);
+  }, []);
+
+  const setBattleMode = useCallback((value) => {
+    setMode(value);
+    setResult(null);
+    setGuess(null);
+    setMessage(null);
+  }, []);
+
+  const cyclePortrait = useCallback((fighter) => {
+    if (!fighter) return;
+    const sources = [fighter.cover, ...(fighter.gallery || [])].filter(Boolean);
+    if (!sources.length) return;
+    setPortraitStep((current) => {
+      const index = current[fighter.id] ?? 0;
+      return { ...current, [fighter.id]: (index + 1) % sources.length };
+    });
+  }, []);
+
+  const queueOpponents = useCallback(
+    (champion, rival) => {
+      const base = rival ? [rival] : [];
+      if (mode === "duel") return base;
+      const desired = mode === "championship-3" ? 3 : 4;
+      const needed = Math.max(0, desired - base.length);
+      const pool = contenders.filter(
+        (entry) => entry.id !== champion.id && !base.some((item) => item.id === entry.id)
+      );
+      const extras = [];
+      const mutable = [...pool];
+      while (extras.length < needed && mutable.length) {
+        const idx = Math.floor(Math.random() * mutable.length);
+        extras.push(mutable[idx]);
+        mutable.splice(idx, 1);
+      }
+      return [...base, ...extras];
     },
-    [pair, result]
+    [mode, contenders]
   );
 
-  const nextRound = useCallback(() => {
-    setPair(pickRandomPair(contenders));
+  const choose = useCallback(
+    (candidateId) => {
+      if (!pair.length || result || animating) return;
+      const champion = pair.find((entry) => entry.id === candidateId);
+      const rival = pair.find((entry) => entry.id !== candidateId);
+      if (!champion || !rival) return;
+      setGuess(candidateId);
+      const opponents = queueOpponents(champion, rival);
+      setAnimating(true);
+      const matches = [];
+      let championWins = true;
+      for (const opponent of opponents) {
+        const outcome = simulateDuel(champion, opponent);
+        matches.push({ opponent, outcome });
+        if (outcome.winner?.id !== champion.id) {
+          championWins = false;
+          break;
+        }
+      }
+      const finalMatch = matches[matches.length - 1] || null;
+      const finalWinner = finalMatch?.outcome?.winner || champion;
+      const finalLoser = finalMatch?.outcome?.loser || rival;
+      setResult({ champion, matches, championWins, finalWinner, finalLoser, mode });
+      setMessage(championWins ? `${champion.name} Wins` : `${champion.name} Loses`);
+      setTimeout(() => setAnimating(false), 1200);
+    },
+    [pair, result, animating, queueOpponents, mode]
+  );
+
+  const rematch = useCallback(() => {
     setGuess(null);
     setResult(null);
-  }, [contenders]);
+    setMessage(null);
+    setAnimating(false);
+  }, []);
+
+  const nextOpponents = useCallback(() => {
+    shufflePair();
+  }, [shufflePair]);
 
   if (!contenders.length || pair.length < 2) {
     return null;
   }
 
   const [left, right] = pair;
-  const guessedCorrect = result && result.winner?.id === guess;
-
-  const toggleExpanded = useCallback(() => {
-    setExpanded((value) => !value);
-  }, []);
+  const lastMatch = result?.matches?.[result.matches.length - 1] || null;
+  const roundLogs = lastMatch?.outcome?.logs || [];
+  const championName = result?.champion?.name || left?.name;
+  const challengerName = lastMatch?.opponent?.name || right?.name;
 
   const summaryBar = (
     <button
@@ -182,10 +336,10 @@ function GuessTheVictorSection({ roster, onOpen }) {
     >
       <span className="flex items-center gap-2">
         <Sparkles className="h-3.5 w-3.5 text-amber-200" aria-hidden="true" />
-        Predict the victor
+        {message || "Predict the victor"}
       </span>
       <span className="flex items-center gap-2 text-[0.65rem] font-bold text-white/60">
-        {result ? (guessedCorrect ? "Prophecy fulfilled" : "Fate disagreed") : expanded ? "Collapse" : "Unfold"}
+        {expanded ? "Collapse" : "Unfold"}
         <ChevronDown
           className={classNames(
             "h-3.5 w-3.5 transition-transform",
@@ -199,82 +353,102 @@ function GuessTheVictorSection({ roster, onOpen }) {
 
   const fighterCard = (fighter) => {
     if (!fighter) return null;
-    const active = result && result.winner?.id === fighter.id;
     const descriptor = fighter.alias?.[0] || fighter.identity || fighter.alignment || fighter.primaryLocation || "Legend";
-    const handleOpen = () => onOpen?.(fighter);
+    const imageSources = [fighter.cover, ...(fighter.gallery || [])].filter(Boolean);
+    const portraitIndex = portraitStep[fighter.id] ?? 0;
+    const portrait = imageSources.length ? imageSources[portraitIndex % imageSources.length] : fighter.cover;
+    const isWinner = result && result.finalWinner?.id === fighter.id;
+    const isLoser = result && result.finalLoser?.id === fighter.id;
+    const isChosen = guess === fighter.id;
+    const handleSelect = () => {
+      if (result) return;
+      choose(fighter.id);
+    };
     const handleKey = (event) => {
       if (event.key === "Enter" || event.key === " ") {
         event.preventDefault();
-        handleOpen();
+        handleSelect();
       }
     };
     return (
       <div
         key={fighter.id}
+        role="button"
+        tabIndex={0}
+        onClick={handleSelect}
+        onKeyDown={handleKey}
         className={classNames(
-          "flex h-full flex-col gap-4 overflow-hidden rounded-3xl border border-white/12 bg-white/10 p-4 backdrop-blur-xl",
-          active ? "ring-4 ring-emerald-300" : guess === fighter.id ? "ring-2 ring-amber-300/70" : "ring-1 ring-white/10"
+          "relative flex h-full flex-col overflow-hidden rounded-3xl border border-white/12 bg-black/40 backdrop-blur-xl transition",
+          animating ? "animate-duel-shake" : "",
+          isWinner
+            ? "ring-4 ring-emerald-300"
+            : isLoser
+            ? "ring-2 ring-rose-400/70"
+            : isChosen
+            ? "ring-2 ring-amber-200/70"
+            : "hover:ring-2 hover:ring-amber-200/60"
         )}
       >
-        <div
-          className={classNames(
-            "relative isolate overflow-hidden rounded-[26px] border border-white/15",
-            active ? "ring-2 ring-emerald-200/70" : guess === fighter.id ? "ring-2 ring-amber-200/60" : ""
-          )}
-          role="button"
-          tabIndex={0}
-          onClick={handleOpen}
-          onKeyDown={handleKey}
-          aria-label={`Open ${fighter.name} quick view`}
-        >
-          <div className="aspect-square">
-            <ImageSafe
-              src={fighter.cover || fighter.gallery?.[0]}
-              alt={characterAltText(fighter.name)}
-              fallbackLabel={fighter.name}
-              className="h-full w-full object-cover"
-              loading="lazy"
-            />
-          </div>
-          <div className="absolute inset-0 bg-gradient-to-b from-black/10 via-transparent to-black/70" aria-hidden="true" />
+        <div className="relative aspect-square overflow-hidden">
+          <ImageSafe
+            src={portrait || fighter.cover || fighter.gallery?.[0]}
+            alt={characterAltText(fighter.name)}
+            fallbackLabel={fighter.name}
+            className="h-full w-full object-cover"
+            loading="lazy"
+          />
+          <div className="absolute inset-0 bg-gradient-to-b from-black/10 via-black/10 to-black/75" aria-hidden="true" />
           <div className="absolute inset-x-4 bottom-4 flex flex-col gap-1 text-left">
-            <span className="text-[0.65rem] font-semibold uppercase tracking-[0.35em] text-white/70">{descriptor}</span>
+            <span className="text-[0.6rem] font-semibold uppercase tracking-[0.35em] text-white/65">{descriptor}</span>
             <span className="text-xl font-black text-white drop-shadow">{fighter.name}</span>
           </div>
-          <button
-            type="button"
-            onClick={(event) => {
-              event.stopPropagation();
-              choose(fighter.id);
-            }}
-            disabled={Boolean(result)}
-            className={classNames(
-              "absolute left-4 top-4 inline-flex items-center gap-2 rounded-full px-4 py-1 text-xs font-semibold uppercase tracking-[0.35em] shadow-lg transition",
-              result && active
-                ? "border border-emerald-300/80 bg-emerald-300/20 text-emerald-100"
-                : result
-                ? "border border-white/20 bg-black/40 text-white/60"
-                : "border border-white/20 bg-black/50 text-white hover:bg-black/70"
-            )}
-            aria-pressed={guess === fighter.id}
-          >
-            {result ? (active ? "Victor" : "Resolved") : `I choose ${fighter.alias?.[0] || fighter.name}`}
-          </button>
-        </div>
-        <div className="flex flex-1 flex-col gap-3 text-sm text-white/75">
-          <div className="flex flex-wrap gap-2">
-            {(fighter.faction || []).slice(0, 2).map((label) => (
-              <span key={label} className="rounded-full border border-white/20 bg-white/10 px-3 py-1 text-xs font-semibold">
-                {label}
-              </span>
-            ))}
-            {(fighter.locations || [fighter.primaryLocation]).filter(Boolean).slice(0, 1).map((label) => (
-              <span key={label} className="rounded-full border border-white/20 bg-white/10 px-3 py-1 text-xs font-semibold">
-                {label}
-              </span>
-            ))}
+          {imageSources.length > 1 && (
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                cyclePortrait(fighter);
+              }}
+              className="absolute right-4 top-4 inline-flex items-center gap-2 rounded-full border border-white/20 bg-black/60 px-3 py-1 text-[0.65rem] font-semibold uppercase tracking-[0.3em] text-white transition hover:bg-black/80"
+            >
+              <ImageIcon className="h-3.5 w-3.5" aria-hidden="true" />
+              Change view
+            </button>
+          )}
+          <div className="pointer-events-none absolute inset-0" aria-hidden="true">
+            <div className="absolute inset-x-0 top-4 mx-auto w-fit rounded-full border border-white/20 bg-black/50 px-3 py-1 text-[0.6rem] font-semibold uppercase tracking-[0.3em] text-white/70">
+              {result ? (isWinner ? "Victor" : isLoser ? "Fallen" : "Resolved") : "Tap anywhere to choose"}
+            </div>
           </div>
-          <div className="text-xs font-semibold uppercase tracking-[0.3em] text-white/55">Tap portrait for dossier</div>
+        </div>
+        <div className="flex flex-1 flex-col justify-between gap-3 p-4 text-sm text-white/75">
+          <div className="flex flex-wrap gap-2 text-xs font-semibold uppercase tracking-[0.3em] text-white/55">
+            {(fighter.faction || []).slice(0, 2).map((label) => (
+              <span key={label} className="rounded-full border border-white/20 bg-white/10 px-3 py-1">
+                {label}
+              </span>
+            ))}
+            {(fighter.locations || [fighter.primaryLocation])
+              .filter(Boolean)
+              .slice(0, 1)
+              .map((label) => (
+                <span key={label} className="rounded-full border border-white/20 bg-white/10 px-3 py-1">
+                  {label}
+                </span>
+              ))}
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold uppercase tracking-[0.3em] text-white/50">{mode === "duel" ? "Single clash" : "Championship"}</span>
+            {fighter.slug && (
+              <Link
+                href={`/characters/${fighter.slug}`}
+                onClick={(event) => event.stopPropagation()}
+                className="text-xs font-semibold uppercase tracking-[0.3em] text-amber-200 transition hover:text-amber-100"
+              >
+                Full profile
+              </Link>
+            )}
+          </div>
         </div>
       </div>
     );
@@ -287,75 +461,128 @@ function GuessTheVictorSection({ roster, onOpen }) {
   return (
     <section className="space-y-6 rounded-3xl border border-white/12 bg-white/5 p-6 backdrop-blur-2xl">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="min-w-[14rem] flex-1 space-y-2">
-          <div className="flex items-center justify-between gap-3">
-            <h2 className="text-2xl font-black text-white">Predict the victor</h2>
-            {result && (
-              <div
-                className={classNames(
-                  "hidden rounded-full border px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] sm:inline-flex",
-                  guessedCorrect
-                    ? "border-emerald-300/70 bg-emerald-300/15 text-emerald-100"
-                    : "border-rose-400/60 bg-rose-400/15 text-rose-100"
-                )}
-              >
-                {guessedCorrect ? "Prophecy fulfilled" : "Fate disagreed"}
-              </div>
-            )}
-          </div>
+        <div className="space-y-2">
+          <h2 className="text-2xl font-black text-white">Predict the victor</h2>
           <p className="text-sm font-semibold text-white/70">
-            Pick your champion before each enclave clash and see if your instincts align with the LoreMaker oracles.
+            Call the duel, or stage a championship run across three or four challengers. Every guess shapes your legend.
           </p>
         </div>
-        <div className="flex w-full flex-col items-end gap-2 sm:w-auto sm:flex-none">
+        <div className="flex flex-col items-end gap-2 sm:flex-row sm:items-center">
+          <button
+            type="button"
+            onClick={nextOpponents}
+            className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-4 py-1 text-[0.65rem] font-semibold uppercase tracking-[0.3em] text-white transition hover:bg-white/20"
+          >
+            <RefreshCcw className="h-3.5 w-3.5" aria-hidden="true" /> Reload
+          </button>
+          <div className="flex items-center gap-1 rounded-full border border-white/15 bg-white/10 p-1 text-[0.6rem] font-semibold uppercase tracking-[0.3em] text-white/70">
+            <span className="hidden px-2 text-white/60 sm:inline">Championship</span>
+            {[
+              { id: "duel", label: "Duel" },
+              { id: "championship-3", label: "3 Legends" },
+              { id: "championship-4", label: "4 Legends" },
+            ].map((entry) => (
+              <button
+                key={entry.id}
+                type="button"
+                onClick={() => setBattleMode(entry.id)}
+                className={classNames(
+                  "rounded-full px-3 py-1 transition",
+                  mode === entry.id ? "bg-amber-300/20 text-amber-100" : "text-white/60 hover:text-white"
+                )}
+              >
+                {entry.label}
+              </button>
+            ))}
+          </div>
           {summaryBar}
-          {result && (
-            <div
-              className={classNames(
-                "mt-1 inline-flex rounded-full border px-4 py-1 text-[0.65rem] font-semibold uppercase tracking-[0.35em]",
-                guessedCorrect
-                  ? "border-emerald-300/70 bg-emerald-300/15 text-emerald-100"
-                  : "border-rose-400/60 bg-rose-400/15 text-rose-100"
-              )}
-            >
-              {guessedCorrect ? "Prophecy fulfilled" : "Fate disagreed"}
-            </div>
-          )}
         </div>
       </div>
-      <div className="grid gap-4 sm:grid-cols-2">
-        {fighterCard(left)}
-        {fighterCard(right)}
-      </div>
-      {result && (
-        <div className="space-y-3 rounded-2xl border border-white/10 bg-black/40 p-4 text-sm text-white/80">
-          <div className="flex flex-wrap items-center gap-2 text-sm font-semibold">
-            <span className="text-white/70">Winner:</span>
-            <span className="text-base font-black text-white">{result.winner?.name}</span>
+      <div className="relative">
+        <div className="grid grid-cols-2 gap-4">
+          {fighterCard(left)}
+          {fighterCard(right)}
+        </div>
+        {animating && (
+          <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+            <div className="rounded-full border border-amber-300/60 bg-black/70 p-4 shadow-[0_0_60px_rgba(251,191,36,0.35)]">
+              <Swords className="h-10 w-10 text-amber-200 animate-duel-swords" aria-hidden="true" />
+            </div>
           </div>
-          <div className="grid gap-2 sm:grid-cols-2">
-            {(result.logs || []).map((log) => (
-              <div key={log.swing} className="rounded-xl border border-white/10 bg-white/5 px-3 py-2">
-                <div className="text-xs font-semibold uppercase tracking-[0.3em] text-white/50">Round {log.swing}</div>
-                <div className="mt-1 flex items-center justify-between text-xs text-white/70">
-                  <span>
-                    {left?.name}: <strong className="text-white">{log.h1}</strong>
-                  </span>
-                  <span>
-                    {right?.name}: <strong className="text-white">{log.h2}</strong>
-                  </span>
-                </div>
+        )}
+        {roundLogs.length > 0 && championName && challengerName && (
+          <div className="pointer-events-none absolute inset-y-0 left-1/2 flex -translate-x-1/2 flex-col items-center justify-center gap-2">
+            {roundLogs.map((log) => (
+              <div
+                key={log.swing}
+                className="rounded-full border border-white/20 bg-black/70 px-4 py-1 text-[0.65rem] font-semibold uppercase tracking-[0.3em] text-white/75"
+              >
+                Round {log.swing}: {championName?.split(" ")[0]} {log.h1} • {challengerName?.split(" ")[0]} {log.h2}
               </div>
             ))}
           </div>
-          <button
-            type="button"
-            onClick={nextRound}
-            className="inline-flex w-full items-center justify-center gap-2 rounded-full border border-white/20 bg-white/10 px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-white transition hover:bg-white/20"
-          >
-            <RefreshCcw className="h-4 w-4" aria-hidden="true" />
-            Play another round
-          </button>
+        )}
+        {result && (
+          <div className="pointer-events-none absolute inset-x-0 top-1/2 flex -translate-y-1/2 justify-center">
+            <div className="pointer-events-auto flex flex-wrap items-center gap-2 rounded-full border border-white/20 bg-black/85 px-5 py-3 text-[0.65rem] font-semibold uppercase tracking-[0.3em] text-white shadow-xl">
+              <button
+                type="button"
+                onClick={rematch}
+                className="rounded-full border border-white/20 bg-white/10 px-3 py-1 text-white transition hover:bg-white/20"
+              >
+                Rematch
+              </button>
+              <button
+                type="button"
+                onClick={nextOpponents}
+                className="rounded-full border border-white/20 bg-white/10 px-3 py-1 text-white transition hover:bg-white/20"
+              >
+                New duel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setBattleMode("championship-3");
+                  rematch();
+                }}
+                className="rounded-full border border-amber-300/50 bg-amber-300/15 px-3 py-1 text-amber-100 transition hover:bg-amber-300/25"
+              >
+                3 legends
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setBattleMode("championship-4");
+                  rematch();
+                }}
+                className="rounded-full border border-amber-300/50 bg-amber-300/15 px-3 py-1 text-amber-100 transition hover:bg-amber-300/25"
+              >
+                4 legends
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+      {result && (
+        <div className="rounded-2xl border border-white/10 bg-black/45 p-5 text-sm text-white/80">
+          <div className="flex flex-wrap items-center gap-2 text-base font-black text-white">
+            {message}
+          </div>
+          <div className="mt-3 grid gap-3 sm:grid-cols-2">
+            {(result.matches || []).map((match, index) => (
+              <div key={match.opponent?.id || index} className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3">
+                <div className="flex items-center justify-between text-xs font-semibold uppercase tracking-[0.3em] text-white/55">
+                  <span>Round {index + 1}</span>
+                  <span>{match.opponent?.name}</span>
+                </div>
+                <p className="mt-2 text-sm font-semibold text-white/75">
+                  {match.outcome.winner?.id === result.champion?.id
+                    ? `${result.champion?.name} outmaneuvered ${match.opponent?.name}.`
+                    : `${match.opponent?.name} overwhelmed ${result.champion?.name}.`}
+                </p>
+              </div>
+            ))}
+          </div>
         </div>
       )}
     </section>
@@ -436,14 +663,42 @@ export function TaxonomyIndexLayout({
 
   const current = slides[index] || slides[0] || null;
   const background = current?.background || slides.find((slide) => slide.background)?.background || null;
+  const sharedBackground =
+    background ||
+    firstMemberPortrait(current?.members || []) ||
+    entries.reduce((acc, entry) => acc || firstMemberPortrait(entry.members || []), null) ||
+    null;
+  const heroMembers = useMemo(() => {
+    if (!current) return [];
+    return sampleMembers(current.members || [], 6);
+  }, [current?.slug]);
+  const navLinks = useMemo(
+    () => [
+      { href: "/factions", label: "Factions" },
+      { href: "/locations", label: "Locations" },
+      { href: "/powers", label: "Powers" },
+      { href: "/timelines", label: "Timelines" },
+    ],
+    []
+  );
+  const navClasses = useCallback(
+    (href) =>
+      classNames(
+        "rounded-full px-2 py-1 transition",
+        basePath === href
+          ? "bg-white/15 text-white shadow-[0_0_20px_rgba(255,255,255,0.25)]"
+          : "text-white/70 hover:text-white"
+      ),
+    [basePath]
+  );
 
   return (
     <div className="relative min-h-screen overflow-hidden bg-[#050813] text-white">
       <section className="relative overflow-hidden">
         <div className="absolute inset-0 -z-20">
-          {background ? (
+          {sharedBackground ? (
             <ImageSafe
-              src={background}
+              src={sharedBackground}
               alt=""
               className="h-full w-full object-cover"
               loading="eager"
@@ -455,13 +710,13 @@ export function TaxonomyIndexLayout({
           )}
           <div className="absolute inset-0 bg-gradient-to-b from-black/90 via-[#050a1a]/75 to-[#050813]/85" aria-hidden="true" />
         </div>
-        <div className="relative z-10 mx-auto flex min-h-[80vh] w-full max-w-7xl flex-col px-4 pb-12 pt-12 sm:px-8 lg:px-12">
+        <div className="relative z-10 mx-auto flex min-h-screen w-full max-w-6xl flex-col px-4 pb-16 pt-12 sm:px-8 lg:px-12">
           <header
             className="hero-header relative w-full overflow-hidden rounded-[32px] border border-white/20 bg-black/35 px-5 py-4 backdrop-blur-3xl shadow-[0_24px_80px_rgba(8,10,26,0.6)]"
             style={
-              background
+              sharedBackground
                 ? {
-                    "--hero-header-image": `url(${background.replace(/"/g, "\\\"")})`,
+                    "--hero-header-image": `url(${sharedBackground.replace(/"/g, "\\\"")})`,
                   }
                 : undefined
             }
@@ -475,18 +730,11 @@ export function TaxonomyIndexLayout({
                   Loremaker
                 </Link>
                 <nav className="flex flex-wrap items-center gap-2 text-[0.65rem] tracking-[0.3em] sm:text-xs">
-                  <Link href="/factions" className="rounded-full px-2 py-1 text-white/70 transition hover:text-white">
-                    Factions
-                  </Link>
-                  <Link href="/locations" className="rounded-full px-2 py-1 text-white/70 transition hover:text-white">
-                    Locations
-                  </Link>
-                  <Link href="/powers" className="rounded-full px-2 py-1 text-white/70 transition hover:text-white">
-                    Powers
-                  </Link>
-                  <Link href="/timelines" className="rounded-full px-2 py-1 text-white/70 transition hover:text-white">
-                    Timelines
-                  </Link>
+                  {navLinks.map((item) => (
+                    <Link key={item.href} href={item.href} className={navClasses(item.href)}>
+                      {item.label}
+                    </Link>
+                  ))}
                 </nav>
               </div>
               <a
@@ -501,9 +749,23 @@ export function TaxonomyIndexLayout({
           </header>
           <div className="mt-10 flex flex-1 flex-col gap-10 lg:flex-row lg:items-center lg:gap-16">
             <div className="max-w-2xl space-y-5">
-              <p className="text-xs font-semibold uppercase tracking-[0.4em] text-amber-200">{badgeLabel}</p>
-              <h1 className="text-4xl font-black leading-tight text-balance sm:text-5xl lg:text-6xl">{title}</h1>
-              <p className="max-w-xl text-sm font-semibold text-white/80 sm:text-base">{description}</p>
+              <div className="space-y-3">
+                <p className="text-xs font-semibold uppercase tracking-[0.4em] text-amber-200">{badgeLabel}</p>
+                <h1 className="text-4xl font-black leading-tight text-balance sm:text-5xl lg:text-6xl">{title}</h1>
+                <p className="max-w-xl text-sm font-semibold text-white/75 sm:text-base">{description}</p>
+              </div>
+              {heroMembers.length ? (
+                <>
+                  <HeroRosterGrid members={heroMembers} />
+                  <p className="text-xs font-semibold uppercase tracking-[0.3em] text-white/55">
+                    Hover or tap to spotlight legends tied to this focus.
+                  </p>
+                </>
+              ) : (
+                <p className="rounded-3xl border border-white/12 bg-white/5 p-4 text-sm font-semibold text-white/75 backdrop-blur-2xl">
+                  {description}
+                </p>
+              )}
               {current && (
                 <div className="space-y-4 rounded-3xl border border-white/12 bg-white/5 p-6 backdrop-blur-2xl">
                   <div className="flex items-center justify-between gap-3">
@@ -839,7 +1101,7 @@ function FactionArena({ entries, basePath }) {
         <div>
           <h2 className="text-2xl font-black text-white">Faction arena</h2>
           <p className="text-sm font-semibold text-white/70">
-            Stage a lore clash and see which enclave dominates the LoreMaker Universe.
+            Stage a lore clash and see which team dominates the LoreMaker Universe.
           </p>
         </div>
         <button
@@ -891,6 +1153,19 @@ export function TaxonomyDetailLayout({
   relatedEntries = [],
 }) {
   const plural = typeLabelPlural || `${typeLabel}s`;
+  const navLinks = [
+    { href: "/factions", label: "Factions" },
+    { href: "/locations", label: "Locations" },
+    { href: "/powers", label: "Powers" },
+    { href: "/timelines", label: "Timelines" },
+  ];
+  const navClasses = (href) =>
+    classNames(
+      "rounded-full px-2 py-1 transition",
+      basePath === href
+        ? "bg-white/15 text-white shadow-[0_0_20px_rgba(255,255,255,0.25)]"
+        : "text-white/70 hover:text-white"
+    );
   return (
     <div className="relative min-h-screen overflow-hidden bg-[#050813] text-white">
       <section className="relative overflow-hidden border-b border-white/10">
@@ -918,18 +1193,11 @@ export function TaxonomyDetailLayout({
                 Loremaker
               </Link>
               <nav className="flex flex-wrap items-center gap-2 text-[0.65rem] tracking-[0.3em] sm:text-xs">
-                <Link href="/factions" className="rounded-full px-2 py-1 text-white/70 transition hover:text-white">
-                  Factions
-                </Link>
-                <Link href="/locations" className="rounded-full px-2 py-1 text-white/70 transition hover:text-white">
-                  Locations
-                </Link>
-                <Link href="/powers" className="rounded-full px-2 py-1 text-white/70 transition hover:text-white">
-                  Powers
-                </Link>
-                <Link href="/timelines" className="rounded-full px-2 py-1 text-white/70 transition hover:text-white">
-                  Timelines
-                </Link>
+                {navLinks.map((item) => (
+                  <Link key={item.href} href={item.href} className={navClasses(item.href)}>
+                    {item.label}
+                  </Link>
+                ))}
               </nav>
             </div>
             <Link
@@ -1058,6 +1326,7 @@ export function TaxonomyDetailLayout({
         )}
       </main>
       <SiteFooter arenaHref="/#arena-anchor" />
+      <ScrollShortcuts />
     </div>
   );
 }

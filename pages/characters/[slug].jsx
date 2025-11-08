@@ -952,7 +952,7 @@ export default function CharacterProfilePage({ character, canonicalUrl, related,
                 className="space-y-4 rounded-3xl border border-white/12 bg-white/5 p-6 backdrop-blur-xl lg:col-span-5 lg:col-start-1"
               >
                 <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.35em] text-white/70">
-                  <Crown className="h-4 w-4 text-amber-200" aria-hidden="true" /> Allies &amp; Enclaves
+                  <Crown className="h-4 w-4 text-amber-200" aria-hidden="true" /> Allies &amp; Teams
                 </div>
                 <p className="text-sm font-semibold text-white/70">
                   Meet the trusted circles who stand with {character.name}.
